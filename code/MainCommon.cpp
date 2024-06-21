@@ -78,12 +78,11 @@ struct SettingsImpl : SettingsCustomCallbacks
 
 static Path GetSettingsFilePath()
 {
-    // Create cache dir if it doesn't exist
-    Path cacheDir;
-    pathGetCacheDir(cacheDir.Ptr(), sizeof(cacheDir), CONFIG_APP_NAME);
-    if (!cacheDir.IsDir())
-    pathCreateDir(cacheDir.CStr());
-    return Path::Join(cacheDir, CONFIG_APP_NAME ".ini");
+    Path myDir;
+    pathGetMyPath(myDir.Ptr(), myDir.Capacity());
+    myDir = myDir.GetDirectory();
+    ASSERT(myDir.IsDir());
+    return Path::Join(myDir, CONFIG_APP_NAME ".ini");
 }
 
 bool InitializeCommon()

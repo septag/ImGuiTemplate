@@ -103,6 +103,15 @@ static void SetImGuiTheme()
     colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
 }
 
+static Path GetImGuiSettingsFilepath()
+{
+    Path myDir;
+    pathGetMyPath(myDir.Ptr(), myDir.Capacity());
+    myDir = myDir.GetDirectory();
+    ASSERT(myDir.IsDir());
+    return Path::Join(myDir, CONFIG_IMGUI_SETTINGS_FILENAME);
+}
+
 bool ImGui::MyInitialize()
 {
     ImGui::SetAllocatorFunctions(
@@ -127,11 +136,7 @@ bool ImGui::MyInitialize()
     // Setup Dear ImGui context
     io.IniFilename = nullptr;
 
-    Path iniFilepath;
-    pathGetCacheDir(iniFilepath.Ptr(), sizeof(iniFilepath), CONFIG_APP_NAME);
-    ASSERT(iniFilepath.IsDir());
-    iniFilepath = Path::Join(iniFilepath, CONFIG_IMGUI_SETTINGS_FILENAME);
-    ImGui::LoadIniSettingsFromDisk(iniFilepath.CStr());
+    ImGui::LoadIniSettingsFromDisk(GetImGuiSettingsFilepath().CStr());
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
@@ -291,10 +296,7 @@ Docking& ImGui::GetDocking()
 
 void ImGui::SaveState()
 {
-    Path iniFilepath;
-    pathGetCacheDir(iniFilepath.Ptr(), sizeof(iniFilepath), CONFIG_APP_NAME);
-    iniFilepath = Path::Join(iniFilepath, CONFIG_IMGUI_SETTINGS_FILENAME);
-    ImGui::SaveIniSettingsToDisk(iniFilepath.CStr());
+    ImGui::SaveIniSettingsToDisk(GetImGuiSettingsFilepath().CStr());
 }
 
 // imspinner.h
