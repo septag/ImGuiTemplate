@@ -1,0 +1,7 @@
+function(utils_remove_compile_options dst_var compile_flags flags)
+    separate_arguments(flags)
+    foreach(flag ${flags})
+        string(REPLACE "${flag}" "" compile_flags "${compile_flags}")
+    endforeach()
+    set(${dst_var} ${compile_flags} PARENT_SCOPE)
+endfunction()
