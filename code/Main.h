@@ -17,6 +17,7 @@ void Update();
 const Settings& GetSettings();
 void SetWindowPos(uint16 x, uint16 y);
 void SetWindowRect(uint16 x, uint16 y, uint16 width, uint16 height);
+void ToggleIdleWait(bool wait);
 
 void* CreateRGBATexture(uint32 width, uint32 height, const void* data);
 void  DestroyTexture(void* handle);

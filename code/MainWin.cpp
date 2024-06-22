@@ -28,10 +28,8 @@ struct MainWindowContext
     HWND hwnd;
     uint32 resizeWidth;
     uint32 resizeHeight;
-    uint32 swapInterval;
-    bool minimized;
-    bool idle;
-    bool appFocused;
+    bool isFocused;
+    bool disableIdleWait;
     bool quit;
 };
 
@@ -91,16 +89,6 @@ static void CleanupDeviceD3D()
     if (gGfx.device) { gGfx.device->Release(); gGfx.device = nullptr; }
 }
 
-static void UpdateFocusMode()
-{
-    if (gWindow.appFocused) {
-        gWindow.swapInterval = 1;
-    }
-    else {
-        gWindow.swapInterval = (gWindow.idle || gWindow.minimized) ? 3 : 2;
-    }
-}
-
 static void ResizeBuffers(uint32 width, uint32 height)
 {
     ASSERT(gGfx.swapchain);
@@ -126,12 +114,6 @@ static void BeginDraw(ImVec4 clearColor)
 
     gGfx.deviceContext->OMSetRenderTargets(1, &gGfx.mainRenderTargetView, nullptr);
     gGfx.deviceContext->ClearRenderTargetView(gGfx.mainRenderTargetView, clearColorWithAlpha);
-}
-
-static void PresentGraphics(uint32 swapInterval)
-{
-    ASSERT(gGfx.swapchain);
-    gGfx.swapchain->Present(swapInterval, 0); // Present with vsync
 }
 
 // Main code
@@ -191,6 +173,13 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
         // Poll and handle messages (inputs, window resize, etc.)
         // See the WndProc() function below for our to dispatch events to the Win32 backend.
         MSG msg;
+
+        // Block the program and go into idle mode if we are getting no window messages
+        if (!gWindow.disableIdleWait && GetMessage(&msg, nullptr, 0U, 0U)) {
+            ::TranslateMessage(&msg);
+            ::DispatchMessage(&msg);
+        }
+
         while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
         {
             ::TranslateMessage(&msg);
@@ -234,7 +223,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
             ImGui::RenderPlatformWindowsDefault();
         }
 
-        PresentGraphics(gWindow.swapInterval);
+        gGfx.swapchain->Present(gWindow.isFocused ? 0 : 2, 0); // Present with vsync
         memTempReset(1.0f/io.Framerate, false);
     }
 
@@ -269,15 +258,10 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     switch (msg)
     {
     case WM_SIZE:
-        if (wParam != SIZE_MINIMIZED)
-        {
+        if (wParam != SIZE_MINIMIZED) {
             gWindow.resizeWidth = (UINT)LOWORD(lParam); // Queue resize
             gWindow.resizeHeight = (UINT)HIWORD(lParam);
-            gWindow.minimized = false;
-        }
-        else
-        {
-            gWindow.minimized = true;
+            gWindow.isFocused = false;
         }
         return 0;
     case WM_SYSCOMMAND:
@@ -289,8 +273,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
 
     case WM_ACTIVATEAPP:
-        gWindow.appFocused = wParam ? true : false;
-        UpdateFocusMode();
+        gWindow.isFocused = wParam ? true : false;
         break;
 
     case WM_MOVE: {
@@ -411,4 +394,9 @@ bool GetClipboardString(char* textOut, uint32 textSize)
     CloseClipboard();
     
     return true;
+}
+
+void ToggleIdleWait(bool wait)
+{
+    gWindow.disableIdleWait = !wait;
 }
