@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.15)
 
 set(APPNAME "" CACHE STRING "App name")
 if (NOT APPNAME)
@@ -8,7 +8,6 @@ endif()
 project(${APPNAME})
 
 if (MSVC)
-    option(MSVC_STATIC_RUNTIME "Link with MSVC static runtime. Only sets for 'Release' build" OFF)
     option(MSVC_MULTITHREADED_COMPILE "Multi-threaded compilation in MSVC." ON)
 endif()
 
@@ -18,6 +17,8 @@ endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}")
 include(Utils)
+
+set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded$<$<CONFIG:Debug>:DebugDLL>)
 
 add_definitions(-D__STDC_LIMIT_MACROS)
 add_definitions(-D__STDC_FORMAT_MACROS)
@@ -37,18 +38,6 @@ if (MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /GR-")
     if (MSVC_MULTITHREADED_COMPILE AND NOT CMAKE_MAKE_PROGRAM MATCHES "ninja.exe")
         add_compile_options(/MP)    # multiprocessor compilation
-    endif()
-
-    if (MSVC_STATIC_RUNTIME) 
-        utils_remove_compile_options(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}" "/MD")
-        utils_remove_compile_options(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}" "/MD")
-		set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
-		set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
-
-        utils_remove_compile_options(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}" "/MDd")
-        utils_remove_compile_options(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}" "/MDd")
-		set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
-		set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MTd")
     endif()
 
     if (${MSVC_VERSION} GREATER_EQUAL 1928)
@@ -79,12 +68,17 @@ endif()
 
 # Source files
 set(SOURCE_FILES 
+    ../code/Resources/App.rc
+    ../code/Resources/AppIcon.ico
+    ../code/Resources/resource.h
     ../code/Core.cpp
     ../code/Core.h
     ../code/Main.cpp 
     ../code/Main.h
     ../code/MainWin.cpp 
     ../code/MainCommon.cpp 
+    ../code/CommonLogView.h 
+    ../code/CommonLogView.cpp 
     ../code/ImGui/ImGuiMain.cpp
     ../code/ImGui/ImGuiMain.h
     ../code/ImGui/imgui.cpp
@@ -93,11 +87,21 @@ set(SOURCE_FILES
     ../code/ImGui/imgui_tables.cpp
     ../code/ImGui/imgui_widgets.cpp
     ../code/ImGui/imgui.h
-    ../code/ImGui/imconfig.h
-    ../code/ImGui/imgui_impl_dx11.cpp
-    ../code/ImGui/imgui_impl_dx11.h 
-    ../code/ImGui/imgui_impl_win32.cpp
-    ../code/ImGui/imgui_impl_win32.h)
+    ../code/ImGui/imconfig.h 
+    ../code/External/osdialog/osdialog.h
+    ../code/External/osdialog/osdialog.c)
+set_source_files_properties(../code/External/osdialog/osdialog.c PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+
+if (WIN32)
+    list(APPEND SOURCE_FILES 
+        ../code/ImGui/imgui_impl_dx11.cpp
+        ../code/ImGui/imgui_impl_dx11.h 
+        ../code/ImGui/imgui_impl_win32.cpp
+        ../code/ImGui/imgui_impl_win32.h
+        ../code/External/osdialog/osdialog_win.c)
+    set_source_files_properties(../code/External/osdialog/osdialog_win.c PROPERTIES SKIP_PRECOMPILE_HEADERS ON)        
+    set_source_files_properties(../code/External/osdialog/osdialog_win.c PROPERTIES APPEND_STRING PROPERTY COMPILE_FLAGS " /wd4244")
+endif()
 
 add_executable(${APPNAME} ${SOURCE_FILES})
 if (WIN32)

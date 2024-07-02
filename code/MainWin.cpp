@@ -8,6 +8,8 @@
 #include "ImGui/IconsFontAwesome4.h"
 #include "ImGui/ImGuiMain.h"
 
+#include "Resources/resource.h"
+
 #include <stdio.h>
 
 #define COM_NO_WINDOWS_H
@@ -122,20 +124,24 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
     [[maybe_unused]] bool r = InitializeCommon();
     ASSERT_ALWAYS(r, "InitializeCommon() failed");
 
-    Initialize();
-
     wchar_t appNameW[512];
     strUt8ToWide(CONFIG_APP_NAME, appNameW, sizeof(appNameW));
     // Create application window
     ImGui_ImplWin32_EnableDpiAwareness();
 
-    WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, appNameW, nullptr };
+    HICON appIcon = LoadIcon(GetModuleHandleA(nullptr), MAKEINTRESOURCE(IDI_APP_ICON));
+    WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), appIcon, nullptr, nullptr, nullptr, appNameW, nullptr };
     RegisterClassExW(&wc);
 
     const Settings& settings = GetSettings();
+    Recti displayRect = GetWindowDesktopRect();
+    Recti myRect(settings.windowX, settings.windowY, settings.windowX + settings.windowWidth, settings.windowY + settings.windowHeight);
+    if (!rectiTest(myRect, displayRect))
+        SetWindowPos(0, 0);
+
     HWND hwnd = CreateWindowW(wc.lpszClassName, appNameW, WS_OVERLAPPEDWINDOW, 
                               settings.windowX, settings.windowY, 
-                              Max<uint16>(settings.windowWidth, 500), Max<uint16>(settings.windowHeight, 500), 
+                              Clamp<uint16>(settings.windowWidth, 500, rectiWidth(displayRect)), Clamp<uint16>(settings.windowHeight, 500, rectiHeight(displayRect)), 
                               nullptr, nullptr, wc.hInstance, nullptr);
 
     // Show the window
@@ -159,6 +165,8 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(gGfx.device, gGfx.deviceContext);
+
+    Initialize();
 
     ImGuiIO& io = ImGui::GetIO();
 
@@ -209,6 +217,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
         ImGui::BeginFrame();       
+        UpdateCommon();
         Update();
 
         // Rendering
@@ -227,13 +236,15 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
         memTempReset(1.0f/io.Framerate, false);
     }
 
+    ImGui::MyRelease();
+    Release();
+    ReleaseCommon();
+
     CleanupDeviceD3D();
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
 
-    ImGui::MyRelease();
-    ReleaseCommon();
-    Release();
+    ImGui::DestroyContext();
 
     DestroyWindow(hwnd);
     UnregisterClassW(wc.lpszClassName, wc.hInstance);
@@ -261,6 +272,8 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if (wParam != SIZE_MINIMIZED) {
             gWindow.resizeWidth = (UINT)LOWORD(lParam); // Queue resize
             gWindow.resizeHeight = (UINT)HIWORD(lParam);
+        }
+        else {
             gWindow.isFocused = false;
         }
         return 0;
@@ -322,8 +335,8 @@ void* CreateRGBATexture(uint32 width, uint32 height, const void* data)
 
     };
     [[maybe_unused]] HRESULT hr = gGfx.device->CreateTexture2D(&textureDesc, nullptr, &texture);
-
     ASSERT(SUCCEEDED(hr));
+
     return texture;
 }
 
@@ -399,4 +412,27 @@ bool GetClipboardString(char* textOut, uint32 textSize)
 void ToggleIdleWait(bool wait)
 {
     gWindow.disableIdleWait = !wait;
+}
+
+Recti GetWindowDesktopRect()
+{
+    HMONITOR hmon = MonitorFromWindow(gWindow.hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi = { sizeof(MONITORINFO) };
+    if (GetMonitorInfoA(hmon, &mi))
+        return Recti(mi.rcWork.left, mi.rcWork.top, mi.rcWork.right, mi.rcWork.bottom);
+    else
+        return RECTI_EMPTY;
+}
+
+void* GetGraphicsDevice()
+{
+    return gGfx.device;
+}
+
+void SetWindowTitle(const char* title)
+{
+    if (title && title[0])
+        SetWindowTextA(gWindow.hwnd, String<512>::Format("%s [%s]", CONFIG_APP_NAME, title).CStr());
+    else
+        SetWindowTextA(gWindow.hwnd, CONFIG_APP_NAME);
 }

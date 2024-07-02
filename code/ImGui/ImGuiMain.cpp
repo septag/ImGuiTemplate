@@ -3,6 +3,7 @@
 
 #include "ImGuiMain.h"
 #include "FontAwesome.h"
+#include "imgui_internal.h"
 
 #include <time.h>
 
@@ -10,7 +11,7 @@ struct ImGuiContextExtra
 {
     Fonts fonts;
     void* fontTexture;
-    Docking dock;
+    bool init;
 };
 
 static ImGuiContextExtra gImGuiExtra;
@@ -151,13 +152,14 @@ bool ImGui::MyInitialize()
         style.Colors[ImGuiCol_WindowBg].w = 1.0f;
     }
 
+    gImGuiExtra.init = true;
+
     return true;
 }
 
 void ImGui::MyRelease()
 {
     DestroyTexture(gImGuiExtra.fontTexture);
-    ImGui::DestroyContext();
 }
 
 const Fonts& ImGui::GetFonts()
@@ -226,72 +228,35 @@ bool ImGui::LoadFonts(float dpiScale)
     return true;
 }
 
-#include "imgui_internal.h"
-
-// Note(TODO): this whole thing is very hacky, so beware and consider changing to a better solution in the future
-static ImGuiID tmpDockSpaceOverViewport(const ImGuiViewport* viewport = nullptr, ImGuiDockNodeFlags dockspaceFlags = 0)
-{
-    if (viewport == nullptr)
-        viewport = ImGui::GetMainViewport();
-
-    ImGui::SetNextWindowPos(viewport->WorkPos);
-    ImGui::SetNextWindowSize(viewport->WorkSize);
-    ImGui::SetNextWindowViewport(viewport->ID);
-
-    ImGuiWindowFlags hostWindowFlags = 0;
-    hostWindowFlags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking;
-    hostWindowFlags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-    if (dockspaceFlags & ImGuiDockNodeFlags_PassthruCentralNode)
-        hostWindowFlags |= ImGuiWindowFlags_NoBackground;
-
-    char label[32];
-    strPrintFmt(label, sizeof(label), "DockSpaceViewport_%08X", viewport->ID);
-
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::Begin(label, nullptr, hostWindowFlags);
-    ImGui::PopStyleVar(3);
-
-    ImGuiID dockspaceID = ImGui::GetID("DockSpace");
-
-    ImGuiDockNodeFlags extraDockFlags = 0; // ImGuiDockNodeFlags_NoTabBar
-    Docking& dock = gImGuiExtra.dock;
-    if (!ImGui::DockBuilderGetNode(dockspaceID)) {
-        ImGui::DockBuilderRemoveNode(dockspaceID);
-        ImGui::DockBuilderAddNode(dockspaceID, extraDockFlags);
-
-        ImGuiID dock_main_id = dockspaceID;
-        dock.left = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.3f, nullptr, &dock.right);
-
-        ImGui::DockBuilderDockWindow("Workspace", dock.left);
-        ImGui::DockBuilderDockWindow("_Blank", dock.right);
-
-        // Disable tab bar for custom toolbar
-        ImGuiDockNode* node = ImGui::DockBuilderGetNode(dock.left);
-        node->LocalFlags |= extraDockFlags;
-
-        node = ImGui::DockBuilderGetNode(dock.right);
-        node->LocalFlags |= extraDockFlags;        
-
-        ImGui::DockBuilderFinish(dock_main_id);
-    }
-
-    dock.main = dockspaceID;
-    ImGui::DockSpace(dockspaceID, ImVec2(0.0f, 0.0f), dockspaceFlags, nullptr);
-    ImGui::End();
-
-    return dockspaceID;
-}
-
 void ImGui::BeginFrame()
 {
-    tmpDockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);    
-}
+    if (!gImGuiExtra.init)
+        return;
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    if (!viewport)
+        return;
 
-Docking& ImGui::GetDocking()
-{
-    return gImGuiExtra.dock;
+    ImGuiID id = ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
+    
+    static bool firstTime = true;
+    if (firstTime) {
+
+        ImGui::DockBuilderRemoveNode(id);
+        ImGui::DockBuilderAddNode(id, ImGuiDockNodeFlags_PassthruCentralNode);
+
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+
+        ImGui::DockBuilderSetNodeSize(id, viewport->WorkSize);
+        ImGui::DockBuilderSetNodePos(id, viewport->WorkPos);
+
+        // Add additional docks and assign them to windows based on this example
+        // ImGuiID dock1 = ImGui::DockBuilderSplitNode(id, ImGuiDir_Up, 0.5f, nullptr, &id);
+        // ImGuiID dock2 = ImGui::DockBuilderSplitNode(id, ImGuiDir_Down, 0.5f, nullptr, &id);
+        // ImGui::DockBuilderDockWindow("Preview", dock1);
+        // ImGui::DockBuilderDockWindow("Log", dock2);
+
+        firstTime = false;
+    }
 }
 
 void ImGui::SaveState()
@@ -441,4 +406,43 @@ void ImGui::EndMainToolbar()
 
     ImGui::End();
     ImGui::PopStyleColor();
+}
+
+void ImGui::SeparatorVertical(float thickness)
+{
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical, thickness);
+}
+
+bool ImGui::ToggleButton(const char* label, bool* toggled, const ImVec2& size_arg)
+{
+    ImGuiWindow* window = GetCurrentWindow();
+    if (window->SkipItems)
+        return false;
+    ImGuiContext& g = *GImGui;
+    const ImGuiStyle& style = g.Style;
+    const ImGuiID id = window->GetID(label);
+    const ImVec2 labelSize = CalcTextSize(label, NULL, true);
+
+    ImVec2 pos = window->DC.CursorPos;
+    ImVec2 size = CalcItemSize(size_arg, labelSize.x + style.FramePadding.x * 2.0f, labelSize.y + style.FramePadding.y * 2.0f);
+    const ImRect bb(pos, pos + size);
+    ItemSize(size, style.FramePadding.y);
+
+    if (!ItemAdd(bb, id))
+        return false;
+
+    bool hovered, held;
+    bool pressed = ButtonBehavior(bb, id, &hovered, &held, 0);
+
+    if (pressed)
+        *toggled = !*toggled;
+
+    {
+        const ImU32 col = GetColorU32(*toggled ? ImGuiCol_ButtonActive : ImGuiCol_Button);
+        RenderNavHighlight(bb, id);
+        RenderFrame(bb.Min, bb.Max, col, true, style.FrameRounding);
+        RenderTextClipped(bb.Min + style.FramePadding, bb.Max - style.FramePadding, label, NULL, &labelSize, style.ButtonTextAlign, &bb);
+    }
+
+    return pressed;
 }

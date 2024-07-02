@@ -1,7 +1,9 @@
 #include "Core.h"
 #include "Main.h"
 
+#include "CommonLogView.h"
 #include "ImGui/imgui.h"
+#include "External/osdialog/osdialog.h"
 
 struct ShortcutItem
 {
@@ -85,28 +87,41 @@ static Path GetSettingsFilePath()
     return Path::Join(myDir, CONFIG_APP_NAME ".ini");
 }
 
+static void LogToMessageBoxCallback(const LogEntry& entry, void*)
+{
+    if (entry.type == LogLevel::Error) {
+        osdialog_message(OSDIALOG_ERROR, OSDIALOG_OK, entry.text);
+    }
+}
+
 bool InitializeCommon()
 {
     static SettingsImpl settingsImpl;
+
+    logRegisterCallback(LogToMessageBoxCallback, nullptr);
 
     settingsAddCustomCallbacks(&settingsImpl);
     settingsInitializeFromINI(GetSettingsFilePath().CStr());
 
     logSetSettings(LogLevel::Debug, false, false);
     jobsInitialize({});
+
+    if (!InitializeLogView())
+        logError("Could not initialize log view");
     
     return true;
 }
 
 void ReleaseCommon()
 {
+    ReleaseLogView();
     settingsSaveToINI(GetSettingsFilePath().CStr());
 
     jobsRelease();
     settingsRelease();
 }
 
-const Settings& GetSettings()
+Settings& GetSettings()
 {
     return gSettings;
 }
@@ -123,6 +138,30 @@ void SetWindowRect(uint16 x, uint16 y, uint16 width, uint16 height)
     gSettings.windowY = y;
     gSettings.windowWidth = width;
     gSettings.windowHeight = height;
+}
+
+void UpdateCommon()
+{
+    // Process shortcuts
+    {
+        for (const ShortcutItem& item : gShortcuts) {
+            int modKeys = 0;
+            if (ImGui::IsKeyDown(ImGuiKey_ModAlt))
+                modKeys |= ImGuiKey_ModAlt;
+            if (ImGui::IsKeyDown(ImGuiKey_ModCtrl))
+                modKeys |= ImGuiKey_ModCtrl;
+            if (ImGui::IsKeyDown(ImGuiKey_ModShift))
+                modKeys |= ImGuiKey_ModShift;
+
+            if ((item.keys[0] && ImGui::IsKeyPressed(item.keys[0])) && 
+                (item.keys[1] == 0 || (item.keys[1] && ImGui::IsKeyPressed(item.keys[1]))) &&
+                (item.modKeys == 0 || item.modKeys == modKeys))
+            {
+                item.callback(item.user);
+            }
+        }
+    }
+
 }
 
 // shortcut string example:

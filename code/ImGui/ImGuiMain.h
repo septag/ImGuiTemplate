@@ -15,16 +15,6 @@ struct Fonts
     float monoFontSize;
 };
 
-struct Docking
-{
-    ImGuiID main;
-    ImGuiID left;
-    ImGuiID right;
-
-    ImGuiID dockIdForGraphs;
-    ImGuiID dockIdForOutputs;
-};
-
 namespace ImGui
 {
     bool MyInitialize();
@@ -35,7 +25,6 @@ namespace ImGui
     void SaveState();
     void BeginFrame();
 
-    Docking& GetDocking();
     bool BeginMainToolbar(float height);
     void EndMainToolbar();
 
@@ -75,4 +64,7 @@ namespace ImGui
     template <typename F> void AlignCenter(const F& f) { Align(0.5f, f); }
 
     void SpinnerAng(const char *label, float radius, float thickness, const ImColor &color, const ImColor &bg, float speed, float angle, int mode);
+
+    void SeparatorVertical(float thickness = 1.0f);
+    bool ToggleButton(const char* label, bool* toggled, const ImVec2& size_arg = ImVec2(0, 0));
 }
