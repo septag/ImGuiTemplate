@@ -1,42 +1,42 @@
 // This source file is auto-generated
 // Inlined files:
-//	stringutilwin.cpp
-//	tracycallstack.h
-//	remedybg_driver.h
-//	log.cpp
-//	tracyuwp.hpp
 //	jsonparser.cpp
-//	settings.cpp
-//	tlsf.c
-//	stringutil.cpp
-//	systemmac.cpp
-//	tracyapi.h
-//	cpu-features.c
-//	cpu-features.h
-//	base.cpp
-//	cj5.h
-//	iniparser.cpp
-//	tracyhelper.h
-//	sokol_args.h
-//	ini.h
-//	pools.cpp
-//	jobs.cpp
-//	includewin.h
-//	debug.cpp
-//	tracyhelper.cpp
-//	debugwin.cpp
-//	debugclang.cpp
-//	tracyc.h
-//	systemwin.cpp
-//	mathall.cpp
-//	hash.cpp
-//	systemposix.cpp
-//	tlsf.h
-//	stb_sprintf.h
-//	allocators.cpp
-//	system.cpp
 //	minicoro.h
 //	systemandroid.cpp
+//	base.cpp
+//	jobs.cpp
+//	tracyc.h
+//	includewin.h
+//	ini.h
+//	tlsf.h
+//	cj5.h
+//	stringutil.cpp
+//	cpu-features.h
+//	tracyuwp.hpp
+//	tlsf.c
+//	settings.cpp
+//	debugclang.cpp
+//	tracyhelper.cpp
+//	stb_sprintf.h
+//	mathall.cpp
+//	tracycallstack.h
+//	debugwin.cpp
+//	tracyapi.h
+//	remedybg_driver.h
+//	systemmac.cpp
+//	tracyhelper.h
+//	pools.cpp
+//	systemposix.cpp
+//	allocators.cpp
+//	stringutilwin.cpp
+//	hash.cpp
+//	iniparser.cpp
+//	system.cpp
+//	log.cpp
+//	systemwin.cpp
+//	cpu-features.c
+//	sokol_args.h
+//	debug.cpp
 
 #include "Core.h"
 #define BUILD_UNITY
@@ -500,82 +500,138 @@ TRACY_API void ___tracy_fiber_leave( void );
     using TracyZoneEnterCallback = void(*)(TracyCZoneCtx* ctx, const ___tracy_source_location_data* sourceLoc);
     using TracyZoneExitCallback = bool(*)(TracyCZoneCtx* ctx);
 
-    API void tracySetZoneCallbacks(TracyZoneEnterCallback zoneEnterCallback, TracyZoneExitCallback zoneExitCallback);
-    API void tracyRunZoneEnterCallback(TracyCZoneCtx* ctx, const ___tracy_source_location_data* sourceLoc);
-    API bool tracyRunZoneExitCallback(TracyCZoneCtx* ctx);
-
-    namespace _private
+    namespace Tracy
     {
-        struct ___tracy_gpu_calibrate_data
-        {
-            int64 gpuTime;
-            int64 cpuTime;
-            int64 deltaTime;
-            uint8 context;
-        };
+        API void SetZoneCallbacks(TracyZoneEnterCallback zoneEnterCallback, TracyZoneExitCallback zoneExitCallback);
+        API void RunZoneEnterCallback(TracyCZoneCtx* ctx, const ___tracy_source_location_data* sourceLoc);
+        API bool RunZoneExitCallback(TracyCZoneCtx* ctx);
 
-        void ___tracy_emit_gpu_calibrate_serial(const struct ___tracy_gpu_calibrate_data data);
-        int64 __tracy_get_time(void);
-        uint64 __tracy_alloc_source_loc(uint32 line, const char* source, const char* function, const char* name);
-
-        struct TracyCZoneScope
+        namespace _private
         {
-            TracyCZoneCtx mCtx;
-            const ___tracy_source_location_data* mSourceLoc;
+            struct ___tracy_gpu_calibrate_data
+            {
+                int64 gpuTime;
+                int64 cpuTime;
+                int64 deltaTime;
+                uint8 context;
+            };
+
+            void ___tracy_emit_gpu_calibrate_serial(const struct ___tracy_gpu_calibrate_data data);
+            int64 __tracy_get_time(void);
+            uint64 __tracy_alloc_source_loc(uint32 line, const char* source, const char* function, const char* name);
+
+            struct TracyCZoneScope
+            {
+                TracyCZoneCtx mCtx;
+                const ___tracy_source_location_data* mSourceLoc;
     
-            TracyCZoneScope() = delete;
-            explicit TracyCZoneScope(TracyCZoneCtx ctx, const ___tracy_source_location_data* sourceLoc) : mCtx(ctx), mSourceLoc(sourceLoc) { tracyRunZoneEnterCallback(&ctx, sourceLoc); }
-            ~TracyCZoneScope() { if (!tracyRunZoneExitCallback(&mCtx)) { TracyCZoneEnd(mCtx); }}
-        };
+                TracyCZoneScope() = delete;
+                explicit TracyCZoneScope(TracyCZoneCtx ctx, const ___tracy_source_location_data* sourceLoc) : mCtx(ctx), mSourceLoc(sourceLoc) { Tracy::RunZoneEnterCallback(&ctx, sourceLoc); }
+                ~TracyCZoneScope() { if (!Tracy::RunZoneExitCallback(&mCtx)) { TracyCZoneEnd(mCtx); }}
+            };
+        }
     }
 
-    #define TracyCRealloc(oldPtr, ptr, size) \
-        if (oldPtr) {  \
-            TracyCFree(oldPtr);    \
-        }   \
-        TracyCAlloc(ptr, size);   
+
+    #define TracyCRealloc(oldPtr, ptr, size) if (oldPtr) { TracyCFree(oldPtr); }  TracyCAlloc(ptr, size)
 
     #if defined TRACY_HAS_CALLSTACK && defined TRACY_CALLSTACK
-        #define PROFILE_ZONE(active) \
+        #define PROFILE_ZONE_OPT(active) \
             static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { NULL, __func__,  __FILE__, (uint32_t)__LINE__, 0 }; \
-            _private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin_callstack(&CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active), &CONCAT(__tracy_source_location,__LINE__));
-        #define PROFILE_ZONE_NAME(name, active) \
+            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin_callstack(&CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active), &CONCAT(__tracy_source_location,__LINE__));
+        #define PROFILE_ZONE_NAME_OPT(name, active) \
             static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { name, __func__,  __FILE__, (uint32_t)__LINE__, 0 }; \
-            _private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin_callstack( &CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active ), &CONCAT(__tracy_source_location,__LINE__));
-        #define PROFILE_ZONE_COLOR(color, active) \
+            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin_callstack( &CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active ), &CONCAT(__tracy_source_location,__LINE__));
+        #define PROFILE_ZONE_COLOR_OPT(color, active) \
             static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { NULL, __func__,  __FILE__, (uint32_t)__LINE__, color }; \
-            _private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin_callstack( &CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active ), &CONCAT(__tracy_source_location,__LINE__));
-        #define PROFILE_ZONE_NAME_COLOR(name, color, active) \
+            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin_callstack( &CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active ), &CONCAT(__tracy_source_location,__LINE__));
+        #define PROFILE_ZONE_NAME_COLOR_OPT(name, color, active) \
             static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { name, __func__,  __FILE__, (uint32_t)__LINE__, color }; \
-            _private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin_callstack( &CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active ), &CONCAT(__tracy_source_location,__LINE__));
-        #define PROFILE_ZONE_WITH_TEXT(text, textLen, active) \
-            static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { NULL, __func__,  __FILE__, (uint32_t)__LINE__, 0 }; \
-            _private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin_callstack(&CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active), &CONCAT(__tracy_source_location,__LINE__)); \
+            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin_callstack( &CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active ), &CONCAT(__tracy_source_location,__LINE__));
+
+        #define PROFILE_ZONE() PROFILE_ZONE_OPT(true)
+        #define PROFILE_ZONE_NAME(name) PROFILE_ZONE_NAME_OPT(name, true)
+        #define PROFILE_ZONE_COLOR(color) PROFILE_ZONE_COLOR_OPT(color, true)
+        #define PROFILE_ZONE_NAME_COLOR(name, color) PROFILE_ZONE_NAME_COLOR_OPT(name, color, true)
+
+        #define PROFILE_ZONE_WITH_TEXT_OPT(text, textLen, active) \
+            PROFILE_ZONE_OPT(active) \
             TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
+        #define PROFILE_ZONE_NAME_WITH_TEXT_OPT(name, text, textLen, active) \
+            PROFILE_ZONE_NAME_OPT(name, active) \
+            TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
+        #define PROFILE_ZONE_COLOR_WITH_TEXT_OPT(color, text, textLen, active) \
+            PROFILE_ZONE_COLOR_OPT(color, active) \
+            TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
+        #define PROFILE_ZONE_NAME_COLOR_WITH_TEXT_OPT(name, color, text, textLen, active) \
+            PROFILE_ZONE_NAME_COLOR_OPT(name, color, active) \
+            TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
+
+        #define PROFILE_ZONE_WITH_TEXT(text, textLen) PROFILE_ZONE_WITH_TEXT_OPT(text, textLen, true)
+        #define PROFILE_ZONE_NAME_WITH_TEXT(name, text, textLen) PROFILE_ZONE_NAME_WITH_TEXT_OPT(name, text, textLen, true)
+        #define PROFILE_ZONE_COLOR_WITH_TEXT(color, text, textLen) PROFILE_ZONE_COLOR_WITH_TEXT_OPT(color, text, textLen, true)
+        #define PROFILE_ZONE_NAME_COLOR_WITH_TEXT(name, color, text, textLen) PROFILE_ZONE_NAME_COLOR_WITH_TEXT(name, color, text, textLen, true)
     #else
-        #define PROFILE_ZONE(active) \
+        #define PROFILE_ZONE_OPT(active) \
             static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { NULL, __func__,  __FILE__, (uint32_t)__LINE__, 0 }; \
-            _private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin( &CONCAT(__tracy_source_location,__LINE__), active ), &CONCAT(__tracy_source_location,__LINE__));
-        #define PROFILE_ZONE_NAME(name, active) \
+            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin( &CONCAT(__tracy_source_location,__LINE__), active ), &CONCAT(__tracy_source_location,__LINE__));
+        #define PROFILE_ZONE_NAME_OPT(name, active) \
             static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { name, __func__,  __FILE__, (uint32_t)__LINE__, 0 }; \
-            _private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin( &CONCAT(__tracy_source_location,__LINE__), active ), &CONCAT(__tracy_source_location,__LINE__));
-        #define PROFILE_ZONE_COLOR(color, active) \
+            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin( &CONCAT(__tracy_source_location,__LINE__), active ), &CONCAT(__tracy_source_location,__LINE__));
+        #define PROFILE_ZONE_COLOR_OPT(color, active) \
             static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { NULL, __func__,  __FILE__, (uint32_t)__LINE__, color }; \
-            _private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin( &CONCAT(__tracy_source_location,__LINE__), active ), &CONCAT(__tracy_source_location,__LINE__));
-        #define PROFILE_ZONE_NAME_COLOR(name, color, active) \
+            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin( &CONCAT(__tracy_source_location,__LINE__), active ), &CONCAT(__tracy_source_location,__LINE__));
+        #define PROFILE_ZONE_NAME_COLOR_OPT(name, color, active) \
             static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { name, __func__,  __FILE__, (uint32_t)__LINE__, color }; \
-            _private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin( &CONCAT(__tracy_source_location,__LINE__), active ), &CONCAT(__tracy_source_location,__LINE__));
-        #define PROFILE_ZONE(text, textLen, active) \
+            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin( &CONCAT(__tracy_source_location,__LINE__), active ), &CONCAT(__tracy_source_location,__LINE__));
+        #define PROFILE_ZONE_WITH_TEXT_OPT(text, textLen, active) \
             static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { NULL, __func__,  __FILE__, (uint32_t)__LINE__, 0 }; \
-            _private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin( &CONCAT(__tracy_source_location,__LINE__), active ), &CONCAT(__tracy_source_location,__LINE__)); \
+            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin( &CONCAT(__tracy_source_location,__LINE__), active ), &CONCAT(__tracy_source_location,__LINE__)); \
             TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
+
+        #define PROFILE_ZONE() PROFILE_ZONE_OPT(true)
+        #define PROFILE_ZONE_NAME(name) PROFILE_ZONE_NAME_OPT(name, true)
+        #define PROFILE_ZONE_COLOR(color) PROFILE_ZONE_COLOR_OPT(color, true)
+        #define PROFILE_ZONE_NAME_COLOR(name, color) PROFILE_ZONE_NAME_COLOR_OPT(name, color, true)
+
+        #define PROFILE_ZONE_WITH_TEXT_OPT(text, textLen, active) \
+            PROFILE_ZONE_OPT(active) \
+            TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
+        #define PROFILE_ZONE_NAME_WITH_TEXT_OPT(name, text, textLen, active) \
+            PROFILE_ZONE_NAME_OPT(name, active) \
+            TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
+        #define PROFILE_ZONE_COLOR_WITH_TEXT_OPT(color, text, textLen, active) \
+            PROFILE_ZONE_COLOR_OPT(color, active) \
+            TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
+        #define PROFILE_ZONE_NAME_COLOR_WITH_TEXT_OPT(name, color, text, textLen, active) \
+            PROFILE_ZONE_NAME_COLOR_WITH_TEXT_OPT(name, color, active) \
+            TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
+
+        #define PROFILE_ZONE_WITH_TEXT(text, textLen) PROFILE_ZONE_WITH_TEXT_OPT(text, textLen, true)
+        #define PROFILE_ZONE_NAME_WITH_TEXT(name, text, textLen) PROFILE_ZONE_NAME_WITH_TEXT_OPT(name, text, textLen, true)
+        #define PROFILE_ZONE_COLOR_WITH_TEXT(color, text, textLen) PROFILE_ZONE_COLOR_WITH_TEXT_OPT(color, text, textLen, true)
+        #define PROFILE_ZONE_NAME_COLOR_WITH_TEXT(name, color, text, textLen) PROFILE_ZONE_NAME_COLOR_WITH_TEXT(name, color, text, textLen, true)
     #endif // else: TRACY_HAS_CALLBACK
 #else
-    #define PROFILE_ZONE(active)
-    #define PROFILE_ZONE_NAME(name, active)
-    #define PROFILE_ZONE_COLOR(color, active)
-    #define PROFILE_ZONE_NAME_COLOR(name, color, active)
-    #define PROFILE_ZONE_WITH_TEXT(text, textLen, active)
+    #define PROFILE_ZONE_OPT(active)
+    #define PROFILE_ZONE_NAME_OPT(name, active)
+    #define PROFILE_ZONE_COLOR_OPT(color, active)
+    #define PROFILE_ZONE_NAME_COLOR_OPT(name, color, active)
+
+    #define PROFILE_ZONE_WITH_TEXT_OPT(text, textLen, active)
+    #define PROFILE_ZONE_NAME_WITH_TEXT_OPT(name, text, textLen, active)
+    #define PROFILE_ZONE_COLOR_WITH_TEXT_OPT(color, text, textLen, active)
+    #define PROFILE_ZONE_NAME_COLOR_WITH_TEXT_OPT(name, color, text, textLen, active)
+
+    #define PROFILE_ZONE()
+    #define PROFILE_ZONE_NAME(name)
+    #define PROFILE_ZONE_COLOR(color)
+    #define PROFILE_ZONE_NAME_COLOR(name, color)
+
+    #define PROFILE_ZONE_WITH_TEXT(text, textLen)
+    #define PROFILE_ZONE_NAME_WITH_TEXT(name, text, textLen)
+    #define PROFILE_ZONE_COLOR_WITH_TEXT(color, text, textLen)
+    #define PROFILE_ZONE_NAME_COLOR_WITH_TEXT(name, color, text, textLen)    
 
     #define TracyCRealloc(oldPtr, ptr, size)
 #endif  // TRACY_ENABLE
@@ -1947,10 +2003,9 @@ void* tlsf_realloc(tlsf_t tlsf, void* ptr, size_t size)
 PRAGMA_DIAGNOSTIC_POP()
 
 
-static constexpr size_t MEM_TEMP_MAX_BUFFER_SIZE = kGB;
+static constexpr size_t MEM_TEMP_MAX_BUFFER_SIZE = CONFIG_TEMP_ALLOC_MAX;
 static constexpr uint32 MEM_TEMP_FRAME_PEAKS_COUNT = 4;
-static constexpr uint32 MEM_TEMP_PAGE_SIZE = 256*kKB;
-static constexpr float  MEM_TEMP_VALIDATE_RESET_TIME = 5.0f;
+static constexpr uint32 MEM_TEMP_PAGE_SIZE = CONFIG_TEMP_ALLOC_PAGE_SIZE;
 static constexpr uint32 MEM_TEMP_MAX_STACK_FRAMES = 8;
 
 struct MemTempStack
@@ -1959,15 +2014,14 @@ struct MemTempStack
     size_t offset;
     void* lastAllocatedPtr;
     void* stacktrace[MEM_TEMP_MAX_STACK_FRAMES];
-    Array<_private::MemDebugPointer> debugPointers;
-    MemTempId id;
+    Array<MemDebugPointer> debugPointers;
+    MemTempAllocator::ID id;
     uint16 numStackframes;
 };
 
 struct alignas(CACHE_LINE_SIZE) MemTempContext
 {
-    atomicUint32 isInUse;  // This is atomic because we are accessing it in the memTempReset thread
-    uint8 _padding1[CACHE_LINE_SIZE - sizeof(atomicUint32)];
+    SpinLockMutex inUseMtx;
 
     Array<MemTempStack> allocStack;
     uint32 generationIdx;   // Just a counter to make temp IDs unique
@@ -1978,7 +2032,6 @@ struct alignas(CACHE_LINE_SIZE) MemTempContext
     uint8* buffer;
     size_t bufferSize;
     
-    float noresetTime;
     uint32 threadId;
     char threadName[32];
 
@@ -1994,8 +2047,9 @@ struct alignas(CACHE_LINE_SIZE) MemTempContext
 struct MemTempData
 {
     Mutex            tempMtx;
-    size_t           pageSize = sysGetPageSize();
-    Array<MemTempContext*> tempCtxs; 
+    size_t           pageSize = OS::GetPageSize();
+    Array<MemTempContext*> tempCtxs;
+    Array<MemTempContext*> tempCtxsCopy;
     bool             captureTempStackTrace;
 
     MemTempData()  { tempMtx.Initialize(); ASSERT(MEM_TEMP_PAGE_SIZE % pageSize == 0); }
@@ -2003,24 +2057,25 @@ struct MemTempData
 };
 
 static MemTempData gMemTemp;
-NO_INLINE static MemTempContext& MemGetTempContext() 
+
+NO_INLINE static MemTempContext& _GetMemTempContext() 
 { 
     static thread_local MemTempContext tempCtx;
     return tempCtx; 
 }
 
-void memTempSetDebugMode(bool enable)
+void MemTempAllocator::EnableDebugMode(bool enable)
 {
-    ASSERT_MSG(MemGetTempContext().allocStack.Count() == 0, "MemTemp must be at it's initial state");
-    MemGetTempContext().debugMode = enable;
+    ASSERT_MSG(_GetMemTempContext().allocStack.Count() == 0, "MemTemp must be at it's initial state");
+    _GetMemTempContext().debugMode = enable;
 }
 
-void memTempSetCaptureStackTrace(bool capture)
+void MemTempAllocator::EnableCallstackCapture(bool capture)
 {
     gMemTemp.captureTempStackTrace = capture;
 }
 
-void memTempGetStats(Allocator* alloc, MemTransientAllocatorStats** outStats, uint32* outCount)
+void MemTempAllocator::GetStats(MemAllocator* alloc, Stats** outStats, uint32* outCount)
 {
     ASSERT(alloc);
     ASSERT(outStats);
@@ -2028,7 +2083,7 @@ void memTempGetStats(Allocator* alloc, MemTransientAllocatorStats** outStats, ui
 
     MutexScope mtx(gMemTemp.tempMtx);
     if (gMemTemp.tempCtxs.Count())
-        *outStats = memAllocTyped<MemTransientAllocatorStats>(gMemTemp.tempCtxs.Count(), alloc);
+        *outStats = Mem::AllocTyped<MemTempAllocator::Stats>(gMemTemp.tempCtxs.Count(), alloc);
     *outCount = gMemTemp.tempCtxs.Count();
 
     for (uint32 i = 0; i < *outCount; i++) {
@@ -2039,20 +2094,21 @@ void memTempGetStats(Allocator* alloc, MemTransientAllocatorStats** outStats, ui
     }
 }
 
-MemTempId memTempPushId()
+MemTempAllocator::ID MemTempAllocator::PushId()
 {
-    MemTempContext& ctx = MemGetTempContext();
+    MemTempContext& ctx = _GetMemTempContext();
 
-    atomicExchange32Explicit(&ctx.isInUse, 1, AtomicMemoryOrder::Release);
+    if (ctx.allocStack.IsEmpty())
+        ctx.inUseMtx.Enter();
 
     ++ctx.generationIdx;
     ASSERT_MSG(ctx.generationIdx <= UINT16_MAX, "Too many push temp allocator, generation overflowed");
 
     if (!ctx.init) {
         if (ctx.buffer == nullptr && !ctx.debugMode) {
-            ctx.buffer = (uint8*)memVirtualReserve(MEM_TEMP_MAX_BUFFER_SIZE);
+            ctx.buffer = (uint8*)Mem::VirtualReserve(MEM_TEMP_MAX_BUFFER_SIZE);
             ctx.bufferSize = MEM_TEMP_PAGE_SIZE;
-            memVirtualCommit(ctx.buffer, ctx.bufferSize); 
+            Mem::VirtualCommit(ctx.buffer, ctx.bufferSize); 
         }
         ctx.init = true;
     }
@@ -2061,8 +2117,8 @@ MemTempId memTempPushId()
         MutexScope mtx(gMemTemp.tempMtx);
         if (gMemTemp.tempCtxs.FindIf([ctx = &ctx](const MemTempContext* tmpCtx)->bool { return ctx == tmpCtx; }) == UINT32_MAX) {
             gMemTemp.tempCtxs.Push(&ctx);
-            ctx.threadId = threadGetCurrentId();
-            threadGetCurrentThreadName(ctx.threadName, sizeof(ctx.threadName));
+            ctx.threadId = Thread::GetCurrentId();
+            Thread::GetCurrentThreadName(ctx.threadName, sizeof(ctx.threadName));
         }
 
         ctx.used = true;
@@ -2071,7 +2127,7 @@ MemTempId memTempPushId()
     uint32 index = ctx.allocStack.Count();
     ASSERT_MSG(index <= UINT16_MAX, "Temp stack depth is too high! Perhaps a mistake in Push/Pop order");
 
-    MemTempId id = (index << 16) | (ctx.generationIdx & 0xffff);
+    ID id = (index << 16) | (ctx.generationIdx & 0xffff);
     
     MemTempStack memStack { 
         .baseOffset = index > 0 ? (ctx.allocStack.Last().baseOffset + ctx.allocStack.Last().offset) : 0,
@@ -2080,16 +2136,16 @@ MemTempId memTempPushId()
 
     if constexpr(!CONFIG_FINAL_BUILD) {
         if (gMemTemp.captureTempStackTrace)
-            memStack.numStackframes = debugCaptureStacktrace(memStack.stacktrace, MEM_TEMP_MAX_STACK_FRAMES, 2);
+            memStack.numStackframes = Debug::CaptureStacktrace(memStack.stacktrace, MEM_TEMP_MAX_STACK_FRAMES, 2);
     }
 
     ctx.allocStack.Push(memStack);
     return id;
 }
 
-void memTempPopId(MemTempId id)
+void MemTempAllocator::PopId(ID id)
 {
-    MemTempContext& ctx = MemGetTempContext();
+    MemTempContext& ctx = _GetMemTempContext();
 
     ASSERT(id);
     ASSERT(ctx.used);
@@ -2100,16 +2156,146 @@ void memTempPopId(MemTempId id)
 
     MemTempStack memStack = ctx.allocStack.PopLast();
     if (memStack.debugPointers.Count()) {
-        for (_private::MemDebugPointer p : memStack.debugPointers)
-            memDefaultAlloc()->Free(p.ptr, p.align);
+        for (MemDebugPointer p : memStack.debugPointers)
+            Mem::GetDefaultAlloc()->Free(p.ptr, p.align);
         memStack.debugPointers.Free();
     }
-    atomicExchange32Explicit(&ctx.isInUse, 0, AtomicMemoryOrder::Release);
+
+    if (ctx.allocStack.IsEmpty())
+        ctx.inUseMtx.Exit();
 }
 
-void* memReallocTemp(MemTempId id, void* ptr, size_t size, uint32 align)
+MemTempContext::~MemTempContext()
 {
-    MemTempContext& ctx = MemGetTempContext();
+    if (buffer) {
+        if (bufferSize)
+            Mem::VirtualDecommit(buffer, bufferSize);
+        Mem::VirtualRelease(buffer, bufferSize);
+    }
+
+    if (debugMode) {
+        for (MemTempStack& memStack : allocStack) {
+            for (MemDebugPointer p : memStack.debugPointers)
+                Mem::GetDefaultAlloc()->Free(p.ptr, p.align);
+            memStack.debugPointers.Free();
+        }
+    }
+    allocStack.Free();
+
+    used = false;
+    init = false;
+}
+
+void MemTempAllocator::Reset()
+{
+    PROFILE_ZONE();
+
+
+    uint32 count;
+    {
+        MutexScope mtx(gMemTemp.tempMtx);
+        gMemTemp.tempCtxs.CopyTo(&gMemTemp.tempCtxsCopy);
+        count = gMemTemp.tempCtxs.Count();
+    }
+
+    for (uint32 i = 0; i < gMemTemp.tempCtxsCopy.Count();) {
+        MemTempContext* ctx = gMemTemp.tempCtxsCopy[i];
+
+        if (!ctx->inUseMtx.TryEnter()) {
+            i++;
+            continue;
+        }
+
+        if (ctx->used && ctx->allocStack.IsEmpty()) {
+            ctx->generationIdx = 0;
+            ctx->framePeaks[ctx->resetCount] = ctx->curFramePeak;
+            ctx->resetCount = (ctx->resetCount + 1) % MEM_TEMP_FRAME_PEAKS_COUNT;
+            ctx->curFramePeak = 0;
+
+            if (!ctx->debugMode) {
+                size_t maxPeakSize = 0;
+                for (uint32 k = 0; k < MEM_TEMP_FRAME_PEAKS_COUNT; k++) {
+                    if (ctx->framePeaks[k] > maxPeakSize)
+                        maxPeakSize = ctx->framePeaks[k];
+                }
+
+                maxPeakSize = Max<size_t>(MEM_TEMP_PAGE_SIZE, maxPeakSize);
+                maxPeakSize = AlignValue(maxPeakSize, gMemTemp.pageSize);
+                if (maxPeakSize > ctx->bufferSize) {
+                    size_t growSize = maxPeakSize - ctx->bufferSize;
+                    Mem::VirtualCommit(ctx->buffer + ctx->bufferSize, growSize);
+                }
+                else if (maxPeakSize < ctx->bufferSize) {
+                    size_t shrinkSize = ctx->bufferSize - maxPeakSize;
+                    Mem::VirtualDecommit(ctx->buffer + maxPeakSize, shrinkSize);
+                }
+                ctx->bufferSize = maxPeakSize;
+            }
+
+            ctx->used = false;
+            gMemTemp.tempCtxsCopy.RemoveAndSwap(i);
+        }
+        else {
+            i++;
+        }
+
+        ctx->inUseMtx.Exit();
+    }
+    
+    {
+        MutexScope mtx(gMemTemp.tempMtx);
+        for (uint32 i = count; i < gMemTemp.tempCtxs.Count(); i++)
+            gMemTemp.tempCtxsCopy.Push(gMemTemp.tempCtxs[i]);
+        gMemTemp.tempCtxsCopy.CopyTo(&gMemTemp.tempCtxs);
+    }
+    
+}
+
+MemTempAllocator::MemTempAllocator() : 
+    mId(MemTempAllocator::PushId()), 
+    mFiberProtectorId(Debug::FiberScopeProtector_Push("TempAllocator")),
+    mOwnsId(true) 
+{ 
+}
+
+MemTempAllocator::MemTempAllocator(ID id)
+{
+    if (id) {
+        mId = id;
+        mFiberProtectorId = Debug::FiberScopeProtector_Push("TempAllocator");
+        mOwnsId = false;
+    }
+    else {
+        mId = MemTempAllocator::PushId();
+        mFiberProtectorId = Debug::FiberScopeProtector_Push("TempAllocator");
+        mOwnsId = true;
+    }
+}
+
+MemTempAllocator::~MemTempAllocator() 
+{ 
+    Debug::FiberScopeProtector_Pop(mFiberProtectorId); 
+    if (mOwnsId) 
+        MemTempAllocator::PopId(mId); 
+}
+
+void* MemTempAllocator::Malloc(size_t size, uint32 align) 
+{
+    return Realloc(nullptr, size, align);
+}
+
+void* MemTempAllocator::MallocZero(size_t size, uint32 align) 
+{
+    void* ptr = Realloc(nullptr, size, align);
+    if (ptr)
+        memset(ptr, 0x0, size);
+    return ptr;
+}
+
+void* MemTempAllocator::Realloc(void* ptr, size_t size, uint32 align) 
+{
+    ID id = mId;
+    MemTempContext& ctx = _GetMemTempContext();
 
     ASSERT(id);
     ASSERT(ctx.used);
@@ -2151,7 +2337,7 @@ void* memReallocTemp(MemTempId id, void* ptr, size_t size, uint32 align)
         size_t endOffset = offset + addOffset;
 
         if (endOffset > MEM_TEMP_MAX_BUFFER_SIZE) {
-            MEMORY_FAIL();
+            MEM_FAIL();
             return nullptr;
         }
 
@@ -2159,7 +2345,7 @@ void* memReallocTemp(MemTempId id, void* ptr, size_t size, uint32 align)
             size_t newSize = Clamp(ctx.bufferSize << 1, endOffset, MEM_TEMP_MAX_BUFFER_SIZE);
 
             size_t growSize = AlignValue(newSize - ctx.bufferSize, gMemTemp.pageSize);
-            memVirtualCommit(ctx.buffer + ctx.bufferSize, growSize);
+            Mem::VirtualCommit(ctx.buffer + ctx.bufferSize, growSize);
             ctx.bufferSize += growSize;
         }
 
@@ -2182,118 +2368,37 @@ void* memReallocTemp(MemTempId id, void* ptr, size_t size, uint32 align)
     }
     else {
         if (ptr == nullptr)
-            ptr = memDefaultAlloc()->Malloc(size, align);
+            ptr = Mem::GetDefaultAlloc()->Malloc(size, align);
         else
-            ptr = memDefaultAlloc()->Realloc(ptr, size, align);
+            ptr = Mem::GetDefaultAlloc()->Realloc(ptr, size, align);
 
         if (ptr) {
             memStack.offset += size;
             size_t endOffset = memStack.baseOffset + memStack.offset;
 
             ctx.peakBytes = Max<size_t>(ctx.peakBytes, endOffset);
-            memStack.debugPointers.Push(_private::MemDebugPointer {ptr, align});
+            memStack.debugPointers.Push({ptr, align});
         }
         return ptr;
     }
 }
 
-MemTempContext::~MemTempContext()
+void MemTempAllocator::Free(void*, uint32) 
 {
-    if (buffer) {
-        if (bufferSize)
-            memVirtualDecommit(buffer, bufferSize);
-        memVirtualRelease(buffer, bufferSize);
-    }
-
-    if (debugMode) {
-        for (MemTempStack& memStack : allocStack) {
-            for (_private::MemDebugPointer p : memStack.debugPointers)
-                memDefaultAlloc()->Free(p.ptr, p.align);
-            memStack.debugPointers.Free();
-        }
-    }
-    allocStack.Free();
-
-    used = false;
-    init = false;
 }
 
-void* memAllocTemp(MemTempId id, size_t size, uint32 align)
+size_t MemTempAllocator::GetOffset() const
 {
-    return memReallocTemp(id, nullptr, size, align);
+    uint32 index = mId >> 16;
+    ASSERT_MSG(index == _GetMemTempContext().allocStack.Count() - 1, "Invalid temp id, likely doesn't belong to current temp stack scope");
+
+    const MemTempStack& memStack = _GetMemTempContext().allocStack[index];
+    return memStack.baseOffset + memStack.offset;
 }
 
-void* memAllocTempZero(MemTempId id, size_t size, uint32 align)
+size_t MemTempAllocator::GetPointerOffset(void* ptr) const
 {
-    void* ptr = memAllocTemp(id, size, align);
-    if (ptr)
-        memset(ptr, 0x0, size);
-    return ptr;
-}
-
-void memTempReset(float dt, bool resetValidation)
-{
-    MutexScope mtx(gMemTemp.tempMtx);
-    for (uint32 i = 0; i < gMemTemp.tempCtxs.Count(); i++) {
-        MemTempContext* ctx = gMemTemp.tempCtxs[i];
-
-        if (atomicLoad32Explicit(&ctx->isInUse, AtomicMemoryOrder::Acquire)) 
-            continue;
-
-        if (ctx->used) {
-            if (ctx->allocStack.Count() == 0) {
-                ctx->generationIdx = 0;
-                ctx->framePeaks[ctx->resetCount] = ctx->curFramePeak;
-                ctx->resetCount = (ctx->resetCount + 1) % MEM_TEMP_FRAME_PEAKS_COUNT;
-                ctx->curFramePeak = 0;
-                ctx->noresetTime = 0;
-
-                if (!ctx->debugMode) {
-                    size_t maxPeakSize = 0;
-                    for (uint32 k = 0; k < MEM_TEMP_FRAME_PEAKS_COUNT; k++) {
-                        if (ctx->framePeaks[k] > maxPeakSize) 
-                            maxPeakSize = ctx->framePeaks[k];
-                    }
-
-                    maxPeakSize = Max<size_t>(MEM_TEMP_PAGE_SIZE, maxPeakSize);
-                    maxPeakSize = AlignValue(maxPeakSize, gMemTemp.pageSize);
-                    if (maxPeakSize > MemGetTempContext().bufferSize) {
-                        size_t growSize = maxPeakSize - MemGetTempContext().bufferSize;
-                        memVirtualCommit(MemGetTempContext().buffer + MemGetTempContext().bufferSize, growSize);
-                    }
-                    else if (maxPeakSize < MemGetTempContext().bufferSize) {
-                        size_t shrinkSize = MemGetTempContext().bufferSize - maxPeakSize;
-                        memVirtualDecommit(MemGetTempContext().buffer + maxPeakSize, shrinkSize);
-                    }
-                    MemGetTempContext().bufferSize = maxPeakSize;
-                }
-
-                ctx->used = false;
-            }   // MemTempContext can reset (allocStack is empty)
-            else if (resetValidation) {
-                ctx->noresetTime += dt;
-                if (ctx->noresetTime >= MEM_TEMP_VALIDATE_RESET_TIME) {
-                    logWarning("Temp stack failed to pop during the frame after %.0f seconds", MEM_TEMP_VALIDATE_RESET_TIME);
-                    ctx->noresetTime = 0;
-
-                    if constexpr(!CONFIG_FINAL_BUILD) {
-                        if (gMemTemp.captureTempStackTrace) {
-                            DebugStacktraceEntry entries[MEM_TEMP_MAX_STACK_FRAMES];
-                            uint32 index = 0;
-                            logDebug("Callstacks for each remaining MemTempPush:");
-                            for (const MemTempStack& memStack : ctx->allocStack) {
-                                debugResolveStacktrace(memStack.numStackframes, memStack.stacktrace, entries);
-                                logDebug("\t%u) Id=%u", ++index, memStack.id);
-                                for (uint16 s = 0; s < memStack.numStackframes; s++) {
-                                    logDebug("\t\t%s(%u): %s", entries[s].filename, entries[s].line, entries[s].name);
-                                }
-                            }
-                        }
-                    } // CONFIG_FINAL_BUILD
-                }
-            }
-        } // MemTempContext->used
-    }
+    return size_t((uint8*)ptr - _GetMemTempContext().buffer);
 }
 
 
@@ -2307,13 +2412,13 @@ void MemBumpAllocatorBase::Initialize(size_t reserveSize, size_t pageSize, bool 
 
         mBuffer = (uint8*)BackendReserve(reserveSize);
         if (!mBuffer) 
-            MEMORY_FAIL();
+            MEM_FAIL();
 
         mPageSize = pageSize;
         mReserveSize = reserveSize;
     }
     else {
-        mDebugPointers = NEW(memDefaultAlloc(), Array<_private::MemDebugPointer>);
+        mDebugPointers = NEW(Mem::GetDefaultAlloc(), Array<MemDebugPointer>);
     }
 }
 
@@ -2327,10 +2432,10 @@ void MemBumpAllocatorBase::Release()
     }
     
     if (mDebugMode) {
-        for (_private::MemDebugPointer p : *mDebugPointers)
-            memDefaultAlloc()->Free(p.ptr, p.align);
+        for (MemDebugPointer p : *mDebugPointers)
+            Mem::GetDefaultAlloc()->Free(p.ptr, p.align);
         mDebugPointers->Free();
-        memFree(mDebugPointers, memDefaultAlloc());
+        Mem::Free(mDebugPointers, Mem::GetDefaultAlloc());
         mDebugPointers = nullptr;
     }
 }
@@ -2356,6 +2461,8 @@ void* MemBumpAllocatorBase::Realloc(void* ptr, size_t size, uint32 align)
     ASSERT(size);
 
     if (!mDebugMode) {
+        ASSERT_MSG(mBuffer, "BumpAllocator is not initialized yet");
+        
         align = Max(align, CONFIG_MACHINE_ALIGNMENT);
         size = AlignValue<size_t>(size, align);
 
@@ -2386,7 +2493,7 @@ void* MemBumpAllocatorBase::Realloc(void* ptr, size_t size, uint32 align)
         size_t endOffset = offset + addOffset;
 
         if (endOffset > mReserveSize) {
-            MEMORY_FAIL();
+            MEM_FAIL();
             return nullptr;
         }
 
@@ -2413,13 +2520,20 @@ void* MemBumpAllocatorBase::Realloc(void* ptr, size_t size, uint32 align)
         return newPtr;
     }
     else {
-        if (ptr == nullptr)
-            ptr = memDefaultAlloc()->Malloc(size, align);
-        else
-            ptr = memDefaultAlloc()->Realloc(ptr, size, align);
+        if (ptr == nullptr) {
+            ptr = Mem::GetDefaultAlloc()->Malloc(size, align);
+        }
+        else {
+            void* newPtr = Mem::GetDefaultAlloc()->Realloc(ptr, size, align);
+            if (newPtr != ptr) {
+                uint32 index = mDebugPointers->FindIf([ptr](const MemDebugPointer& p) { return p.ptr == ptr; });
+                if (index != -1) 
+                    mDebugPointers->RemoveAndSwap(index);
+            }
+            ptr = newPtr;
+        }
 
-        if (ptr)
-            mDebugPointers->Push(_private::MemDebugPointer {ptr, align});
+        mDebugPointers->Push({ptr, align});
         return ptr;
     }
 }
@@ -2431,9 +2545,6 @@ void MemBumpAllocatorBase::Free(void*, uint32)
 void MemBumpAllocatorBase::Reset()
 {
     if (!mDebugMode) {
-        if (mOffset)
-            memset(mBuffer, 0xfe, mOffset);
-
         mLastAllocatedPtr = nullptr;
         mOffset = 0;
         mCommitSize = 0;
@@ -2441,79 +2552,73 @@ void MemBumpAllocatorBase::Reset()
     else {
         mOffset = 0;
 
-        for (_private::MemDebugPointer& dbgPtr : *mDebugPointers) 
-            memDefaultAlloc()->Free(dbgPtr.ptr, dbgPtr.align);
+        for (MemDebugPointer& dbgPtr : *mDebugPointers) 
+            Mem::GetDefaultAlloc()->Free(dbgPtr.ptr, dbgPtr.align);
         mDebugPointers->Clear();
     }
 }
 
+size_t MemBumpAllocatorBase::GetPointerOffset(void* ptr)
+{
+    ASSERT(uintptr(ptr) >= uintptr(mBuffer) && uintptr(ptr) < uintptr(mBuffer + mCommitSize));
+    return uintptr(ptr) - uintptr(mBuffer);
+}
+
+void MemBumpAllocatorBase::SetOffset(size_t offset)
+{
+    ASSERT(offset <= mOffset);
+    mOffset = offset;
+    mLastAllocatedPtr = nullptr;
+}
+
 void* MemBumpAllocatorVM::BackendReserve(size_t size)
 {
-    return memVirtualReserve(size);
+    return Mem::VirtualReserve(size);
 }
 
 void* MemBumpAllocatorVM::BackendCommit(void* ptr, size_t size)
 {
-    return memVirtualCommit(ptr, size);
+    return Mem::VirtualCommit(ptr, size);
 }
 
 void  MemBumpAllocatorVM::BackendDecommit(void* ptr, size_t size)
 {
-    return memVirtualDecommit(ptr, size);
+    return Mem::VirtualDecommit(ptr, size);
 }
 
 void  MemBumpAllocatorVM::BackendRelease(void* ptr, size_t size)
 {
-    return memVirtualRelease(ptr, size);
+    return Mem::VirtualRelease(ptr, size);
 }
 
-MemTempAllocator::MemTempAllocator() : 
-    mId(memTempPushId()), 
-    mFiberProtectorId(debugFiberScopeProtector_Push("TempAllocator")),
-    mOwnsId(true) 
-{ 
+void MemBumpAllocatorVM::WarmUp()
+{
+    PROFILE_ZONE();
+
+    size_t hwPageSize = OS::GetPageSize();
+    size_t pageOffset = AlignValue(mOffset, mPageSize);
+    BackendCommit(mBuffer + pageOffset, mReserveSize - pageOffset);
+    for (size_t offset = pageOffset; offset < mReserveSize; offset += hwPageSize)
+        memset(mBuffer + offset, 0xfe, CONFIG_MACHINE_ALIGNMENT);
 }
 
-MemTempAllocator::MemTempAllocator(MemTempId id) : 
-    mId(id), 
-    mFiberProtectorId(debugFiberScopeProtector_Push("TempAllocator")),
-    mOwnsId(false)
+void* MemBumpAllocatorCustom::BackendReserve(size_t size)
+{
+    return mAlloc->Malloc(size);
+}
+
+void* MemBumpAllocatorCustom::BackendCommit(void* ptr, size_t)
+{
+    return ptr;
+}
+
+void MemBumpAllocatorCustom::BackendDecommit(void*, size_t)
 {
 }
 
-MemTempAllocator::~MemTempAllocator() 
-{ 
-    debugFiberScopeProtector_Pop(mFiberProtectorId); 
-    if (mOwnsId) 
-        memTempPopId(mId); 
-}
-
-void* MemTempAllocator::Malloc(size_t size, uint32 align) 
+void MemBumpAllocatorCustom::BackendRelease(void* ptr, size_t)
 {
-    return memAllocTemp(mId, size, align);
-}
-
-void* MemTempAllocator::Realloc(void* ptr, size_t size, uint32 align) 
-{
-    return memReallocTemp(mId, ptr, size, align);
-}
-
-void MemTempAllocator::Free(void*, uint32) 
-{
-}
-
-size_t MemTempAllocator::GetOffset() const
-{
-    uint32 index = mId >> 16;
-    ASSERT_MSG(index == MemGetTempContext().allocStack.Count() - 1, "Invalid temp id, likely doesn't belong to current temp stack scope");
-
-    const MemTempStack& memStack = MemGetTempContext().allocStack[index];
-    return memStack.baseOffset + memStack.offset;
-}
-
-size_t MemTempAllocator::GetPointerOffset(void* ptr) const
-{
-    return size_t((uint8*)ptr - MemGetTempContext().buffer);
+    mAlloc->Free(ptr);
 }
 
 size_t MemTlsfAllocator::GetMemoryRequirement(size_t poolSize)
@@ -2521,16 +2626,27 @@ size_t MemTlsfAllocator::GetMemoryRequirement(size_t poolSize)
     return tlsf_size() + tlsf_align_size() + tlsf_pool_overhead() + poolSize;
 }
 
+void MemTlsfAllocator::Initialize(MemAllocator* alloc, size_t poolSize, bool debugMode)
+{
+    ASSERT(alloc);
+    ASSERT(poolSize);
+
+    mAlloc = alloc;
+    size_t bufferSize = GetMemoryRequirement(poolSize);
+    Initialize(poolSize, Mem::Alloc(bufferSize, alloc), bufferSize, debugMode);
+}
+
 void MemTlsfAllocator::Initialize([[maybe_unused]] size_t poolSize, void* buffer, size_t size, bool debugMode)
 {
     mDebugMode = debugMode;
+    mPoolSize = poolSize;
 
     if (!debugMode) {
         ASSERT(GetMemoryRequirement(poolSize) <= size);
 
         mTlsf = tlsf_create_with_pool(buffer, size);
         if (mTlsf == nullptr) {
-            MEMORY_FAIL();
+            MEM_FAIL();
         }
         mTlsfSize = size;
     }
@@ -2544,6 +2660,7 @@ void MemTlsfAllocator::Release()
 
 void* MemTlsfAllocator::Malloc(size_t size, uint32 align)
 {
+    ASSERT(size);
     if (!mDebugMode) {
         ASSERT(mTlsf);
 
@@ -2562,16 +2679,23 @@ void* MemTlsfAllocator::Malloc(size_t size, uint32 align)
 
             TracyCAlloc(ptr, size);
 
-            memTrackMalloc(ptr, size);
+            Mem::TrackMalloc(ptr, size);
+            
             return ptr;
         }
         else {
-            MEMORY_FAIL();
+            if (mAlloc && size <= mPoolSize) {
+                size_t poolBufferSize = tlsf_pool_overhead() + tlsf_align_size() + mPoolSize;
+                tlsf_add_pool(mTlsf, Mem::Alloc(poolBufferSize, mAlloc), mPoolSize);
+                return Malloc(size, align);
+            }
+
+            MEM_FAIL();
             return nullptr;
         }
     }
     else {
-        return memDefaultAlloc()->Malloc(size, align);
+        return Mem::GetDefaultAlloc()->Malloc(size, align);
     }
 }
 
@@ -2589,16 +2713,22 @@ void* MemTlsfAllocator::Realloc(void* ptr, size_t size, uint32 align)
             mAllocatedSize += tlsf_block_size(ptr);
             TracyCRealloc(freePtr, ptr, size);
 
-            memTrackRealloc(freePtr, ptr, size);
+            Mem::TrackRealloc(freePtr, ptr, size);
             return ptr;
         }
         else {
-            MEMORY_FAIL();
+            if (mAlloc) {
+                size_t poolBufferSize = tlsf_pool_overhead() + tlsf_align_size() + mPoolSize;
+                tlsf_add_pool(mTlsf, Mem::Alloc(poolBufferSize, mAlloc), mPoolSize);
+                return Realloc(ptr, size, align);
+            }
+
+            MEM_FAIL();
             return nullptr;
         }
     }
     else {
-        return memDefaultAlloc()->Realloc(ptr, size, align);
+        return Mem::GetDefaultAlloc()->Realloc(ptr, size, align);
     }
 }
 
@@ -2611,11 +2741,11 @@ void MemTlsfAllocator::Free(void* ptr, uint32 align)
             mAllocatedSize -= blockSize;
             tlsf_free(mTlsf, ptr);
             TracyCFree(ptr);
-            memTrackFree(ptr);
+            Mem::TrackFree(ptr);
         }
     }
     else {
-        return memDefaultAlloc()->Free(ptr, align);
+        return Mem::GetDefaultAlloc()->Free(ptr, align);
     }
 }
 
@@ -2684,13 +2814,19 @@ float MemTlsfAllocator::CalculateFragmentation()
     return 0;
 }
 
-MemThreadSafeAllocator::MemThreadSafeAllocator(Allocator* alloc) : mAlloc(alloc)
+MemThreadSafeAllocator::MemThreadSafeAllocator()
 {
     SpinLockMutex* lock = (SpinLockMutex*)mLock;
     memset(lock, 0x0, sizeof(SpinLockMutex));
 }
 
-void MemThreadSafeAllocator::SetAllocator(Allocator* alloc)
+MemThreadSafeAllocator::MemThreadSafeAllocator(MemAllocator* alloc) : mAlloc(alloc)
+{
+    SpinLockMutex* lock = (SpinLockMutex*)mLock;
+    memset(lock, 0x0, sizeof(SpinLockMutex));
+}
+
+void MemThreadSafeAllocator::SetAllocator(MemAllocator* alloc)
 {
     mAlloc = alloc;
 }
@@ -2719,10 +2855,128 @@ void MemThreadSafeAllocator::Free(void* ptr, uint32 align)
     mAlloc->Free(ptr, align);
 }
 
-AllocatorType MemThreadSafeAllocator::GetType() const
+MemAllocatorType MemThreadSafeAllocator::GetType() const
 {
     ASSERT(mAlloc);
     return mAlloc->GetType();
+}
+
+MemProxyAllocator::MemProxyAllocator()
+{
+    SpinLockMutex* lock = (SpinLockMutex*)mLock;
+    memset(lock, 0x0, sizeof(SpinLockMutex));
+}
+
+void MemProxyAllocator::Initialize(const char* name, MemAllocator* baseAlloc, MemProxyAllocatorFlags flags)
+{
+    ASSERT_MSG(!mBaseAlloc, "ProxyAllocator already initialized?");
+    ASSERT(name);
+    ASSERT(baseAlloc);
+    ASSERT(baseAlloc->GetType() != MemAllocatorType::Proxy);
+
+    mName = name;
+    mBaseAlloc = baseAlloc;
+    mFlags = flags;
+
+    if (IsBitsSet<MemProxyAllocatorFlags>(flags, MemProxyAllocatorFlags::EnableTracking)) {
+        mAllocTable = NEW(Mem::GetDefaultAlloc(), HashTable<MemProxyAllocatorItem>);
+    }
+}
+
+void MemProxyAllocator::Release()
+{
+    if (IsBitsSet<MemProxyAllocatorFlags>(mFlags, MemProxyAllocatorFlags::EnableTracking)) {
+        mAllocTable->Free();
+        Mem::Free(mAllocTable);
+    }
+}
+
+void* MemProxyAllocator::Malloc(size_t size, uint32 align)
+{
+    ASSERT(size);
+
+    void* ptr = mBaseAlloc->Malloc(size, align);
+    if (IsBitsSet<MemProxyAllocatorFlags>(mFlags, MemProxyAllocatorFlags::EnableTracking) && ptr) {
+        SpinLockMutex* lock = (SpinLockMutex*)mLock;
+        SpinLockMutexScope l(*lock);
+
+        MemProxyAllocatorItem item {
+            .ptr = ptr,
+            .size = size
+        };
+
+        mAllocTable->Add(Hash::Int64To32(uint64(ptr)), item);
+
+        mTotalSizeAllocated += size;
+        ++mNumAllocs;
+    }
+
+    return ptr;
+}
+
+void* MemProxyAllocator::Realloc(void* ptr, size_t size, uint32 align)
+{
+    ASSERT(size);
+
+    void* newPtr = mBaseAlloc->Realloc(ptr, size, align);
+    if (IsBitsSet<MemProxyAllocatorFlags>(mFlags, MemProxyAllocatorFlags::EnableTracking) && newPtr) {
+        SpinLockMutex* lock = (SpinLockMutex*)mLock;
+        SpinLockMutexScope l(*lock);
+
+        if (ptr) {
+            uint32 lookupIdx = mAllocTable->Find(Hash::Int64To32(uint64(ptr)));
+            ASSERT_MSG(lookupIdx != -1, "Invalid pointer. Pointer is not tracked in ProxyAllocator");
+            MemProxyAllocatorItem& item = mAllocTable->GetMutable(lookupIdx);
+
+            size_t prevSize = item.size;
+
+            mTotalSizeAllocated -= prevSize;
+            item.ptr = newPtr;
+            item.size = size;
+            mTotalSizeAllocated += size;
+
+            if (ptr != newPtr) {
+                mAllocTable->Remove(lookupIdx);
+                mAllocTable->Add(Hash::Int64To32(uint64(newPtr)), item);
+
+                if (mBaseAlloc->GetType() == MemAllocatorType::Bump && !((MemBumpAllocatorBase*)mBaseAlloc)->IsDebugMode())
+                    mTotalSizeAllocated -= prevSize;
+            }
+        }
+        else {
+            MemProxyAllocatorItem item {
+                .ptr = newPtr,
+                .size = size
+            };
+
+            mAllocTable->Add(Hash::Int64To32(uint64(newPtr)), item);
+            mTotalSizeAllocated += size;
+            ++mNumAllocs;
+        }
+    }
+
+    return newPtr;
+}
+
+void MemProxyAllocator::Free(void* ptr, uint32 align)
+{
+    mBaseAlloc->Free(ptr, align);
+
+    if (IsBitsSet<MemProxyAllocatorFlags>(mFlags, MemProxyAllocatorFlags::EnableTracking) && ptr) {
+        SpinLockMutex* lock = (SpinLockMutex*)mLock;
+        SpinLockMutexScope l(*lock);
+
+        uint32 lookupIdx = mAllocTable->Find(Hash::Int64To32(uint64(ptr)));
+        ASSERT_MSG(lookupIdx != -1, "Pointer is not being tracked in ProxyAllocator");
+        const MemProxyAllocatorItem& item = mAllocTable->Get(lookupIdx);
+
+        if (mBaseAlloc->GetType() != MemAllocatorType::Bump || ((MemBumpAllocatorBase*)mBaseAlloc)->IsDebugMode())
+            mTotalSizeAllocated -= item.size;
+
+        --mNumAllocs;
+
+        mAllocTable->Remove(lookupIdx);
+    }
 }
 
 #define __STDC_WANT_LIB_EXT1__ 1
@@ -2730,7 +2984,7 @@ AllocatorType MemThreadSafeAllocator::GetType() const
 #if MEMPRO_ENABLED
     #define OVERRIDE_NEW_DELETE
     #define WAIT_FOR_CONNECT true
-    #define MEMPRO_BACKTRACE(_stackframes, _maxStackframes, _hashPtr) debugCaptureStacktrace(_stackframes, _maxStackframes, 3, _hashPtr)
+    #define MEMPRO_BACKTRACE(_stackframes, _maxStackframes, _hashPtr) Debug::CaptureStacktrace(_stackframes, _maxStackframes, 3, _hashPtr)
     #include "External/mempro/MemPro.cpp"
     #define MEMPRO_TRACK_REALLOC(oldPtr, ptr, size) do { if (oldPtr)  { MEMPRO_TRACK_FREE(oldPtr); } MEMPRO_TRACK_ALLOC(ptr, size);} while(0)
 #else
@@ -2742,7 +2996,7 @@ AllocatorType MemThreadSafeAllocator::GetType() const
 #if PLATFORM_APPLE
     #define strcpy_s(dest, size, src)  strlcpy(dest, src, size)
     #define strcat_s(dest, size, src)  strlcat(dest, src, size)
-#elif PLATFORM_ANDROID
+#elif PLATFORM_ANDROID || PLATFORM_LINUX
     static size_t strcpy_s(char *dest, size_t size, const char *src);
     static size_t strcat_s(char *dst, size_t size, const char *src);
 #elif PLATFORM_WINDOWS
@@ -2775,9 +3029,12 @@ struct RandomContextCtor
 
     RandomContextCtor() 
     {
-        ctx = randomCreateContext();
+        ctx = Random::CreateContext();
     }
 };
+
+namespace Random
+{
 
 NO_INLINE static RandomContextCtor& RandomCtx() 
 { 
@@ -2787,7 +3044,7 @@ NO_INLINE static RandomContextCtor& RandomCtx()
 
 PRAGMA_DIAGNOSTIC_PUSH()
 PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wstrict-aliasing")
-static inline float randomFloatNormalized(uint32 value)
+static inline float FloatNormalized(uint32 value)
 {
     uint32 exponent = 127;
     uint32 mantissa = value >> 9;
@@ -2797,7 +3054,7 @@ static inline float randomFloatNormalized(uint32 value)
 }
 PRAGMA_DIAGNOSTIC_POP()
 
-INLINE uint64 randomAvalanche64(uint64 h)
+INLINE uint64 Avalanche64(uint64 h)
 {
     h ^= h >> 33;
     h *= 0xff51afd7ed558ccd;
@@ -2807,25 +3064,25 @@ INLINE uint64 randomAvalanche64(uint64 h)
     return h;
 }
 
-uint32 randomGenSeed()
+uint32 Seed()
 {
     return static_cast<uint32>(time(nullptr));
 }
 
-RandomContext randomCreateContext(uint32 seed)
+RandomContext CreateContext(uint32 seed)
 {
     RandomContext ctx = {{0, 0}};
     uint64 value = (((uint64)seed) << 1ull) | 1ull;    // make it odd
-    value = randomAvalanche64(value);
+    value = Avalanche64(value);
     ctx.state[0] = 0ull;
     ctx.state[1] = (value << 1ull) | 1ull;
-    randomNewUint(&ctx);
-    ctx.state[0] += randomAvalanche64(value);
-    randomNewUint(&ctx);
+    Int(&ctx);
+    ctx.state[0] += Avalanche64(value);
+    Int(&ctx);
     return ctx;
 }
 
-uint32 randomNewUint(RandomContext* ctx)
+uint32 Int(RandomContext* ctx)
 {
     uint64 oldstate = ctx->state[0];
     ctx->state[0] = oldstate * 0x5851f42d4c957f2dull + ctx->state[1];
@@ -2834,51 +3091,52 @@ uint32 randomNewUint(RandomContext* ctx)
     return (xorshifted >> rot) | (xorshifted << ((-(int)rot) & 31));
 }
 
-float randomNewFloat(RandomContext* ctx)
+float Float(RandomContext* ctx)
 {
-    return randomFloatNormalized(randomNewUint(ctx));
+    return FloatNormalized(Int(ctx));
 }
 
-float randomNewFloatInRange(RandomContext* ctx, float _min, float _max)
+float Float(RandomContext* ctx, float _min, float _max)
 {
     ASSERT(_min <= _max);
     
-    float r = randomNewFloat(ctx);
+    float r = Float(ctx);
     return _min + r*(_max - _min);
 }
 
-int randomNewIntInRange(RandomContext* ctx, int _min, int _max)
+int Int(RandomContext* ctx, int _min, int _max)
 {
     ASSERT(_min <= _max);
     
     uint32 range = static_cast<uint32>(_max - _min) + 1;
-    return _min + static_cast<int>(randomNewUint(ctx) % range);
+    return _min + static_cast<int>(Int(ctx) % range);
 }
 
-uint32 randomNewUint()
+uint32 Int()
 {
-    return randomNewUint(&RandomCtx().ctx);
+    return Int(&RandomCtx().ctx);
 }
 
-float randomNewFloat()
+float Float()
 {
-    return randomNewFloat(&RandomCtx().ctx);
+    return Float(&RandomCtx().ctx);
 }
 
-float randomNewFloatInRange(float _min, float _max)
+float Float(float _min, float _max)
 {
-    return randomNewFloatInRange(&RandomCtx().ctx, _min, _max);
+    return Float(&RandomCtx().ctx, _min, _max);
 }
 
-int randomNewIntInRange(int _min, int _max)
+int Int(int _min, int _max)
 {
-    return randomNewIntInRange(&RandomCtx().ctx, _min, _max);
+    return Int(&RandomCtx().ctx, _min, _max);
 }
+} // Random
 
 static AssertFailCallback gAssertFailCallback;
 static void* gAssertFailUserData;
 
-void assertDebugMessage(const char* fmt, ...)
+void Assert::DebugMessage(const char* fmt, ...)
 {
     char msgFmt[4972];
     char msg[4972];
@@ -2901,31 +3159,31 @@ void assertDebugMessage(const char* fmt, ...)
     #endif
 }
 
-void assertSetFailCallback(AssertFailCallback callback, void* userdata)
+void Assert::SetFailCallback(AssertFailCallback callback, void* userdata)
 {
     gAssertFailCallback = callback;
     gAssertFailUserData = userdata;
 }
 
-void assertRunFailCallback()
+void Assert::RunFailCallback()
 {
     if (gAssertFailCallback)
         gAssertFailCallback(gAssertFailUserData);
 }
 
-struct MemHeapAllocator final : Allocator 
+struct MemHeapAllocator final : MemAllocator 
 {
     void* Malloc(size_t size, uint32 align) override;
     void* Realloc(void* ptr, size_t size, uint32 align) override;
     void  Free(void* ptr, uint32 align) override;
-    AllocatorType GetType() const override { return AllocatorType::Heap; }
+    MemAllocatorType GetType() const override { return MemAllocatorType::Heap; }
 };
 
 struct MemBaseContext
 {
     MemFailCallback  memFailFn;
     void* 			 memFailUserdata;
-    Allocator*		 defaultAlloc = &heapAlloc;
+    MemAllocator*		 defaultAlloc = &heapAlloc;
     MemHeapAllocator heapAlloc;
     bool             enableMemPro;
 };
@@ -2942,20 +3200,20 @@ static MemBaseContext gMemBase;
     INLINE void  aligned_free(void* ptr);
 #endif
 
-void memSetFailCallback(MemFailCallback callback, void* userdata)
+void Mem::SetFailCallback(MemFailCallback callback, void* userdata)
 {
     gMemBase.memFailFn = callback;
     gMemBase.memFailUserdata = userdata;
 }
 
-void memRunFailCallback()
+void Mem::RunFailCallback()
 {
     if (gMemBase.memFailFn) {
         gMemBase.memFailFn(gMemBase.memFailUserdata);
     }
 }
 
-void* memAlignPointer(void* ptr, size_t extra, uint32 align)
+void* Mem::AlignPointer(void* ptr, size_t extra, uint32 align)
 {
     union {
         void* ptr;
@@ -2968,17 +3226,17 @@ void* memAlignPointer(void* ptr, size_t extra, uint32 align)
     return un.ptr;
 }
 
-Allocator* memDefaultAlloc()
+MemAllocator* Mem::GetDefaultAlloc()
 {
-    return static_cast<Allocator*>(&gMemBase.heapAlloc);
+    return static_cast<MemAllocator*>(&gMemBase.heapAlloc);
 }
 
-void memSetDefaultAlloc(Allocator* alloc)
+void Mem::SetDefaultAlloc(MemAllocator* alloc)
 {
     gMemBase.defaultAlloc = alloc != nullptr ? alloc : &gMemBase.heapAlloc;
 }
 
-void memEnableMemPro(bool enable)
+void Mem::EnableMemPro(bool enable)
 {
     #if MEMPRO_ENABLED
     gMemBase.enableMemPro = enable;
@@ -2987,7 +3245,7 @@ void memEnableMemPro(bool enable)
     #endif
 }
 
-bool memIsMemProEnabled()
+bool Mem::IsMemProEnabled()
 {
     #if MEMPRO_ENABLED
     return gMemBase.enableMemPro;
@@ -2996,7 +3254,7 @@ bool memIsMemProEnabled()
     #endif
 }
 
-void memTrackMalloc([[maybe_unused]] void* ptr, [[maybe_unused]] size_t size)
+void Mem::TrackMalloc([[maybe_unused]] void* ptr, [[maybe_unused]] size_t size)
 {
     if constexpr (MEMPRO_ENABLED) {
         if (gMemBase.enableMemPro)
@@ -3004,7 +3262,7 @@ void memTrackMalloc([[maybe_unused]] void* ptr, [[maybe_unused]] size_t size)
     }    
 }
 
-void memTrackFree([[maybe_unused]] void* ptr)
+void Mem::TrackFree([[maybe_unused]] void* ptr)
 {
     if constexpr (MEMPRO_ENABLED) {
         if (gMemBase.enableMemPro)
@@ -3012,7 +3270,7 @@ void memTrackFree([[maybe_unused]] void* ptr)
     }
 }
 
-void memTrackRealloc([[maybe_unused]] void* oldPtr, [[maybe_unused]] void* ptr, [[maybe_unused]] size_t size)
+void Mem::TrackRealloc([[maybe_unused]] void* oldPtr, [[maybe_unused]] void* ptr, [[maybe_unused]] size_t size)
 {
     if constexpr (MEMPRO_ENABLED) {
         if (gMemBase.enableMemPro)
@@ -3032,13 +3290,13 @@ inline void* MemHeapAllocator::Malloc(size_t size, uint32 align)
         ptr = aligned_malloc(align, size);
     }
     if (!ptr) {
-        MEMORY_FAIL();
+        MEM_FAIL();
         return nullptr;
     }
 
     TracyCAlloc(ptr, size);        
 
-    memTrackMalloc(ptr, size);
+    Mem::TrackMalloc(ptr, size);
     return ptr;
 }
     
@@ -3055,12 +3313,12 @@ inline void* MemHeapAllocator::Realloc(void* ptr, size_t size, uint32 align)
     }
     
     if (!ptr) {
-        MEMORY_FAIL();
+        MEM_FAIL();
         return nullptr;
     }
     
     TracyCRealloc(freePtr, ptr, size);
-    memTrackRealloc(freePtr, ptr, size);
+    Mem::TrackRealloc(freePtr, ptr, size);
     return ptr;
 }
     
@@ -3075,12 +3333,7 @@ inline void MemHeapAllocator::Free(void* ptr, uint32 align)
         }
     
         TracyCFree(ptr);
-        memTrackFree(ptr);
-
-        if constexpr (MEMPRO_ENABLED) {
-            if (gMemBase.enableMemPro) 
-                MEMPRO_TRACK_FREE(ptr);
-        }
+        Mem::TrackFree(ptr);
     }
 }
 
@@ -3093,7 +3346,7 @@ INLINE void* aligned_malloc(uint32 align, size_t size)
     uint8* ptr = (uint8*)malloc(total);
     if (!ptr)
         return nullptr;
-    uint8* aligned = (uint8*)memAlignPointer(ptr, sizeof(uint32), align);
+    uint8* aligned = (uint8*)Mem::AlignPointer(ptr, sizeof(uint32), align);
     uint32* header = (uint32*)aligned - 1;
     *header = PtrToInt<uint32>((void*)(aligned - ptr));  // Save the offset needed to move back from aligned pointer
     return aligned;
@@ -3112,7 +3365,7 @@ INLINE void* aligned_realloc(void* ptr, uint32 align, size_t size)
         ptr = realloc(ptr, total);
         if (!ptr)
             return nullptr;
-        uint8* newAligned = (uint8*)memAlignPointer(ptr, sizeof(uint32), align);
+        uint8* newAligned = (uint8*)Mem::AlignPointer(ptr, sizeof(uint32), align);
         if (newAligned == aligned)
             return aligned;
 
@@ -3138,7 +3391,7 @@ INLINE void aligned_free(void* ptr)
 }
 #endif  // !PLATFORM_WINDOWS
 
-#if PLATFORM_ANDROID
+#if PLATFORM_ANDROID || PLATFORM_LINUX
 static size_t strcpy_s(char *dest, size_t size, const char *src)
 {
     size_t ret = strlen(src);
@@ -3510,7 +3763,7 @@ typedef struct _IMAGEHLP_MODULE64_V3
     CHAR LoadedImageName[256]; // symbol file name
     CHAR LoadedPdbName[256];   // pdb file name
     DWORD CVSig;               // Signature of the CV record in the debug directories
-    CHAR CVData[kMaxPath * 3]; // Contents of the CV record
+    CHAR CVData[PATH_CHARS_MAX * 3]; // Contents of the CV record
     DWORD PdbSig;              // Signature of PDB
     GUID PdbSig70;             // Signature of PDB (VC 7 and up)
     DWORD PdbAge;              // DBI age of pdb
@@ -3552,10 +3805,10 @@ static SymGetLineFromAddr64Fn _SymGetLineFromAddr64;
 
 struct DebugStacktraceContext
 {
-    bool initialized;
-    HINSTANCE dbghelp;
-    HANDLE process;
-    CRITICAL_SECTION mutex;
+    bool mInitialized;
+    HINSTANCE mDbgHelp;
+    HANDLE mProcess;
+    CRITICAL_SECTION mMutex;
     
     DebugStacktraceContext();
     ~DebugStacktraceContext();
@@ -3563,204 +3816,245 @@ struct DebugStacktraceContext
 
 static DebugStacktraceContext gStacktrace;
 
-static bool debugInitializeStacktrace()
+namespace Debug
 {
-    if (gStacktrace.initialized)
+    static bool InitializeStacktrace()
+    {
+        if (gStacktrace.mInitialized)
         return true;
-    gStacktrace.initialized = true;
+        gStacktrace.mInitialized = true;
 
-    EnterCriticalSection(&gStacktrace.mutex);
-    ASSERT(gStacktrace.dbghelp == nullptr);
+        EnterCriticalSection(&gStacktrace.mMutex);
+        ASSERT(gStacktrace.mDbgHelp == nullptr);
 
-    gStacktrace.dbghelp = LoadLibraryA("dbghelp.dll");
-    if (!gStacktrace.dbghelp) {
-        debugPrint("Could not load DbgHelp.dll");
-        gStacktrace.initialized = false;
-        return false;
+        gStacktrace.mDbgHelp = LoadLibraryA("dbghelp.dll");
+        if (!gStacktrace.mDbgHelp) {
+            Debug::Print("Could not load DbgHelp.dll");
+            gStacktrace.mInitialized = false;
+            return false;
+        }
+
+        _SymInitialize = (SymInitializeFn)GetProcAddress(gStacktrace.mDbgHelp, "SymInitialize");
+        _SymCleanup = (SymCleanupFn)GetProcAddress(gStacktrace.mDbgHelp, "SymCleanup");
+        _SymGetLineFromAddr64 = (SymGetLineFromAddr64Fn)GetProcAddress(gStacktrace.mDbgHelp, "SymGetLineFromAddr64");
+        _SymGetSymFromAddr64 = (SymGetSymFromAddr64Fn)GetProcAddress(gStacktrace.mDbgHelp, "SymGetSymFromAddr64");
+        _UnDecorateSymbolName = (UnDecorateSymbolNameFn)GetProcAddress(gStacktrace.mDbgHelp, "UnDecorateSymbolName");
+        ASSERT(_SymInitialize && _SymCleanup && _SymGetLineFromAddr64 && _SymGetSymFromAddr64 && _UnDecorateSymbolName);
+
+        gStacktrace.mProcess = GetCurrentProcess();
+
+        if (!_SymInitialize(gStacktrace.mProcess, NULL, TRUE)) {
+            LeaveCriticalSection(&gStacktrace.mMutex);
+            Debug::Print("DbgHelp: _SymInitialize failed");
+            gStacktrace.mInitialized = false;
+            return false;
+        }
+
+        ASSERT(_SymInitialize && _SymCleanup && _SymGetLineFromAddr64 && _SymGetSymFromAddr64 && _UnDecorateSymbolName);
+        LeaveCriticalSection(&gStacktrace.mMutex);
+
+        return true;
     }
+};
 
-    _SymInitialize = (SymInitializeFn)GetProcAddress(gStacktrace.dbghelp, "SymInitialize");
-    _SymCleanup = (SymCleanupFn)GetProcAddress(gStacktrace.dbghelp, "SymCleanup");
-    _SymGetLineFromAddr64 = (SymGetLineFromAddr64Fn)GetProcAddress(gStacktrace.dbghelp, "SymGetLineFromAddr64");
-    _SymGetSymFromAddr64 = (SymGetSymFromAddr64Fn)GetProcAddress(gStacktrace.dbghelp, "SymGetSymFromAddr64");
-    _UnDecorateSymbolName = (UnDecorateSymbolNameFn)GetProcAddress(gStacktrace.dbghelp, "UnDecorateSymbolName");
-    ASSERT(_SymInitialize && _SymCleanup && _SymGetLineFromAddr64 && _SymGetSymFromAddr64 && _UnDecorateSymbolName);
-
-    gStacktrace.process = GetCurrentProcess();
-
-    if (!_SymInitialize(gStacktrace.process, NULL, TRUE)) {
-        LeaveCriticalSection(&gStacktrace.mutex);
-        debugPrint("DbgHelp: _SymInitialize failed");
-        gStacktrace.initialized = false;
-        return false;
-    }
-
-    ASSERT(_SymInitialize && _SymCleanup && _SymGetLineFromAddr64 && _SymGetSymFromAddr64 && _UnDecorateSymbolName);
-    LeaveCriticalSection(&gStacktrace.mutex);
-
-    return true;
+#ifdef TRACY_ENABLE
+void DebugDbgHelpInit()
+{
+    if (!gStacktrace.mInitialized) {
+        Debug::InitializeStacktrace();
+        ASSERT_MSG(gStacktrace.mInitialized, "Failed to initialize stacktrace capture");
+    }  
 }
 
-NO_INLINE uint16 debugCaptureStacktrace(void** stackframes, uint16 maxStackframes, uint16 framesToSkip, uint32* pHash)
+void DebugDbgHelpLock()
+{
+    EnterCriticalSection(&gStacktrace.mMutex);
+}
+
+void DebugDbgHelpUnlock()
+{
+    LeaveCriticalSection(&gStacktrace.mMutex);
+}
+#endif // if TRACY_ENABLE
+
+NO_INLINE uint16 Debug::CaptureStacktrace(void** stackframes, uint16 maxStackframes, uint16 framesToSkip, uint32* pHash)
 {
     static_assert(sizeof(DWORD) == sizeof(uint32));
 
     return (uint16)RtlCaptureStackBackTrace(framesToSkip, maxStackframes, stackframes, PDWORD(pHash));
 }
 
-void debugResolveStacktrace(uint16 numStacktrace, void* const* stackframes, DebugStacktraceEntry* entries)
+void Debug::ResolveStacktrace(uint16 numStacktrace, void* const* stackframes, DebugStacktraceEntry* entries)
 {
-    if (!gStacktrace.initialized) {
-        debugInitializeStacktrace();
-        ASSERT_MSG(gStacktrace.initialized, "Failed to initialize stacktrace capture");
+    if (!gStacktrace.mInitialized) {
+        Debug::InitializeStacktrace();
+        ASSERT_MSG(gStacktrace.mInitialized, "Failed to initialize stacktrace capture");
     }  
 
     IMAGEHLP_LINE64 line;
-    uint8* symbolBuffer[sizeof(IMAGEHLP_SYMBOL64) + kMaxPath];
+    uint8* symbolBuffer[sizeof(IMAGEHLP_SYMBOL64) + PATH_CHARS_MAX];
     IMAGEHLP_SYMBOL64* symbol = reinterpret_cast<IMAGEHLP_SYMBOL64*>(symbolBuffer);
-    memset(symbol, 0, sizeof(IMAGEHLP_SYMBOL64) + kMaxPath);
+    memset(symbol, 0, sizeof(IMAGEHLP_SYMBOL64) + PATH_CHARS_MAX);
     symbol->SizeOfStruct = sizeof(IMAGEHLP_SYMBOL64);
-    symbol->MaxNameLength = kMaxPath;
+    symbol->MaxNameLength = PATH_CHARS_MAX;
 
-    EnterCriticalSection(&gStacktrace.mutex);
+    EnterCriticalSection(&gStacktrace.mMutex);
     for (uint16 i = 0; i < numStacktrace; i++) {
         DebugStacktraceEntry entry = {};
-        if (_SymGetSymFromAddr64(gStacktrace.process, (DWORD64)stackframes[i], &entry.offsetFromSymbol, symbol)) {
-            strCopy(entry.name, sizeof(entry.name), symbol->Name);
+        if (_SymGetSymFromAddr64(gStacktrace.mProcess, (DWORD64)stackframes[i], &entry.offsetFromSymbol, symbol)) {
+            Str::Copy(entry.name, sizeof(entry.name), symbol->Name);
         } 
         else {
             DWORD gle = GetLastError();
             if (gle != ERROR_INVALID_ADDRESS && gle != ERROR_MOD_NOT_FOUND) {
-                debugPrint("_SymGetSymFromAddr64 failed");
+                Debug::Print("_SymGetSymFromAddr64 failed");
                 break;
             }
-            strCopy(entry.name, sizeof(entry.name), "[NA]");
+            Str::Copy(entry.name, sizeof(entry.name), "[NA]");
         }
 
-        if (_SymGetLineFromAddr64(gStacktrace.process, (DWORD64)stackframes[i], (PDWORD)&(entry.offsetFromLine), &line)) {
+        if (_SymGetLineFromAddr64(gStacktrace.mProcess, (DWORD64)stackframes[i], (PDWORD)&(entry.offsetFromLine), &line)) {
             entry.line = line.LineNumber;
-            strCopy(entry.filename, kMaxPath, line.FileName);
+            Str::Copy(entry.filename, PATH_CHARS_MAX, line.FileName);
         } 
         else {
             DWORD gle = GetLastError();
             if (gle != ERROR_INVALID_ADDRESS && gle != ERROR_MOD_NOT_FOUND) {
-                debugPrint("_SymGetLineFromAddr64 failed");
+                Debug::Print("_SymGetLineFromAddr64 failed");
                 break;
             }
-            strCopy(entry.filename, kMaxPath, "[NA]");
+            Str::Copy(entry.filename, PATH_CHARS_MAX, "[NA]");
         }
 
         memcpy(&entries[i], &entry, sizeof(DebugStacktraceEntry));
     }
-    LeaveCriticalSection(&gStacktrace.mutex);
+    LeaveCriticalSection(&gStacktrace.mMutex);
 }
 
-void debugStacktraceSaveStopPoint(void*)
+void Debug::StacktraceSaveStopPoint(void*)
 {
 }
 
-#ifdef TRACY_ENABLE
-void debugDbgHelpInit()
-{
-    if (!gStacktrace.initialized) {
-        debugInitializeStacktrace();
-        ASSERT_MSG(gStacktrace.initialized, "Failed to initialize stacktrace capture");
-    }  
-}
-
-void debugDbgHelpLock()
-{
-    EnterCriticalSection(&gStacktrace.mutex);
-}
-
-void debugDbgHelpUnlock()
-{
-    LeaveCriticalSection(&gStacktrace.mutex);
-}
-#endif
-
-DebugStacktraceContext::DebugStacktraceContext() : dbghelp(nullptr), process(nullptr)
+DebugStacktraceContext::DebugStacktraceContext() : mDbgHelp(nullptr), mProcess(nullptr)
 {
     if constexpr (!CONFIG_FINAL_BUILD) {
-        InitializeCriticalSectionAndSpinCount(&mutex, 32);
-        debugInitializeStacktrace();
+        InitializeCriticalSectionAndSpinCount(&mMutex, 32);
+        Debug::InitializeStacktrace();
     }
 }
 
 DebugStacktraceContext::~DebugStacktraceContext()
 {
-    if (initialized) {
-        ASSERT(dbghelp);
+    if (mInitialized) {
+        ASSERT(mDbgHelp);
         ASSERT(_SymCleanup);
 
-        EnterCriticalSection(&mutex);
-        _SymCleanup(process);
-        FreeLibrary(dbghelp);
-        dbghelp = nullptr;
-        LeaveCriticalSection(&mutex);
+        EnterCriticalSection(&mMutex);
+        _SymCleanup(mProcess);
+        FreeLibrary(mDbgHelp);
+        mDbgHelp = nullptr;
+        LeaveCriticalSection(&mMutex);
 
         #if defined(TRACY_ENABLE)
-        DeleteCriticalSection(&mutex);
+        DeleteCriticalSection(&mMutex);
         #endif
     }
 }
 
 
-static const char* kDebugRemedyBGPipeNamePrefix = "\\\\.\\pipe\\";
-static constexpr uint32 kDebugRemedyBGBufferSize = 8*kKB;
+static const char* RDBG_PIPE_NAME_PREFIX = "\\\\.\\pipe\\";
+static constexpr uint32 RDBG_BUFFER_SIZE = 8*SIZE_KB;
 
-struct DebugRemedyBGContext
+struct RDBG_Context
 {
-    SysProcess remedybgProc;
+    OSProcess remedybgProc;
     HANDLE cmdPipe = INVALID_HANDLE_VALUE;
 };
-static DebugRemedyBGContext gRemedyBG;
+static RDBG_Context gRemedyBG;
 
-bool debugRemedyBG_Initialize(const char* serverName, const char* remedybgPath)
+namespace RDBG
+{
+    static Blob SendCommand(const Blob& cmdBuffer, MemAllocator* outBufferAlloc)
+    {
+        ASSERT(gRemedyBG.cmdPipe != INVALID_HANDLE_VALUE);
+
+        uint8 tempBuffer[RDBG_BUFFER_SIZE];
+        DWORD bytesRead;
+        Blob outBuffer(outBufferAlloc);
+        outBuffer.SetGrowPolicy(Blob::GrowPolicy::Linear);
+
+        BOOL r = TransactNamedPipe(gRemedyBG.cmdPipe, const_cast<void*>(cmdBuffer.Data()), DWORD(cmdBuffer.Size()), tempBuffer, sizeof(tempBuffer), &bytesRead, nullptr);
+        if (r)
+            outBuffer.Write(tempBuffer, bytesRead);
+
+        while (!r && GetLastError() == ERROR_MORE_DATA) {
+            r = ReadFile(gRemedyBG.cmdPipe, tempBuffer, sizeof(tempBuffer), &bytesRead, nullptr);
+            if (r)
+                outBuffer.Write(tempBuffer, bytesRead);
+        }
+
+        if (!r) {
+            LOG_ERROR("Reading RemedyBG pipe failed");
+            RDBG::Release();
+            return outBuffer;
+        }
+
+        return outBuffer;
+    }
+
+    static inline rdbg_CommandResult GetResult(Blob& resultBuff)
+    {
+        uint16 res;
+        resultBuff.Read<uint16>(&res);
+        return rdbg_CommandResult(res);
+    }
+}
+
+bool RDBG::Initialize(const char* serverName, const char* remedybgPath)
 {
     ASSERT(remedybgPath);
     ASSERT_MSG(gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE, "RemedyBG is initialized before");
 
-    ASSERT_MSG(!sysIsDebuggerPresent(), "Another debugger is already attached to this executable");
-    ASSERT_ALWAYS(strLen(serverName) <= RDBG_MAX_SERVERNAME_LEN, "ServerName is too long for RemedyBG sessions: %s", serverName);
+    ASSERT_MSG(!OS::IsDebuggerPresent(), "Another debugger is already attached to this executable");
+    ASSERT_ALWAYS(Str::Len(serverName) <= RDBG_MAX_SERVERNAME_LEN, "ServerName is too long for RemedyBG sessions: %s", serverName);
 
     Path remedybgCmdline(remedybgPath);
     remedybgCmdline.Append(" --servername ");
     remedybgCmdline.Append(serverName);
-    if (!gRemedyBG.remedybgProc.Run(remedybgCmdline.CStr(), SysProcessFlags::None)) {
-        logError("RemedyBG: Could not run RemedyBG instance '%s'", remedybgPath);
+    if (!gRemedyBG.remedybgProc.Run(remedybgCmdline.CStr(), OSProcessFlags::None)) {
+        LOG_ERROR("RemedyBG: Could not run RemedyBG instance '%s'", remedybgPath);
         return false;
     }
     while (!gRemedyBG.remedybgProc.IsRunning())
-        threadSleep(20);
-    threadSleep(200);   // wait a little more so remedybg gets it's shit together
+        Thread::Sleep(20);
+    Thread::Sleep(200);   // wait a little more so remedybg gets it's shit together
 
-    String<256> pipeName(kDebugRemedyBGPipeNamePrefix);
+    String<256> pipeName(RDBG_PIPE_NAME_PREFIX);
     pipeName.Append(serverName);
 
     gRemedyBG.cmdPipe = CreateFileA(pipeName.CStr(), GENERIC_READ|GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
     if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE) {
-        logError("RemedyBG: Creating command pipe failed");
+        LOG_ERROR("RemedyBG: Creating command pipe failed");
         return false;
     }
     
     DWORD newMode = PIPE_READMODE_MESSAGE;
     if (!SetNamedPipeHandleState(gRemedyBG.cmdPipe, &newMode, nullptr, nullptr)) {
-        logError("RemedyBG: SetNamedPipeHandleState failed");
+        LOG_ERROR("RemedyBG: SetNamedPipeHandleState failed");
         return false;
     }
 
-    if (debugRemedyBG_AttachToProcess(0)) {
-        logDebug("RemedyBG launched and attached to the process");
+    if (RDBG::AttachToProcess(0)) {
+        LOG_DEBUG("RemedyBG launched and attached to the process");
         return true;
     }
     else {
-        logError("Attaching RemedyBG debugger to the current process failed");
+        LOG_ERROR("Attaching RemedyBG debugger to the current process failed");
         return false;
     }
 }
 
-void debugRemedyBG_Release()
+void RDBG::Release()
 {
     if (gRemedyBG.cmdPipe != INVALID_HANDLE_VALUE) 
         CloseHandle(gRemedyBG.cmdPipe);
@@ -3769,48 +4063,13 @@ void debugRemedyBG_Release()
         gRemedyBG.remedybgProc.Abort();
 }
 
-static Blob debugRemedyBG_SendCommand(const Blob& cmdBuffer, Allocator* outBufferAlloc)
-{
-    ASSERT(gRemedyBG.cmdPipe != INVALID_HANDLE_VALUE);
-
-    uint8 tempBuffer[kDebugRemedyBGBufferSize];
-    DWORD bytesRead;
-    Blob outBuffer(outBufferAlloc);
-    outBuffer.SetGrowPolicy(Blob::GrowPolicy::Linear);
-
-    BOOL r = TransactNamedPipe(gRemedyBG.cmdPipe, const_cast<void*>(cmdBuffer.Data()), DWORD(cmdBuffer.Size()), tempBuffer, sizeof(tempBuffer), &bytesRead, nullptr);
-    if (r)
-        outBuffer.Write(tempBuffer, bytesRead);
-
-    while (!r && GetLastError() == ERROR_MORE_DATA) {
-        r = ReadFile(gRemedyBG.cmdPipe, tempBuffer, sizeof(tempBuffer), &bytesRead, nullptr);
-        if (r)
-            outBuffer.Write(tempBuffer, bytesRead);
-    }
-
-    if (!r) {
-        logError("Reading RemedyBG pipe failed");
-        debugRemedyBG_Release();
-        return outBuffer;
-    }
-
-    return outBuffer;
-}
-
-static inline rdbg_CommandResult debugRemedyBG_GetResult(Blob& resultBuff)
-{
-    uint16 res;
-    resultBuff.Read<uint16>(&res);
-    return rdbg_CommandResult(res);
-}
-
 #define DEBUG_REMEDYBG_BEGINCOMMAND(_cmd)   \
     MemTempAllocator tempAlloc; \
     Blob cmdBuffer(&tempAlloc); \
     cmdBuffer.SetGrowPolicy(Blob::GrowPolicy::Linear); \
     cmdBuffer.Write<uint16>(_cmd)
 
-bool debugRemedyBG_AttachToProcess(uint32 id)
+bool RDBG::AttachToProcess(uint32 id)
 {
     if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
         return 0;
@@ -3823,38 +4082,38 @@ bool debugRemedyBG_AttachToProcess(uint32 id)
     cmdBuffer.Write<uint32>(id);
     cmdBuffer.Write<rdbg_Bool>(true);
     cmdBuffer.Write<uint8>(RDBG_IF_DEBUGGING_TARGET_STOP_DEBUGGING);
-    Blob res = debugRemedyBG_SendCommand(cmdBuffer, &tempAlloc);
-    return debugRemedyBG_GetResult(res) == RDBG_COMMAND_RESULT_OK;
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
 }
 
-bool debugRemedyBG_DetachFromProcess()
+bool RDBG::DetachFromProcess()
 {
     if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
         return 0;
 
     DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_DETACH_FROM_PROCESS);
-    Blob res = debugRemedyBG_SendCommand(cmdBuffer, &tempAlloc);
-    return debugRemedyBG_GetResult(res) == RDBG_COMMAND_RESULT_OK;
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
 }
 
-bool debugRemedyBG_Break()
+bool RDBG::Break()
 {
     if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
         return 0;
     
     DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_BREAK_EXECUTION);
-    Blob res = debugRemedyBG_SendCommand(cmdBuffer, &tempAlloc);
-    return debugRemedyBG_GetResult(res) == RDBG_COMMAND_RESULT_OK;
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
 }
 
-bool debugRemedyBG_Continue()
+bool RDBG::Continue()
 {
     DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_CONTINUE_EXECUTION);
-    Blob res = debugRemedyBG_SendCommand(cmdBuffer, &tempAlloc);
-    return debugRemedyBG_GetResult(res) == RDBG_COMMAND_RESULT_OK;
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
 }
 
-bool debugRemedyBG_RunToFileAtLine(const char* filename, uint32 line)
+bool RDBG::RunToFileAtLine(const char* filename, uint32 line)
 {
     if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
         return 0;
@@ -3863,11 +4122,11 @@ bool debugRemedyBG_RunToFileAtLine(const char* filename, uint32 line)
     DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_RUN_TO_FILE_AT_LINE);
     cmdBuffer.WriteStringBinary16(filename);
     cmdBuffer.Write<uint32>(line);
-    Blob res = debugRemedyBG_SendCommand(cmdBuffer, &tempAlloc);
-    return debugRemedyBG_GetResult(res) == RDBG_COMMAND_RESULT_OK;
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
 }
 
-DebugRemedyBG_Id debugRemedyBG_AddFunctionBreakpoint(const char* funcName, const char* conditionExpr, uint32 overloadId)
+RDBG_Id RDBG::AddFunctionBreakpoint(const char* funcName, const char* conditionExpr, uint32 overloadId)
 {
     if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
         return 0;
@@ -3877,15 +4136,15 @@ DebugRemedyBG_Id debugRemedyBG_AddFunctionBreakpoint(const char* funcName, const
     cmdBuffer.WriteStringBinary16(funcName);
     cmdBuffer.Write<uint32>(overloadId);
     cmdBuffer.WriteStringBinary16(conditionExpr ? conditionExpr : "");
-    Blob res = debugRemedyBG_SendCommand(cmdBuffer, &tempAlloc);
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
 
-    DebugRemedyBG_Id bid = 0;
-    if (debugRemedyBG_GetResult(res) == RDBG_COMMAND_RESULT_OK)
-        res.Read<DebugRemedyBG_Id>(&bid);
+    RDBG_Id bid = 0;
+    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
+        res.Read<RDBG_Id>(&bid);
     return bid;
 }
 
-DebugRemedyBG_Id debugRemedyBG_AddFileLineBreakpoint(const char* filename, uint32 line, const char* conditionExpr)
+RDBG_Id RDBG::AddFileLineBreakpoint(const char* filename, uint32 line, const char* conditionExpr)
 {
     if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
         return 0;
@@ -3895,15 +4154,15 @@ DebugRemedyBG_Id debugRemedyBG_AddFileLineBreakpoint(const char* filename, uint3
     cmdBuffer.WriteStringBinary16(filename);
     cmdBuffer.Write<uint32>(line);
     cmdBuffer.WriteStringBinary16(conditionExpr ? conditionExpr : "");
-    Blob res = debugRemedyBG_SendCommand(cmdBuffer, &tempAlloc);
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
 
-    DebugRemedyBG_Id bid = 0;
-    if (debugRemedyBG_GetResult(res) == RDBG_COMMAND_RESULT_OK)
-        res.Read<DebugRemedyBG_Id>(&bid);
+    RDBG_Id bid = 0;
+    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
+        res.Read<RDBG_Id>(&bid);
     return bid;
 }
 
-DebugRemedyBG_Id debugRemedyBG_AddAddressBreakpoint(uintptr_t addr, const char* conditionExpr)
+RDBG_Id RDBG::AddAddressBreakpoint(uintptr_t addr, const char* conditionExpr)
 {
     if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
         return 0;
@@ -3912,16 +4171,15 @@ DebugRemedyBG_Id debugRemedyBG_AddAddressBreakpoint(uintptr_t addr, const char* 
     DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ADD_BREAKPOINT_AT_ADDRESS);
     cmdBuffer.Write<uint64>(addr);
     cmdBuffer.WriteStringBinary16(conditionExpr ? conditionExpr : "");
-    Blob res = debugRemedyBG_SendCommand(cmdBuffer, &tempAlloc);
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
 
-    DebugRemedyBG_Id bid = 0;
-    if (debugRemedyBG_GetResult(res) == RDBG_COMMAND_RESULT_OK)
-        res.Read<DebugRemedyBG_Id>(&bid);
+    RDBG_Id bid = 0;
+    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
+        res.Read<RDBG_Id>(&bid);
     return bid;
 }
 
-DebugRemedyBG_Id debugRemedyBG_AddProcessorBreakpoint(const void* addr, uint8 numBytes, 
-                                                      DebugRemedyBG_ProcessorBreakpointType type, const char* conditionExpr)
+RDBG_Id RDBG::AddProcessorBreakpoint(const void* addr, uint8 numBytes, RDBG_ProcessorBreakpointType type, const char* conditionExpr)
 {
     if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
         return 0;
@@ -3932,21 +4190,21 @@ DebugRemedyBG_Id debugRemedyBG_AddProcessorBreakpoint(const void* addr, uint8 nu
     DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ADD_PROCESSOR_BREAKPOINT);
 
     char addrExpr[64];
-    strPrintFmt(addrExpr, sizeof(addrExpr), "0x%llx", addr);
+    Str::PrintFmt(addrExpr, sizeof(addrExpr), "0x%llx", addr);
     cmdBuffer.WriteStringBinary16(addrExpr);
     cmdBuffer.Write<uint8>(numBytes);
     cmdBuffer.Write<uint8>(uint8(type));
     cmdBuffer.WriteStringBinary16(conditionExpr ? conditionExpr : "");
-    Blob res = debugRemedyBG_SendCommand(cmdBuffer, &tempAlloc);
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
 
-    DebugRemedyBG_Id bid = 0;
-    if (debugRemedyBG_GetResult(res) == RDBG_COMMAND_RESULT_OK)
-        res.Read<DebugRemedyBG_Id>(&bid);
+    RDBG_Id bid = 0;
+    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
+        res.Read<RDBG_Id>(&bid);
 
     return bid;
 }
 
-bool debugRemedyBG_EnableBreakpoint(DebugRemedyBG_Id bId, bool enable)
+bool RDBG::EnableBreakpoint(RDBG_Id bId, bool enable)
 {
     if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
         return 0;
@@ -3954,11 +4212,11 @@ bool debugRemedyBG_EnableBreakpoint(DebugRemedyBG_Id bId, bool enable)
     DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ENABLE_BREAKPOINT);
     cmdBuffer.Write<rdbg_Id>(bId);
     cmdBuffer.Write<rdbg_Bool>(enable);
-    Blob res = debugRemedyBG_SendCommand(cmdBuffer, &tempAlloc);
-    return debugRemedyBG_GetResult(res) == RDBG_COMMAND_RESULT_OK;
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
 }
 
-bool debugRemedyBG_SetBreakpointCondition(DebugRemedyBG_Id bId, const char* conditionExpr)
+bool RDBG::SetBreakpointCondition(RDBG_Id bId, const char* conditionExpr)
 {
     if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
         return 0;
@@ -3966,32 +4224,32 @@ bool debugRemedyBG_SetBreakpointCondition(DebugRemedyBG_Id bId, const char* cond
     DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ENABLE_BREAKPOINT);
     cmdBuffer.Write<rdbg_Id>(bId);
     cmdBuffer.WriteStringBinary16(conditionExpr ? conditionExpr : "");
-    Blob res = debugRemedyBG_SendCommand(cmdBuffer, &tempAlloc);
-    return debugRemedyBG_GetResult(res) == RDBG_COMMAND_RESULT_OK;
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
 }
 
-bool debugRemedyBG_DeleteBreakpoint(DebugRemedyBG_Id bId)
+bool RDBG::DeleteBreakpoint(RDBG_Id bId)
 {
     if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
         return 0;
 
     DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_DELETE_BREAKPOINT);
     cmdBuffer.Write<rdbg_Id>(bId);
-    Blob res = debugRemedyBG_SendCommand(cmdBuffer, &tempAlloc);
-    return debugRemedyBG_GetResult(res) == RDBG_COMMAND_RESULT_OK;
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
 }
 
-bool debugRemedyBG_DeleteAllBreakpoints()
+bool RDBG::DeleteAllBreakpoints()
 {
     if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
         return 0;
 
     DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_DELETE_ALL_BREAKPOINTS);
-    Blob res = debugRemedyBG_SendCommand(cmdBuffer, &tempAlloc);
-    return debugRemedyBG_GetResult(res) == RDBG_COMMAND_RESULT_OK;
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
 }
 
-DebugRemedyBG_Id debugRemedyBG_AddWatch(const char* expr, const char* comment, uint8 windowNum)
+RDBG_Id RDBG::AddWatch(const char* expr, const char* comment, uint8 windowNum)
 {
     if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
         return 0;
@@ -4001,15 +4259,15 @@ DebugRemedyBG_Id debugRemedyBG_AddWatch(const char* expr, const char* comment, u
     cmdBuffer.Write<uint8>(windowNum);
     cmdBuffer.WriteStringBinary16(expr);
     cmdBuffer.WriteStringBinary16(comment ? comment : "");
-    Blob res = debugRemedyBG_SendCommand(cmdBuffer, &tempAlloc);
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
 
-    DebugRemedyBG_Id wid = 0;
-    if (debugRemedyBG_GetResult(res) == RDBG_COMMAND_RESULT_OK)
-        res.Read<DebugRemedyBG_Id>(&wid);
+    RDBG_Id wid = 0;
+    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
+        res.Read<RDBG_Id>(&wid);
     return wid;
 }
 
-DebugRemedyBG_Id debugRemedyBG_DeleteWatch(DebugRemedyBG_Id wId)
+RDBG_Id RDBG::DeleteWatch(RDBG_Id wId)
 {
     if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
         return 0;
@@ -4017,22 +4275,22 @@ DebugRemedyBG_Id debugRemedyBG_DeleteWatch(DebugRemedyBG_Id wId)
     ASSERT(wId);
     DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_DELETE_WATCH);
     cmdBuffer.Write<rdbg_Id>(wId);
-    Blob res = debugRemedyBG_SendCommand(cmdBuffer, &tempAlloc);
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
 
-    DebugRemedyBG_Id wid = 0;
-    if (debugRemedyBG_GetResult(res) == RDBG_COMMAND_RESULT_OK)
-        res.Read<DebugRemedyBG_Id>(&wid);
+    RDBG_Id wid = 0;
+    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
+        res.Read<RDBG_Id>(&wid);
     return wid;
 }
 
-bool debugRemedyBG_DeleteAllWatches()
+bool RDBG::DeleteAllWatches()
 {
     if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
         return 0;
 
     DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_DELETE_ALL_WATCHES);
-    Blob res = debugRemedyBG_SendCommand(cmdBuffer, &tempAlloc);
-    return debugRemedyBG_GetResult(res) == RDBG_COMMAND_RESULT_OK;
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
 }
 
 #endif // PLATFORM_WINDOWS
@@ -4041,13 +4299,13 @@ bool debugRemedyBG_DeleteAllWatches()
 // DebugClang.cpp
 
 
-#if COMPILER_CLANG
+#if COMPILER_CLANG && !COMPILER_MSVC
 
 #include <unwind.h> // _Unwind_Backtrace
 #include <dlfcn.h>  // dladdr
 #include <cxxabi.h> // __cxa_demangle
 
-#if PLATFORM_ANDROID
+#if PLATFORM_ANDROID || PLATFORM_LINUX
 #include <malloc.h>
 #elif PLATFORM_APPLE
 #include <stdlib.h>    
@@ -4069,44 +4327,47 @@ struct DebugStacktraceState
 
 static StaticArray<void*, 16> gDebugStopFuncs;
 
-_Unwind_Reason_Code debugUnwindCallback(_Unwind_Context* context, void* arg)
+namespace Debug
 {
-    DebugStacktraceState* state = reinterpret_cast<DebugStacktraceState*>(arg);
+    static _Unwind_Reason_Code UnwindCallback(_Unwind_Context* context, void* arg)
+    {
+        DebugStacktraceState* state = reinterpret_cast<DebugStacktraceState*>(arg);
 
-    state->numFrames++;
-    if (state->numFrames <= state->framesToSkip)
+        state->numFrames++;
+        if (state->numFrames <= state->framesToSkip)
         return _URC_NO_REASON;
 
-    void* ip = reinterpret_cast<void*>(_Unwind_GetIP(context));
-    if (ip) {
-        bool endOfStack = false;
-        if (gDebugStopFuncs.Count()) {
-            void* fn = _Unwind_FindEnclosingFunction(ip);
-            endOfStack = gDebugStopFuncs.FindIf([fn](const void* _fn)->bool { return fn == _fn; }) != UINT32_MAX;
-        }
+        void* ip = reinterpret_cast<void*>(_Unwind_GetIP(context));
+        if (ip) {
+            bool endOfStack = false;
+            if (gDebugStopFuncs.Count()) {
+                void* fn = _Unwind_FindEnclosingFunction(ip);
+                endOfStack = gDebugStopFuncs.FindIf([fn](const void* _fn)->bool { return fn == _fn; }) != UINT32_MAX;
+            }
 
-        if (state->current == state->end || endOfStack)
+            if (state->current == state->end || endOfStack)
             return _URC_END_OF_STACK;
-        else
+            else
             *state->current++ = ip;
+        }
+        return _URC_NO_REASON;
     }
-    return _URC_NO_REASON;
 }
 
-NO_INLINE uint16 debugCaptureStacktrace(void** stackframes, uint16 maxStackframes, uint16 framesToSkip, uint32* pHash)
+NO_INLINE uint16 Debug::CaptureStacktrace(void** stackframes, uint16 maxStackframes, uint16 framesToSkip, uint32* pHash)
 {
     ASSERT(maxStackframes);
     DebugStacktraceState state {stackframes, stackframes + maxStackframes, framesToSkip};
-    _Unwind_Backtrace(debugUnwindCallback, &state);
+    _Unwind_Backtrace(Debug::UnwindCallback, &state);
     uint32 numStacktrace = PtrToInt<uint16>((void*)(state.current - stackframes));
 
     if (pHash)
-        *pHash = hashMurmur32(stackframes, sizeof(void*)*numStacktrace, DEBUG_STACKTRACE_HASH_SEED);
+        *pHash = Hash::Murmur32(stackframes, sizeof(void*)*numStacktrace, DEBUG_STACKTRACE_HASH_SEED);
 
     return numStacktrace;
 }
 
-void debugResolveStacktrace(uint16 numStacktrace, void* const* stackframes, DebugStacktraceEntry* entries)
+void Debug::ResolveStacktrace(uint16 numStacktrace, void* const* stackframes, DebugStacktraceEntry* entries)
 {
     for (uint16 i = 0; i < numStacktrace; i++) {
         memset(&entries[i], 0x0, sizeof(entries[i]));
@@ -4114,24 +4375,24 @@ void debugResolveStacktrace(uint16 numStacktrace, void* const* stackframes, Debu
         const void* addr = stackframes[i];
         Dl_info info;
         if (dladdr(addr, &info)) {
-            strCopy(entries[i].filename, sizeof(entries[i].filename), info.dli_fname);
-            strCopy(entries[i].name, sizeof(entries[i].name), info.dli_sname);
+            Str::Copy(entries[i].filename, sizeof(entries[i].filename), info.dli_fname);
+            Str::Copy(entries[i].name, sizeof(entries[i].name), info.dli_sname);
 
             int status = 0;
             char* demangled = abi::__cxa_demangle(entries[i].name, 0, 0, &status);
             if (status == 0)
-                strCopy(entries[i].name, sizeof(entries[i].name), demangled);
+                Str::Copy(entries[i].name, sizeof(entries[i].name), demangled);
             ::free(demangled);
         }
     }
 }
 
-void debugStacktraceSaveStopPoint(void* funcPtr)
+void Debug::StacktraceSaveStopPoint(void* funcPtr)
 {
     ASSERT(funcPtr);
     ASSERT_MSG(gDebugStopFuncs.FindIf([funcPtr](const void* fn)->bool { return funcPtr == fn; }) == UINT32_MAX, 
                "Function pointer is already saved");
-    gDebugStopFuncs.Add(funcPtr);
+    gDebugStopFuncs.Push(funcPtr);
 }
 
 #endif // COMPILER_CLANG
@@ -4141,18 +4402,18 @@ void debugStacktraceSaveStopPoint(void* funcPtr)
 
 static bool gDebugCaptureStacktraceForFiberProtector;
 
-void debugPrint(const char* text)
+void Debug::Print(const char* text)
 {
     #if PLATFORM_WINDOWS
-        sysWin32PrintToDebugger(text);
+        OS::Win32PrintToDebugger(text);
     #elif PLATFORM_ANDROID
-        sysAndroidPrintToLog(SysAndroidLogType::Debug, CONFIG_APP_NAME, text);
+        OS::AndroidPrintToLog(OSAndroidLogType::Debug, CONFIG_APP_NAME, text);
     #else
         puts(text);
     #endif
 }
 
-void debugSetCaptureStacktraceForFiberProtector(bool capture)
+void Debug::SetCaptureStacktraceForFiberProtector(bool capture)
 {
     gDebugCaptureStacktraceForFiberProtector = capture;
 }
@@ -4192,11 +4453,11 @@ NO_INLINE static DebugFiberProtectorThreadContext& FiberProtectorCtx()
     return fiberProtectorCtx; 
 }
 
-void debugFiberScopeProtector_RegisterCallback(DebugFiberScopeProtectorCallback callback, void* userData)
+void Debug::FiberScopeProtector_RegisterCallback(DebugFiberScopeProtectorCallback callback, void* userData)
 {
     ASSERT_MSG(gFiberProtector.callbacks.FindIf([callback](const DebugFiberScopeProtectorCallbackPair& p) { return p.first == callback; }) == UINT32_MAX,
                "Callback already added");
-    gFiberProtector.callbacks.Add(DebugFiberScopeProtectorCallbackPair(callback, userData));
+    gFiberProtector.callbacks.Push(DebugFiberScopeProtectorCallbackPair(callback, userData));
 }
 
 INLINE bool debugFiberScopeProtector_IsInFiber()
@@ -4207,7 +4468,7 @@ INLINE bool debugFiberScopeProtector_IsInFiber()
     return inFiber;
 }
 
-uint16 debugFiberScopeProtector_Push(const char* name)
+uint16 Debug::FiberScopeProtector_Push(const char* name)
 {
     if (debugFiberScopeProtector_IsInFiber()) {
         ASSERT(name);
@@ -4215,7 +4476,7 @@ uint16 debugFiberScopeProtector_Push(const char* name)
         memset(item, 0x0, sizeof(*item));
         item->name = name;
         if (gDebugCaptureStacktraceForFiberProtector) 
-            item->numStackframes = debugCaptureStacktrace(item->stackframes, kDebugMaxFiberProtectorStackframes, 2);
+            item->numStackframes = Debug::CaptureStacktrace(item->stackframes, kDebugMaxFiberProtectorStackframes, 2);
         uint16 id = ++FiberProtectorCtx().idGen;
         if (id == 0)
             id = 1;
@@ -4225,7 +4486,7 @@ uint16 debugFiberScopeProtector_Push(const char* name)
     return 0;
 }
 
-void debugFiberScopeProtector_Pop(uint16 id)
+void Debug::FiberScopeProtector_Pop(uint16 id)
 {
     if (id == 0)
         return;
@@ -4238,23 +4499,26 @@ void debugFiberScopeProtector_Pop(uint16 id)
     FiberProtectorCtx().items.Pop(index);
 }
 
-void debugFiberScopeProtector_Check()
+void Debug::FiberScopeProtector_Check()
 {
     char msg[512];
     
     if (FiberProtectorCtx().items.Count()) {
-        strPrintFmt(msg, sizeof(msg), "Found %u protected items in the fiber that are not destructed in the scope:", FiberProtectorCtx().items.Count());
-        debugPrint(msg);
+        Str::PrintFmt(msg, sizeof(msg), "Found %u protected items in the fiber that are not destructed in the scope:", FiberProtectorCtx().items.Count());
+        Debug::Print(msg);
+        if constexpr (PLATFORM_WINDOWS) Debug::Print("\n");
         
         DebugStacktraceEntry stacktraces[kDebugMaxFiberProtectorStackframes];
         for (const DebugFiberProtectorThreadContext::Item& item : FiberProtectorCtx().items) {
-            strPrintFmt(msg, sizeof(msg), "\t%s:", item.name);
-            debugPrint(msg);
+            Str::PrintFmt(msg, sizeof(msg), "\t%s:", item.name);
+            Debug::Print(msg);
+            if constexpr (PLATFORM_WINDOWS) Debug::Print("\n");
             if (item.numStackframes) {
-                debugResolveStacktrace(item.numStackframes, item.stackframes, stacktraces);
+                Debug::ResolveStacktrace(item.numStackframes, item.stackframes, stacktraces);
                 for (uint16 i = 0; i < item.numStackframes; i++) {
-                    strPrintFmt(msg, sizeof(msg), "\t\t%s(%u): %s", stacktraces[i].filename, stacktraces[i].line, stacktraces[i].name);
-                    debugPrint(msg);
+                    Str::PrintFmt(msg, sizeof(msg), "\t\t%s(%u): %s", stacktraces[i].filename, stacktraces[i].line, stacktraces[i].name);
+                    Debug::Print(msg);
+                    if constexpr (PLATFORM_WINDOWS) Debug::Print("\n");
                 }
             }
         }
@@ -4263,13 +4527,21 @@ void debugFiberScopeProtector_Check()
     }
 }
 #else
-void debugFiberScopeProtector_RegisterCallback(DebugFiberScopeProtectorCallback, void*) {}
-uint16 debugFiberScopeProtector_Push(const char*) { return 0; }
-void debugFiberScopeProtector_Pop(uint16) {}
-void debugFiberScopeProtector_Check() {}
+void Debug::FiberScopeProtector_RegisterCallback(DebugFiberScopeProtectorCallback, void*) {}
+uint16 Debug::FiberScopeProtector_Push(const char*) { return 0; }
+void Debug::FiberScopeProtector_Pop(uint16) {}
+void Debug::FiberScopeProtector_Check() {}
 #endif  // CONFIG_ENABLE_ASSERT
 
 
+
+#if CPU_X86 && defined(__SSE4_2__)
+#if COMPILER_MSVC
+#include <intrin.h>     // _mm_crc32_u64
+#else
+#include <immintrin.h>
+#endif
+#endif
 
 
 /* This file is derived from crc32.c from the zlib-1.1.3 distribution
@@ -4336,136 +4608,153 @@ static const uint32 HASH_CRC_TABLE[256] = {
     DO4(buf);    \
     DO4(buf);
 
-uint32 hashCRC32(const void* data, size_t len, uint32 seed) 
+uint32 Hash::CRC32(const void* data, size_t len, uint32 seed)
 {
     const uint8* buf = (const uint8*)data;
     uint32 crc = seed ^ 0xffffffffL;
-    
+
     while (len >= 8) {
         DO8(buf);
         len -= 8;
     }
-    
+
     while (len--) {
         DO1(buf);
     }
-    
+
     crc ^= 0xffffffffL;
-    
+
     return crc;
 }
 
-FORCE_INLINE uint32 rotl32(uint32 x, int8 r)
+#if CPU_X86 && defined(__SSE4_2__)
+uint32 Hash::CRC32_x86_Aligned(const void* data, size_t len)
 {
-    return (x << r) | (x >> (32 - r));
-}
-
-FORCE_INLINE uint64 rotl64(uint64 x, int8 r)
-{
-    return (x << r) | (x >> (64 - r));
-}
-
-#define	ROTL32(x,y)	rotl32(x,y)
-#define ROTL64(x,y)	rotl64(x,y)
-#define BIG_CONSTANT(x) (x##LLU)
-#define HASH_M 0x5bd1e995
-#define HASH_R 24
-#define MMIX(h, k) { k *= HASH_M; k ^= k >> HASH_R; k *= HASH_M; h *= HASH_M; h ^= k; }
-
-#define getblock(p, i) (p[i])
-
-
-FORCE_INLINE uint32 hashMurmurFmix32(uint32 h)
-{
-    h ^= h >> 16;
-    h *= 0x85ebca6b;
-    h ^= h >> 13;
-    h *= 0xc2b2ae35;
-    h ^= h >> 16;
+    ASSERT_MSG(len % 8 == 0, "Data must be aligned to 8 bytes");
     
-    return h;
-}
-
-
-FORCE_INLINE uint64 hashMurmurFmix64(uint64 k)
-{
-    k ^= k >> 33;
-    k *= BIG_CONSTANT(0xff51afd7ed558ccd);
-    k ^= k >> 33;
-    k *= BIG_CONSTANT(0xc4ceb9fe1a85ec53);
-    k ^= k >> 33;
+    const uint64* M64 = (const uint64*)data;
+    uint64 hash = 0;
+    len >>= 3;
+    for (uint32 i = 0; i < len; ++i)
+        hash = _mm_crc32_u64(hash, M64[i]);
     
-    return k;
+    return (uint32)hash;
 }
+#endif
 
-uint32 hashMurmur32(const void * key, uint32 len, uint32 seed)
+namespace Hash
+{
+    FORCE_INLINE uint32 rotl32(uint32 x, int8 r)
+    {
+        return (x << r) | (x >> (32 - r));
+    }
+
+    FORCE_INLINE uint64 rotl64(uint64 x, int8 r)
+    {
+        return (x << r) | (x >> (64 - r));
+    }
+
+    #define	ROTL32(x,y)	rotl32(x,y)
+    #define ROTL64(x,y)	rotl64(x,y)
+    #define BIG_CONSTANT(x) (x##LLU)
+    #define HASH_M 0x5bd1e995
+    #define HASH_R 24
+    #define MMIX(h, k) { k *= HASH_M; k ^= k >> HASH_R; k *= HASH_M; h *= HASH_M; h ^= k; }
+
+    #define getblock(p, i) (p[i])
+
+
+    FORCE_INLINE uint32 MurmurFmix32(uint32 h)
+    {
+        h ^= h >> 16;
+        h *= 0x85ebca6b;
+        h ^= h >> 13;
+        h *= 0xc2b2ae35;
+        h ^= h >> 16;
+    
+        return h;
+    }
+
+    FORCE_INLINE uint64 MurmurFmix64(uint64 k)
+    {
+        k ^= k >> 33;
+        k *= BIG_CONSTANT(0xff51afd7ed558ccd);
+        k ^= k >> 33;
+        k *= BIG_CONSTANT(0xc4ceb9fe1a85ec53);
+        k ^= k >> 33;
+    
+        return k;
+    }
+} // Hash
+
+uint32 Hash::Murmur32(const void * key, uint32 len, uint32 seed)
 {
     const uint8 * data = (const uint8*)key;
     const int nblocks = static_cast<int>(len / 4);
     int i;
-    
+
     uint32 h1 = seed;
     constexpr uint32 c1 = 0xcc9e2d51;
     constexpr uint32 c2 = 0x1b873593;
-    
+
     auto blocks = reinterpret_cast<const uint32*>(data + nblocks*4);
-    
+
     for(i = -nblocks; i; i++) {
         uint32 k1 = getblock(blocks,i);
-        
+    
         k1 *= c1;
         k1 = ROTL32(k1,15);
         k1 *= c2;
-        
+    
         h1 ^= k1;
-        h1 = ROTL32(h1,13); 
+        h1 = ROTL32(h1,13);
         h1 = h1*5+0xe6546b64;
     }
-    
+
     auto tail = reinterpret_cast<const uint8*>(data + nblocks*4);
     uint32 k1 = 0;
-    
+
     switch(len & 3) {
     case 3: k1 ^= tail[2] << 16;
     case 2: k1 ^= tail[1] << 8;
     case 1: k1 ^= tail[0];
         k1 *= c1; k1 = ROTL32(k1,15); k1 *= c2; h1 ^= k1;
     }
-    
-    h1 ^= len;    
-    return hashMurmurFmix32(h1);
-} 
 
-HashResult128 hashMurmur128(const void * key, size_t len, const uint32 seed)
+    h1 ^= len;
+    return MurmurFmix32(h1);
+}
+
+HashResult128 Hash::Murmur128(const void * key, size_t len, const uint32 seed)
 {
     const uint8 * data = (const uint8*)key;
     const size_t nblocks = len / 16;
     size_t i;
-    
+
     uint64 h1 = seed;
     uint64 h2 = seed;
-    
+
     uint64 c1 = BIG_CONSTANT(0x87c37b91114253d5);
     uint64 c2 = BIG_CONSTANT(0x4cf5ad432745937f);
-    
+
     const uint64 * blocks = (const uint64 *)(data);
-    
+
     for(i = 0; i < nblocks; i++)
     {
         uint64 k1 = getblock(blocks,i*2+0);
         uint64 k2 = getblock(blocks,i*2+1);
-        
+    
         k1 *= c1; k1  = ROTL64(k1,31); k1 *= c2; h1 ^= k1;
         h1 = ROTL64(h1,27); h1 += h2; h1 = h1*5+0x52dce729;
         k2 *= c2; k2  = ROTL64(k2,33); k2 *= c1; h2 ^= k2;
         h2 = ROTL64(h2,31); h2 += h1; h2 = h2*5+0x38495ab5;
     }
-    
-    auto tail = reinterpret_cast<const uint8*>(data + nblocks*16);
-    
+
+    const uint8* tail = reinterpret_cast<const uint8*>(data + nblocks*16);
+
     uint64 k1 = 0;
     uint64 k2 = 0;
-    
+
     switch(len & 15)
     {
     case 15: k2 ^= (uint64)(tail[14]) << 48;
@@ -4476,7 +4765,7 @@ HashResult128 hashMurmur128(const void * key, size_t len, const uint32 seed)
     case 10: k2 ^= (uint64)(tail[ 9]) << 8;
     case  9: k2 ^= (uint64)(tail[ 8]) << 0;
         k2 *= c2; k2  = ROTL64(k2,33); k2 *= c1; h2 ^= k2;
-        
+    
     case  8: k1 ^= (uint64)(tail[ 7]) << 56;
     case  7: k1 ^= (uint64)(tail[ 6]) << 48;
     case  6: k1 ^= (uint64)(tail[ 5]) << 40;
@@ -4487,44 +4776,22 @@ HashResult128 hashMurmur128(const void * key, size_t len, const uint32 seed)
     case  1: k1 ^= (uint64)(tail[ 0]) << 0;
         k1 *= c1; k1  = ROTL64(k1,31); k1 *= c2; h1 ^= k1;
     }
-    
+
     h1 ^= len; h2 ^= len;
-    
+
     h1 += h2;
     h2 += h1;
-    
-    h1 = hashMurmurFmix64(h1);
-    h2 = hashMurmurFmix64(h2);
-    
+
+    h1 = MurmurFmix64(h1);
+    h2 = MurmurFmix64(h2);
+
     h1 += h2;
     h2 += h1;
-    
+
     return {
         .h1 = h1,
         .h2 = h2
     };
-}
-
-static void hashMurmur32MixTail(HashMurmur32Incremental* ctx, const uint8** pData, uint32* pSize)
-{
-    uint32 size = *pSize;
-    const uint8* data = *pData;
-    
-    while (size && ((size<4) || ctx->mCount)) {
-        ctx->mTail |= (*data++) << (ctx->mCount * 8);
-        
-        ctx->mCount++;
-        size--;
-        
-        if (ctx->mCount == 4)	{
-            MMIX(ctx->mHash, ctx->mTail);
-            ctx->mTail = 0;
-            ctx->mCount = 0;
-        }
-    }
-    
-    *pData = data;
-    *pSize = size;
 }
 
 HashMurmur32Incremental::HashMurmur32Incremental(uint32 seed) : 
@@ -4543,7 +4810,7 @@ HashMurmur32Incremental& HashMurmur32Incremental::AddAny(const void* _data, uint
     const uint8* key = (const uint8*)_data;
     mSize += _size;
     
-    hashMurmur32MixTail(this, &key, &_size);
+    Murmur32MixTail(&key, &_size);
     
     while (_size >= 4)	{
         uint32 k = *((const uint32*)key);
@@ -4554,7 +4821,7 @@ HashMurmur32Incremental& HashMurmur32Incremental::AddAny(const void* _data, uint
         _size -= 4;
     }
     
-    hashMurmur32MixTail(this, &key, &_size);
+    Murmur32MixTail(&key, &_size);
     return *this;
 }
 
@@ -4564,7 +4831,7 @@ HashMurmur32Incremental& HashMurmur32Incremental::AddCStringArray(const char** _
         return *this;
 
     for (uint32 i = 0; i < _numStrings; i++) 
-        AddAny(_strs[i], strLen(_strs[i]));
+        AddAny(_strs[i], Str::Len(_strs[i]));
 
     return *this;
 }
@@ -4579,6 +4846,28 @@ uint32 HashMurmur32Incremental::Hash()
     mHash ^= mHash >> 15;
     
     return mHash;
+}
+
+void HashMurmur32Incremental::Murmur32MixTail(const uint8** pData, uint32* pSize)
+{
+    uint32 size = *pSize;
+    const uint8* data = *pData;
+    
+    while (size && ((size<4) || mCount)) {
+        mTail |= (*data++) << (mCount * 8);
+        
+        mCount++;
+        size--;
+        
+        if (mCount == 4)	{
+            MMIX(mHash, mTail);
+            mTail = 0;
+            mCount = 0;
+        }
+    }
+    
+    *pData = data;
+    *pSize = size;
 }
 
 
@@ -4612,15 +4901,15 @@ FORCE_INLINE constexpr int hashTableNearestPow2(int n)
     return n;
 }
 
-_private::HashTableData* _private::hashtableCreate(uint32 capacity, uint32 valueStride, Allocator* alloc)
+_private::HashTableData* _private::hashtableCreate(uint32 capacity, uint32 valueStride, MemAllocator* alloc)
 {
     ASSERT(capacity > 0);
     
     capacity = hashTableNearestPow2(capacity);   
     
     MemSingleShotMalloc<HashTableData> mallocator;
-    mallocator.AddMemberField<uint32>(offsetof(HashTableData, keys), capacity)
-              .AddMemberField<uint8>(offsetof(HashTableData, values), valueStride*capacity);
+    mallocator.AddMemberArray<uint32>(offsetof(HashTableData, keys), capacity)
+              .AddMemberArray<uint8>(offsetof(HashTableData, values), valueStride*capacity);
     HashTableData* tbl = mallocator.Calloc(alloc);
     
     tbl->bitshift = hashTableCalcBitShift(capacity);
@@ -4637,12 +4926,12 @@ size_t _private::hashtableGetMemoryRequirement(uint32 capacity, uint32 valueStri
     
     capacity = hashTableNearestPow2(capacity);
     MemSingleShotMalloc<HashTableData> mallocator;
-    return mallocator.AddMemberField<uint32>(offsetof(HashTableData, keys), capacity)
-                     .AddMemberField<uint8>(offsetof(HashTableData, values), valueStride*capacity)
+    return mallocator.AddMemberArray<uint32>(offsetof(HashTableData, keys), capacity)
+                     .AddMemberArray<uint8>(offsetof(HashTableData, values), valueStride*capacity)
                      .GetMemoryRequirement();        
 }
 
-void _private::hashtableDestroy(HashTableData* tbl, Allocator* alloc)
+void _private::hashtableDestroy(HashTableData* tbl, MemAllocator* alloc)
 {
     ASSERT(tbl);
     tbl->count = tbl->capacity = 0;
@@ -4650,14 +4939,14 @@ void _private::hashtableDestroy(HashTableData* tbl, Allocator* alloc)
     MemSingleShotMalloc<HashTableData>::Free(tbl, alloc);
 }
 
-bool _private::hashtableGrow(HashTableData** pTbl, Allocator* alloc)
+bool _private::hashtableGrow(HashTableData** pTbl, MemAllocator* alloc)
 {
     HashTableData* tbl = *pTbl;
     HashTableData* newTable = hashtableCreate(tbl->capacity << 1, tbl->valueStride, alloc);
     if (!newTable)
         return false;
     
-    for (int i = 0, c = tbl->capacity; i < c; i++) {
+    for (uint32 i = 0, c = tbl->capacity; i < c; i++) {
         if (tbl->keys[i] > 0) {
             hashtableAdd(newTable, tbl->keys[i], tbl->values + i * tbl->valueStride);
         }
@@ -4670,18 +4959,8 @@ bool _private::hashtableGrow(HashTableData** pTbl, Allocator* alloc)
 
 uint32 _private::hashtableAdd(HashTableData* tbl, uint32 key, const void* value)
 {
-    ASSERT(tbl->count < tbl->capacity);
-    
-    uint32 h = hashTableFibHash(key, tbl->bitshift);
-    uint32 cnt = (uint32)tbl->capacity;
-    while (tbl->keys[h] != 0) {
-        h = (h + 1) % cnt;
-    }
-    
-    ASSERT(tbl->keys[h] == 0);    // something went wrong!
-    tbl->keys[h] = key;
+    uint32 h = _private::hashtableAddKey(tbl, key);
     memcpy(tbl->values + tbl->valueStride * h, value, tbl->valueStride);
-    ++tbl->count;
     return h;
 }
 
@@ -4691,8 +4970,15 @@ uint32 _private::hashtableAddKey(HashTableData* tbl, uint32 key)
     
     uint32 h = hashTableFibHash(key, tbl->bitshift);
     uint32 cnt = (uint32)tbl->capacity;
-    while (tbl->keys[h] != 0) {
-        h = (h + 1) % cnt;
+
+    if (tbl->keys[h]) {
+        for (uint32 i = 1; i < cnt; i++) {
+            uint32 index = (h + i) % cnt;
+            if (tbl->keys[index] == 0) {
+                h = index;
+                break;
+            }
+        }
     }
     
     ASSERT_MSG(tbl->keys[h] == 0, "No free slot found in the hash-table");
@@ -4709,11 +4995,9 @@ uint32 _private::hashtableFind(const HashTableData* tbl, uint32 key)
         return h;
     } else {
         for (uint32 i = 1; i < cnt; i++) {
-            int idx = (h + i) % cnt;
-            if (tbl->keys[idx] == key)
-                return idx;
-            else if (tbl->keys[idx] == 0) 
-                break;
+            uint32 index = (h + i) % cnt;
+            if (tbl->keys[index] == key)
+                return index;
         }
         
         return INVALID_INDEX;    // Worst case: Not found!
@@ -4733,8 +5017,8 @@ _private::HashTableData* _private::hashtableCreateWithBuffer(uint32 capacity, ui
     capacity = hashTableNearestPow2(capacity);   
     
     MemSingleShotMalloc<HashTableData> hashTableBuff;
-    hashTableBuff.AddMemberField<uint32>(offsetof(HashTableData, keys), capacity)
-                 .AddMemberField<uint8>(offsetof(HashTableData, values), valueStride*capacity);
+    hashTableBuff.AddMemberArray<uint32>(offsetof(HashTableData, keys), capacity)
+                 .AddMemberArray<uint8>(offsetof(HashTableData, values), valueStride*capacity);
     HashTableData* tbl = hashTableBuff.Calloc(buff, size);
     
     tbl->bitshift = hashTableCalcBitShift(capacity);
@@ -4752,7 +5036,7 @@ bool _private::hashtableGrowWithBuffer(HashTableData** pTbl, void* buff, size_t 
     if (!newTable)
         return false;
     
-    for (int i = 0, c = tbl->capacity; i < c; i++) {
+    for (uint32 i = 0, c = tbl->capacity; i < c; i++) {
         if (tbl->keys[i] > 0) {
             hashtableAdd(newTable, tbl->keys[i], tbl->values + i * tbl->valueStride);
         }
@@ -4764,11 +5048,11 @@ bool _private::hashtableGrowWithBuffer(HashTableData** pTbl, void* buff, size_t 
 
 
 #define INI_IMPLEMENTATION
-#define INI_MALLOC(ctx, size)       memAlloc(size, (Allocator*)ctx)
-#define INI_FREE(ctx, ptr)          memFree(ptr, (Allocator*)ctx)
+#define INI_MALLOC(ctx, size)       Mem::Alloc(size, (MemAllocator*)ctx)
+#define INI_FREE(ctx, ptr)          Mem::Free(ptr, (MemAllocator*)ctx)
 #define INI_MEMCPY(dst, src, cnt)   memcpy(dst, src, cnt)
-#define INI_STRLEN(s)               strLen(s)
-#define INI_STRNICMP(s1, s2, cnt)   (strIsEqualNoCaseCount(s1, s2, cnt) ? 0 : 1)
+#define INI_STRLEN(s)               Str::Len(s)
+#define INI_STRNICMP(s1, s2, cnt)   (Str::IsEqualNoCaseCount(s1, s2, cnt) ? 0 : 1)
 
 PRAGMA_DIAGNOSTIC_PUSH()
 PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wsign-compare")
@@ -5837,14 +6121,14 @@ PRAGMA_DIAGNOSTIC_POP()
 
 typedef struct ini_t ini_t;
 
-IniContext iniCreateContext(Allocator* alloc)
+INIFileContext INIFile::Create(MemAllocator* alloc)
 {
-    return IniContext { .ini = ini_create(alloc) };
+    return INIFileContext { .ini = ini_create(alloc) };
 }
 
-IniContext iniLoad(const char* filepath, Allocator* alloc)
+INIFileContext INIFile::Load(const char* filepath, MemAllocator* alloc)
 {
-    ASSERT_MSG(alloc->GetType() != AllocatorType::Temp, "alloc cannot be temp. Because the code below also has temp alloc and breaks the stack");
+    ASSERT_MSG(alloc->GetType() != MemAllocatorType::Temp, "alloc cannot be temp. Because the code below also has temp alloc and breaks the stack");
 
     File f;
 
@@ -5859,22 +6143,23 @@ IniContext iniLoad(const char* filepath, Allocator* alloc)
         f.Close();
     }
     else {
-        return IniContext {};
+        return INIFileContext {};
     }
 
     void* data;
     size_t size;
     blob.Detach(&data, &size);
-    return IniContext { .ini = ini_load((const char*)data, alloc) };
+    return INIFileContext { .ini = ini_load((const char*)data, alloc) };
 }
 
-IniContext iniLoadFromString(const char* data, Allocator* alloc)
+INIFileContext INIFile::LoadFromString(const char* data, MemAllocator* alloc)
 {
-    return IniContext { .ini = ini_load(data, alloc) };
+    return INIFileContext { .ini = ini_load(data, alloc) };
 }
 
-bool iniSave(const IniContext& ini, const char* filepath)
+bool INIFile::Save(const INIFileContext& ini, const char* filepath)
 {
+    bool saveDone = false;
     int size = ini_save(ini.ini, nullptr, 0);
     if (size > 0) {
         MemTempAllocator tmpAlloc;
@@ -5885,155 +6170,148 @@ bool iniSave(const IniContext& ini, const char* filepath)
         if (f.Open(filepath, FileOpenFlags::Write)) {
             f.Write(data, size);
             f.Close();
-            return true;
+            saveDone = true;
         }
-        else {
-            return false;
-        }        
     }
-    else {
-        return false;
-    }
+    return saveDone;
 }
 
-Blob iniSaveToMem(const IniContext& ini, Allocator* alloc)
+Blob INIFile::SaveToMem(const INIFileContext& ini, MemAllocator* alloc)
 {
     int size = ini_save(ini.ini, nullptr, 0);
+    Blob blob(alloc);
     if (size > 0) {
-        Blob blob(alloc);
         blob.Reserve(size);
         ini_save(ini.ini, (char*)blob.Data(), (int)blob.Size());
         return blob;
     }
-    else {
-        return Blob {};
-    }
+    return blob;
 }
 
-uint32 IniContext::GetSectionCount() const
+uint32 INIFileContext::GetSectionCount() const
 {
     ASSERT(this->ini);
     return static_cast<uint32>(ini_section_count(this->ini));
 }
 
-IniSection IniContext::GetSection(uint32 index) const
+INIFileSection INIFileContext::GetSection(uint32 index) const
 {
     ASSERT(this->ini);
-    return IniSection { .ini = this->ini, .id = static_cast<int>(index) };
+    return INIFileSection { .ini = this->ini, .id = static_cast<int>(index) };
 }
 
-const char* IniContext::GetSectionName(uint32 index) const
+const char* INIFileContext::GetSectionName(uint32 index) const
 {
     ASSERT(this->ini);
     return ini_section_name(this->ini, static_cast<int>(index));
 }
 
-IniSection IniContext::GetRootSection() const
+INIFileSection INIFileContext::GetRootSection() const
 {
     ASSERT(this->ini);
-    return IniSection { .ini = this->ini, .id = INI_GLOBAL_SECTION };
+    return INIFileSection { .ini = this->ini, .id = INI_GLOBAL_SECTION };
 }
 
-IniSection IniContext::NewSection(const char* name) const
+INIFileSection INIFileContext::NewSection(const char* name) const
 {
     ASSERT(this->ini);
-    return IniSection { .ini = this->ini, .id = ini_section_add(this->ini, name, strLen(name)) };
+    return INIFileSection { .ini = this->ini, .id = ini_section_add(this->ini, name, Str::Len(name)) };
 }
 
-IniSection IniContext::FindSection(const char* name) const
+INIFileSection INIFileContext::FindSection(const char* name) const
 {
     ASSERT(this->ini);
-    return IniSection { .ini = this->ini, .id = ini_find_section(this->ini, name, strLen(name)) };
+    return INIFileSection { .ini = this->ini, .id = ini_find_section(this->ini, name, Str::Len(name)) };
 }
 
-void IniContext::Destroy()
+void INIFileContext::Destroy()
 {
     if (this->ini) 
         ini_destroy(this->ini);
     this->ini = nullptr;
 }
 
-uint32 IniSection::GetPropertyCount()
+uint32 INIFileSection::GetPropertyCount()
 {
     ASSERT(this->id != INI_NOT_FOUND);
     return static_cast<uint32>(ini_property_count(this->ini, this->id));
 }
 
-IniProperty IniSection::GetProperty(uint32 index)
+INIFileProperty INIFileSection::GetProperty(uint32 index)
 {
     return { .ini = this->ini, .sectionId = this->id, .id = static_cast<int>(index) };
 }
 
-const char* IniSection::GetPropertyName(uint32 index)
+const char* INIFileSection::GetPropertyName(uint32 index)
 {
     ASSERT(this->id != INI_NOT_FOUND);
     return ini_property_name(this->ini, this->id, static_cast<int>(index));
 }
 
-IniProperty IniSection::NewProperty(const char* name, const char* value)
+INIFileProperty INIFileSection::NewProperty(const char* name, const char* value)
 {
     ASSERT(this->id != INI_NOT_FOUND);
-    ini_property_add(this->ini, this->id, name, strLen(name), value, strLen(value));
-    return IniProperty { 
+    ini_property_add(this->ini, this->id, name, Str::Len(name), value, Str::Len(value));
+    return INIFileProperty { 
         .ini = this->ini, 
         .sectionId = this->id,
         .id = ini_property_count(this->ini, this->id) - 1 
     };
 }
 
-IniProperty IniSection::FindProperty(const char* name)
+INIFileProperty INIFileSection::FindProperty(const char* name)
 {
     ASSERT(this->id != INI_NOT_FOUND);
-    return IniProperty { 
+    return INIFileProperty { 
         .ini = this->ini, 
         .sectionId = this->id,
-        .id = ini_find_property(this->ini, this->id, name, strLen(name)) 
+        .id = ini_find_property(this->ini, this->id, name, Str::Len(name)) 
     };
 }
 
-void IniSection::SetName(const char* name)
+void INIFileSection::SetName(const char* name)
 {
     ASSERT(this->id != INI_NOT_FOUND);
-    ini_section_name_set(this->ini, this->id, name, strLen(name));
+    ini_section_name_set(this->ini, this->id, name, Str::Len(name));
 }
 
-const char* IniSection::GetName()
+const char* INIFileSection::GetName()
 {
     ASSERT(this->id != INI_NOT_FOUND);
     return ini_section_name(this->ini, this->id);
 }
 
-void IniSection::Delete()
+void INIFileSection::Delete()
 {
     ASSERT(this->id != INI_NOT_FOUND);
     ini_section_remove(this->ini, this->id);
 }
 
-void IniProperty::SetName(const char* name)
+void INIFileProperty::SetName(const char* name)
 {
     ASSERT(this->id != INI_NOT_FOUND);
-    ini_property_name_set(this->ini, this->sectionId, this->id, name, (int)strLen(name));
+    ini_property_name_set(this->ini, this->sectionId, this->id, name, (int)Str::Len(name));
 }
 
-void IniProperty::SetValue(const char* value)
+void INIFileProperty::SetValue(const char* value)
 {
     ASSERT(this->id != INI_NOT_FOUND);
-    ini_property_value_set(this->ini, this->sectionId, this->id, value, (int)strLen(value));
+    ini_property_value_set(this->ini, this->sectionId, this->id, value, (int)Str::Len(value));
 }
 
-const char* IniProperty::GetName()
+const char* INIFileProperty::GetName()
 {
     ASSERT(this->id != INI_NOT_FOUND);
     return ini_property_name(this->ini, this->sectionId, this->id);
 }
 
-const char* IniProperty::GetValue()
+const char* INIFileProperty::GetValue()
 {
     ASSERT(this->id != INI_NOT_FOUND);
     return ini_property_value(this->ini, this->sectionId, this->id);
 }
 
-void IniProperty::Delete()
+void INIFileProperty::Delete()
 {
     ASSERT(this->id != INI_NOT_FOUND);
     ini_property_remove(this->ini, this->sectionId, this->id);
@@ -6041,7 +6319,7 @@ void IniProperty::Delete()
 
 #define MINICORO_IMPL
 #define MCO_ASSERT(c) ASSERT(c)
-#define MCO_LOG(e) logError(e)
+#define MCO_LOG(e) LOG_ERROR(e)
 //----------------------------------------------------------------------------------------------------------------------
 // External/minicoro/minicoro.h
 
@@ -8083,9 +8361,9 @@ namespace _limits
 }
 
 inline constexpr size_t JOBS_STACK_SIZES[uint32(JobsStackSize::_Count)] = {
-    64*kKB,
-    512*kKB,
-    2*kMB
+    64*SIZE_KB,
+    512*SIZE_KB,
+    2*SIZE_MB
 };
 
 #if JOBS_USE_ANDERSON_LOCK
@@ -8148,9 +8426,9 @@ struct JobsFiberProperties
 
 struct JobsSignalInternal
 {
-    atomicUint32 signaled;
+    AtomicUint32 signaled;
     uint8 reserved[CACHE_LINE_SIZE-4];
-    atomicUint32 value;
+    AtomicUint32 value;
 };
 static_assert(sizeof(JobsSignalInternal) <= sizeof(JobsSignal), "Mismatch sizes between JobsSignal and JobsSignalInternal");
 
@@ -8167,7 +8445,7 @@ struct JobsFiber
     uint32 ownerTid;
     mco_coro* co;
     mco_desc coDesc;
-    atomicUint32* childCounter;
+    AtomicUint32* childCounter;
     JobsFiberProperties* props;
     JobsSignalInternal* signal;
     #ifdef TRACY_ENABLE
@@ -8187,7 +8465,7 @@ struct JobsThreadData
 
 struct alignas(CACHE_LINE_SIZE) JobsInstance
 {
-    atomicUint32 counter;                       // Atomic counter of sub items within a job 
+    AtomicUint32 counter;                       // Atomic counter of sub items within a job 
     uint8 _padding1[CACHE_LINE_SIZE - 4];        // padding for the atomic var to fit inside a cache line
     JobsType type;
     bool isAutoDelete;
@@ -8206,14 +8484,14 @@ struct JobsWaitingList
 template <typename _T, uint32 _MaxCount> 
 struct alignas(CACHE_LINE_SIZE) JobsAtomicPool
 {
-    static JobsAtomicPool<_T, _MaxCount>* Create(Allocator* alloc);
-    static void Destroy(JobsAtomicPool<_T, _MaxCount>* p, Allocator* alloc);
+    static JobsAtomicPool<_T, _MaxCount>* Create(MemAllocator* alloc);
+    static void Destroy(JobsAtomicPool<_T, _MaxCount>* p, MemAllocator* alloc);
 
     _T* New();
     void Delete(_T* props);
 
-    atomicUint32 mIndex;
-    uint8 _reserved1[CACHE_LINE_SIZE - sizeof(atomicUint32)];
+    AtomicUint32 mIndex;
+    uint8 _reserved1[CACHE_LINE_SIZE - sizeof(AtomicUint32)];
     _T** mPtrs;
     _T* mProps;
     uint8 _reserved2[CACHE_LINE_SIZE - sizeof(void*) * 2];
@@ -8230,13 +8508,11 @@ struct JobsFiberMemAllocator
     };
 
     SpinLockMutex mLock;
-    MemBumpAllocatorVM mAlloc;
 
     size_t mAllocationSize;
-    size_t mPoolSize;
+    uint32 mBufferAlignment;
     Pool* mPools;
     uint32 mNumItemsInPool;
-    
 
     void Initialize(size_t allocationSize);
     void Release();
@@ -8259,343 +8535,305 @@ struct JobsContext
     Semaphore semaphores[uint32(JobsType::_Count)];
     JobsAtomicPool<JobsInstance, _limits::JOBS_MAX_INSTANCES>* instancePool;
     JobsAtomicPool<JobsFiberProperties, _limits::JOBS_MAX_PENDING>* fiberPropsPool;
-    StaticArray<Pair<void*, uint32>, 7> pointers;    // Storing memory pointers, For garbage collection at release
 
-    size_t runtimeHeapTotal;
-    size_t initHeapStart;
-    size_t initHeapSize;
-
-    atomicUint32 numBusyShortThreads;
-    atomicUint32 numBusyLongThreads;
-    atomicUint32 numActiveFibers;
-    atomicUint32 numInstances;
-    uint32 maxActiveFibers;
-
-    struct MaxValues
-    {
-        uint32 numBusyShortThreadsMax;
-        uint32 numBusyLongThreadsMax;
-        uint32 numInstancesMax;
-    };
-
-    uint32 fiberHeapAllocSize;
-    MaxValues maxValues[2];     // Index: 0 = Write, 1 = Present
-
-    atomicUint32 quit;
+    AtomicUint32 quit;
 };
 
 static JobsContext gJobs;
 static thread_local bool gIsInFiber = false;
 
-NO_INLINE static JobsThreadData* jobsGetThreadData() 
-{ 
-    static thread_local JobsThreadData* data = nullptr;
-    if (!data) {
-        data = memAllocZeroTyped<JobsThreadData>();
-    }
-    else {
-        ASSERT(data->init);
-    }
-    return data; 
-}
-
-static void jobsEntryFn(mco_coro* co)
+namespace Jobs
 {
-    ASSERT(co);
-    JobsFiber* fiber = reinterpret_cast<JobsFiber*>(co->storage);
-    if (fiber) {
-        JobsFiberProperties* props = fiber->props;
-        ASSERT(props->callback);
-        props->callback(props->index, props->userData);
-    }
-}
+    NO_INLINE static JobsThreadData* _GetThreadData(bool allocateNew = false) 
+    { 
+        static thread_local JobsThreadData* data = nullptr;
 
-static JobsFiber* jobsCreateFiber(JobsFiberProperties* props)
-{
-    auto McoMallocFn = [](size_t size, void*)->void*
-    {
-        JobsFiberMemAllocator* alloc = nullptr;
-        for (uint32 i = 0; i < uint32(JobsStackSize::_Count); i++) {
-            if (size <= JOBS_STACK_SIZES[i] + 4096) {
-                alloc = &gJobs.fiberAllocators[i];
-                break;
-            }
+        if (allocateNew) {
+            ASSERT(data == nullptr);
+            data = Mem::AllocZeroTyped<JobsThreadData>();
         }
-        ASSERT(alloc);
-
-        return alloc->Allocate();
-    };
-
-    auto McoFreeFn = [](void* ptr, size_t size, void*)
-    {
-        JobsFiberMemAllocator* alloc = nullptr;
-        for (uint32 i = 0; i < uint32(JobsStackSize::_Count); i++) {
-            if (size <= JOBS_STACK_SIZES[i] + 4096) {
-                alloc = &gJobs.fiberAllocators[i];
-                break;
-            }
+        else if (data) {
+            ASSERT(data->init);
         }
-        ASSERT(alloc);
 
-        return alloc->Free(ptr);
-    };    
-
-    ASSERT(props->stackSize != JobsStackSize::_Count);
-    mco_desc desc = mco_desc_init(jobsEntryFn, JOBS_STACK_SIZES[uint32(props->stackSize)]);
-    desc.alloc_cb = McoMallocFn;
-    desc.dealloc_cb = McoFreeFn;
-
-    mco_coro* co;
-    mco_result r = mco_create(&co, &desc);
-    if (r != MCO_SUCCESS) {
-        MEMORY_FAIL();
-        return nullptr;
+        return data; 
     }
 
-    JobsFiber fiber {
-        .ownerTid = 0,
-        .co = co,
-        .coDesc = desc,
-        .props = props
-    };
-
-    mco_push(co, &fiber, sizeof(fiber));
-
-    atomicFetchAdd32Explicit(&gJobs.numActiveFibers, 1, AtomicMemoryOrder::Relaxed);
-    gJobs.maxActiveFibers = Max<uint32>(gJobs.numActiveFibers, gJobs.maxActiveFibers);
-
-    return reinterpret_cast<JobsFiber*>(co->storage);
-}
-
-NO_INLINE static void jobsDestroyFiber(JobsFiber* fiber)
-{
-    ASSERT(fiber->props);
-    ASSERT(fiber->props->next == nullptr && fiber->props->prev == nullptr);
-
-    gJobs.fiberPropsPool->Delete(fiber->props);
-
-    ASSERT(fiber->co);
-    mco_destroy(fiber->co);
-
-    atomicFetchSub32Explicit(&gJobs.numActiveFibers, 1, AtomicMemoryOrder::Relaxed);
-}
-
-static void jobsSetFiberToCurrentThread(JobsFiber* fiber)
-{
-    ASSERT(fiber);
-    ASSERT(jobsGetThreadData());
-    ASSERT(jobsGetThreadData()->curFiber == nullptr);
-
-    JobsThreadData* tdata = jobsGetThreadData();
-    JobsType type = tdata->type;
-    fiber->ownerTid = 0;
-    tdata->curFiber = fiber;
-    gIsInFiber = true;
-    
-    ASSERT(fiber->props->next == nullptr);
-
-    if (type == JobsType::ShortTask) {
-        atomicFetchAdd32Explicit(&gJobs.numBusyShortThreads, 1, AtomicMemoryOrder::Relaxed);
-        gJobs.maxValues[0].numBusyShortThreadsMax = Max(gJobs.maxValues[0].numBusyShortThreadsMax, gJobs.numBusyShortThreads);
-    }
-    else if (type == JobsType::LongTask) {
-        atomicFetchAdd32Explicit(&gJobs.numBusyLongThreads, 1, AtomicMemoryOrder::Relaxed);
-        gJobs.maxValues[0].numBusyLongThreadsMax = Max(gJobs.maxValues[0].numBusyLongThreadsMax, gJobs.numBusyLongThreads);
-    }
-
-    #ifdef TRACY_ENABLE
-    if (!fiber->tracyZonesStack.IsEmpty()) {
-        for (JobsTracyZone& zone : fiber->tracyZonesStack)
-            zone.ctx = ___tracy_emit_zone_begin_callstack(zone.sourceLoc, TRACY_CALLSTACK, zone.ctx.active);
-    }
-    #endif
-
+    static void _EntryFn(mco_coro* co)
     {
-        mco_coro* co = fiber->co;
-
-        ASSERT(co->state != MCO_RUNNING);
-        ASSERT(co->state != MCO_DEAD);
-        co->state = MCO_RUNNING;
-
-        #ifdef _MCO_USE_ASAN
-        __sanitizer_start_switch_fiber(&co->asan_prev_stack, co->stack_base, co->stack_size);
-        #endif
-
-        #ifdef _MCO_USE_TSAN
-        co->tsan_prev_fiber = __tsan_get_current_fiber();
-        __tsan_switch_to_fiber(co->tsan_fiber, 0);
-        #endif
-    
-        _mco_context* context = (_mco_context*)co->context;
-        _mco_switch(&context->back_ctx, &context->ctx);
+        ASSERT(co);
+        JobsFiber* fiber = reinterpret_cast<JobsFiber*>(co->storage);
+        if (fiber) {
+            JobsFiberProperties* props = fiber->props;
+            ASSERT(props->callback);
+            props->callback(props->index, props->userData);
+        }
     }
-    
-    #ifdef TRACY_ENABLE
-    if (!fiber->tracyZonesStack.IsEmpty() && fiber->co->state != MCO_DEAD) {
-        for (uint32 i = fiber->tracyZonesStack.Count(); i-- > 0;) 
-            TracyCZoneEnd(fiber->tracyZonesStack[i].ctx);
-    }
-    #endif
 
-    tdata->curFiber = nullptr;
-    gIsInFiber = false;
+    static JobsFiber* _CreateFiber(JobsFiberProperties* props)
+    {
+        auto McoMallocFn = [](size_t size, void*)->void*
+        {
+            JobsFiberMemAllocator* alloc = nullptr;
+            for (uint32 i = 0; i < uint32(JobsStackSize::_Count); i++) {
+                if (size <= JOBS_STACK_SIZES[i] + 4096) {
+                    alloc = &gJobs.fiberAllocators[i];
+                    break;
+                }
+            }
+            ASSERT(alloc);
+
+            return alloc->Allocate();
+        };
+
+        auto McoFreeFn = [](void* ptr, size_t size, void*)
+        {
+            JobsFiberMemAllocator* alloc = nullptr;
+            for (uint32 i = 0; i < uint32(JobsStackSize::_Count); i++) {
+                if (size <= JOBS_STACK_SIZES[i] + 4096) {
+                    alloc = &gJobs.fiberAllocators[i];
+                    break;
+                }
+            }
+            ASSERT(alloc);
+
+            return alloc->Free(ptr);
+        };    
+
+        ASSERT(props->stackSize != JobsStackSize::_Count);
+        mco_desc desc = mco_desc_init(_EntryFn, JOBS_STACK_SIZES[uint32(props->stackSize)]);
+        desc.alloc_cb = McoMallocFn;
+        desc.dealloc_cb = McoFreeFn;
+
+        mco_coro* co;
+        mco_result r = mco_create(&co, &desc);
+        if (r != MCO_SUCCESS) {
+            MEM_FAIL();
+            return nullptr;
+        }
+
+        JobsFiber fiber {
+            .ownerTid = 0,
+            .co = co,
+            .coDesc = desc,
+            .props = props
+        };
+
+        mco_push(co, &fiber, sizeof(fiber));
+
+        return reinterpret_cast<JobsFiber*>(co->storage);
+    }
+
+    NO_INLINE static void _DestroyFiber(JobsFiber* fiber)
+    {
+        ASSERT(fiber->props);
+        ASSERT(fiber->props->next == nullptr && fiber->props->prev == nullptr);
+
+        gJobs.fiberPropsPool->Delete(fiber->props);
+
+        ASSERT(fiber->co);
+        mco_destroy(fiber->co);
+    }
+
+    static void _SetFiberToCurrentThread(JobsFiber* fiber)
+    {
+        ASSERT(fiber);
+        ASSERT(_GetThreadData());
+        ASSERT(_GetThreadData()->curFiber == nullptr);
+
+        JobsThreadData* tdata = _GetThreadData();
+        fiber->ownerTid = 0;
+        tdata->curFiber = fiber;
+        gIsInFiber = true;
     
-    if (type == JobsType::ShortTask)
-        atomicFetchSub32Explicit(&gJobs.numBusyShortThreads, 1, AtomicMemoryOrder::Relaxed);
-    else if (type == JobsType::LongTask)
-        atomicFetchSub32Explicit(&gJobs.numBusyLongThreads, 1, AtomicMemoryOrder::Relaxed);
-    
-    JobsInstance* inst = fiber->props->instance;
-    if (fiber->co->state == MCO_DEAD) {
+        ASSERT(fiber->props->next == nullptr);
+
         #ifdef TRACY_ENABLE
-        ASSERT_MSG(fiber->tracyZonesStack.IsEmpty(), "Tracy zones stack currently have %u remaining items", fiber->tracyZonesStack.Count());
-        #endif
-
-        if (atomicFetchSub32(&inst->counter, 1) == 1) {     // Job is finished with all the fibers
-            if (inst->isAutoDelete) {
-                gJobs.instancePool->Delete(inst);
-                atomicFetchSub32Explicit(&gJobs.numInstances, 1, AtomicMemoryOrder::Relaxed);
-            }
+        if (!fiber->tracyZonesStack.IsEmpty()) {
+            for (JobsTracyZone& zone : fiber->tracyZonesStack)
+                zone.ctx = ___tracy_emit_zone_begin_callstack(zone.sourceLoc, TRACY_CALLSTACK, zone.ctx.active);
         }
-
-        jobsDestroyFiber(fiber);
-    }
-    else {
-        ASSERT(fiber->co->state == MCO_SUSPENDED);
-        fiber->childCounter = &tdata->waitInstance->counter;
-        tdata->waitInstance = nullptr;
-        uint32 typeIndex = uint32(inst->type);
+        #endif
 
         {
-            JobsLockScope lk(gJobs.waitingListLock);
-            gJobs.waitingLists[typeIndex].AddToList(fiber->props);
+            mco_coro* co = fiber->co;
+
+            ASSERT(co->state != MCO_RUNNING);
+            ASSERT(co->state != MCO_DEAD);
+            co->state = MCO_RUNNING;
+
+            #ifdef _MCO_USE_ASAN
+            __sanitizer_start_switch_fiber(&co->asan_prev_stack, co->stack_base, co->stack_size);
+            #endif
+
+            #ifdef _MCO_USE_TSAN
+            co->tsan_prev_fiber = __tsan_get_current_fiber();
+            __tsan_switch_to_fiber(co->tsan_fiber, 0);
+            #endif
+    
+            _mco_context* context = (_mco_context*)co->context;
+            _mco_switch(&context->back_ctx, &context->ctx);
+        }
+    
+        #ifdef TRACY_ENABLE
+        if (!fiber->tracyZonesStack.IsEmpty() && fiber->co->state != MCO_DEAD) {
+            for (uint32 i = fiber->tracyZonesStack.Count(); i-- > 0;) 
+                TracyCZoneEnd(fiber->tracyZonesStack[i].ctx);
+        }
+        #endif
+
+        tdata->curFiber = nullptr;
+        gIsInFiber = false;
+    
+        JobsInstance* inst = fiber->props->instance;
+        if (fiber->co->state == MCO_DEAD) {
+            #ifdef TRACY_ENABLE
+            ASSERT_MSG(fiber->tracyZonesStack.IsEmpty(), "Tracy zones stack currently have %u remaining items", fiber->tracyZonesStack.Count());
+            #endif
+
+            if (Atomic::FetchSub(&inst->counter, 1) == 1) {     // Job is finished with all the fibers
+                if (inst->isAutoDelete) {
+                    gJobs.instancePool->Delete(inst);
+                }
+            }
+
+            _DestroyFiber(fiber);
+        }
+        else {
+            ASSERT(fiber->co->state == MCO_SUSPENDED);
+            fiber->childCounter = &tdata->waitInstance->counter;
+            tdata->waitInstance = nullptr;
+            uint32 typeIndex = uint32(inst->type);
+
+            {
+                JobsLockScope lk(gJobs.waitingListLock);
+                gJobs.waitingLists[typeIndex].AddToList(fiber->props);
+            }
+
+            gJobs.semaphores[typeIndex].Post();
+        }
+    }
+
+    static int _WorkerThread(void* userData)
+    {
+        JobsThreadData* tdata = _GetThreadData(true);
+        uint64 param = PtrToInt<uint64>(userData);
+        tdata->threadIndex = (param >> 32) & 0xffffffff;
+        tdata->type = static_cast<JobsType>(uint32(param & 0xffffffff));
+        tdata->threadId = Thread::GetCurrentId();
+        tdata->init = true;
+
+        uint32 spinCount = !PLATFORM_MOBILE;
+        uint32 typeIndex = uint32(tdata->type);
+    
+        while (Atomic::LoadExplicit(&gJobs.quit, AtomicMemoryOrder::Acquire) != 1) {
+            gJobs.semaphores[typeIndex].Wait();
+
+            bool waitingListIsLive = false;
+            JobsFiber* fiber = nullptr;
+
+            {
+                JobsLockScope lock(gJobs.waitingListLock);
+                for (uint32 prioIdx = 0; prioIdx < static_cast<uint32>(JobsPriority::_Count); prioIdx++) {
+                    JobsWaitingList* list = &gJobs.waitingLists[typeIndex];
+                    JobsFiberProperties* props = list->mWaitingList[prioIdx];
+    
+                    while (props) {
+                        waitingListIsLive = true;
+
+                        JobsFiber* tmpFiber = props->fiber;
+                        AtomicUint32 one = 1;
+                        if (tmpFiber == nullptr || 
+                            ((tmpFiber->childCounter == nullptr || Atomic::LoadExplicit(tmpFiber->childCounter, AtomicMemoryOrder::Acquire) == 0) &&
+                            (tmpFiber->signal == nullptr || Atomic::CompareExchange_Strong(&tmpFiber->signal->signaled, &one, 0))))
+                        {
+                            if (tmpFiber == nullptr)
+                                props->fiber = _CreateFiber(props);
+
+                            fiber = props->fiber;
+                            fiber->childCounter = nullptr;
+                            list->RemoveFromList(props);
+                            prioIdx = static_cast<uint32>(JobsPriority::_Count);    // break out of outer loop
+                            break;
+                        }
+    
+    
+                        props = props->next;
+                    }
+                }
+            }
+
+            if (fiber) {
+                _SetFiberToCurrentThread(fiber);
+            }
+            else if (waitingListIsLive) {
+                gJobs.semaphores[typeIndex].Post();
+
+                if (spinCount & 1023) 
+                    OS::PauseCPU();
+                else
+                    Thread::SwitchContext();
+            }
         }
 
-        gJobs.semaphores[typeIndex].Post();
+        Mem::Free(_GetThreadData());
+        return 0;
     }
-}
 
-static int jobsWorkerThread(void* userData)
-{
-    JobsThreadData* tdata = jobsGetThreadData();
-    uint64 param = PtrToInt<uint64>(userData);
-    tdata->threadIndex = (param >> 32) & 0xffffffff;
-    tdata->type = static_cast<JobsType>(uint32(param & 0xffffffff));
-    tdata->threadId = threadGetCurrentId();
-    tdata->init = true;
+    static JobsInstance* _DispatchInternal(bool isAutoDelete, JobsType type, JobsCallback callback, void* userData, 
+                                        uint32 groupSize, JobsPriority prio, JobsStackSize stackSize)
+    {
+        ASSERT(groupSize);
 
-    uint32 spinCount = !PLATFORM_MOBILE;
-    uint32 typeIndex = uint32(tdata->type);
-    
-    while (atomicLoad32Explicit(&gJobs.quit, AtomicMemoryOrder::Acquire) != 1) {
-        gJobs.semaphores[typeIndex].Wait();
+        uint32 numFibers = groupSize;
+        ASSERT(numFibers);
 
-        bool waitingListIsLive = false;
-        JobsFiber* fiber = nullptr;
+        JobsInstance* instance = gJobs.instancePool->New();
+
+        memset(instance, 0x0, sizeof(*instance));
+
+        Atomic::ExchangeExplicit(&instance->counter, numFibers, AtomicMemoryOrder::Release);
+        instance->type = type;
+        instance->isAutoDelete = isAutoDelete;
+
+        JobsFiber* parent = nullptr;
+        if (gIsInFiber && !isAutoDelete) {
+            JobsThreadData* tdata = _GetThreadData();
+            ASSERT(tdata->curFiber);
+            parent = tdata->curFiber;
+        }
 
         {
             JobsLockScope lock(gJobs.waitingListLock);
-            for (uint32 prioIdx = 0; prioIdx < static_cast<uint32>(JobsPriority::_Count); prioIdx++) {
-                JobsWaitingList* list = &gJobs.waitingLists[typeIndex];
-                JobsFiberProperties* props = list->mWaitingList[prioIdx];
+            for (uint32 i = 0; i < numFibers; i++) {
+                JobsFiberProperties* props = gJobs.fiberPropsPool->New();
+                *props = JobsFiberProperties {
+                    .callback = callback,
+                    .userData = userData,
+                    .instance = instance,
+                    .prio = prio,
+                    .stackSize = stackSize,
+                    .index = i
+                };
     
-                while (props) {
-                    waitingListIsLive = true;
-
-                    JobsFiber* tmpFiber = props->fiber;
-                    atomicUint32 one = 1;
-                    if (tmpFiber == nullptr || 
-                        ((tmpFiber->childCounter == nullptr || atomicLoad32Explicit(tmpFiber->childCounter, AtomicMemoryOrder::Acquire) == 0) &&
-                        (tmpFiber->signal == nullptr || atomicCompareExchange32Strong(&tmpFiber->signal->signaled, &one, 0))))
-                    {
-                        if (tmpFiber == nullptr)
-                            props->fiber = jobsCreateFiber(props);
-
-                        fiber = props->fiber;
-                        fiber->childCounter = nullptr;
-                        list->RemoveFromList(props);
-                        prioIdx = static_cast<uint32>(JobsPriority::_Count);    // break out of outer loop
-                        break;
-                    }
-    
-    
-                    props = props->next;
-                }
+                gJobs.waitingLists[uint32(type)].AddToList(props);
             }
         }
 
-        if (fiber) {
-            jobsSetFiberToCurrentThread(fiber);
-        }
-        else if (waitingListIsLive) {
-            gJobs.semaphores[typeIndex].Post();
-
-            if (spinCount & 1023) 
-                sysPauseCpu();
-            else
-                threadYield();
-        }
+        gJobs.semaphores[uint32(type)].Post(numFibers);
+        return instance;
     }
+} // Jobs
 
-    memFree(jobsGetThreadData());
-    return 0;
-}
-
-static JobsInstance* jobsDispatchInternal(bool isAutoDelete, JobsType type, JobsCallback callback, void* userData, 
-                                          uint32 groupSize, JobsPriority prio, JobsStackSize stackSize)
-{
-    ASSERT(groupSize);
-
-    uint32 numFibers = groupSize;
-    ASSERT(numFibers);
-
-    JobsInstance* instance = gJobs.instancePool->New();
-
-    memset(instance, 0x0, sizeof(*instance));
-    atomicFetchAdd32Explicit(&gJobs.numInstances, 1, AtomicMemoryOrder::Relaxed);
-    gJobs.maxValues[0].numInstancesMax = Max(gJobs.maxValues[0].numInstancesMax, gJobs.numInstances);
-
-    atomicExchange32Explicit(&instance->counter, numFibers, AtomicMemoryOrder::Release);
-    instance->type = type;
-    instance->isAutoDelete = isAutoDelete;
-
-    JobsFiber* parent = nullptr;
-    if (gIsInFiber && !isAutoDelete) {
-        JobsThreadData* tdata = jobsGetThreadData();
-        ASSERT(tdata->curFiber);
-        parent = tdata->curFiber;
-    }
-
-    {
-        JobsLockScope lock(gJobs.waitingListLock);
-        for (uint32 i = 0; i < numFibers; i++) {
-            JobsFiberProperties* props = gJobs.fiberPropsPool->New();
-            *props = JobsFiberProperties {
-                .callback = callback,
-                .userData = userData,
-                .instance = instance,
-                .prio = prio,
-                .stackSize = stackSize,
-                .index = i
-            };
-    
-            gJobs.waitingLists[uint32(type)].AddToList(props);
-        }
-    }
-
-    gJobs.semaphores[uint32(type)].Post(numFibers);
-    return instance;
-}
-
-void jobsWaitForCompletion(JobsHandle instance)
+void Jobs::WaitForCompletionAndDelete(JobsHandle instance)
 {
     ASSERT(!instance->isAutoDelete);
 
     uint32 spinCount = !PLATFORM_MOBILE;    // On mobile hardware, we start from yielding then proceed with Pause
-    while (atomicLoad32Explicit(&instance->counter, AtomicMemoryOrder::Acquire)) {
-        JobsThreadData* tdata = jobsGetThreadData();
+    while (Atomic::LoadExplicit(&instance->counter, AtomicMemoryOrder::Acquire)) {
+        JobsThreadData* tdata = _GetThreadData();
         if (tdata) {
-            ASSERT_MSG(tdata->curFiber, "Worker threads should always have a fiber assigned when 'Wait' is called");
+            ASSERT_MSG(tdata->curFiber, "Task threads should always have a fiber assigned when 'Wait' is called");
 
             JobsFiber* curFiber = tdata->curFiber;
             curFiber->ownerTid = tdata->threadId;    // save ownerTid as a hint so we can pick this up again on the same thread context
@@ -8620,7 +8858,7 @@ void jobsWaitForCompletion(JobsHandle instance)
                 __tsan_switch_to_fiber(tsan_prev_fiber, 0);
                 #endif
 
-                debugFiberScopeProtector_Check();
+                Debug::FiberScopeProtector_Check();
 
                 _mco_context* context = (_mco_context*)co->context;
                 _mco_switch(&context->ctx, &context->back_ctx);
@@ -8628,80 +8866,88 @@ void jobsWaitForCompletion(JobsHandle instance)
         }
         else {
             if (spinCount++ & 1023)
-                sysPauseCpu();   // Main thread just loops 
+                OS::PauseCPU();   // Main thread just loops 
             else
-                threadYield();
+                Thread::SwitchContext();
         }
     }
 
     gJobs.instancePool->Delete(instance);
-    atomicFetchSub32Explicit(&gJobs.numInstances, 1, AtomicMemoryOrder::Relaxed);
 }
 
-bool jobsIsRunning(JobsHandle handle)
+void Jobs::YieldCurrent()
 {
+    JobsThreadData* tdata = _GetThreadData();
+    ASSERT_MSG(tdata, "YieldCurrent() can only be called within the task threads");
+    ASSERT_MSG(tdata->curFiber, "Task threads should always have a fiber assigned when 'Yield' is called");
+
+    JobsFiber* curFiber = tdata->curFiber;
+
+    {
+        mco_coro* co = curFiber->co;
+        ASSERT(co);
+        ASSERT(co->state != MCO_SUSPENDED);
+        ASSERT(co->state != MCO_DEAD);
+        co->state = MCO_SUSPENDED;
+
+        #ifdef _MCO_USE_ASAN
+        void* bottom_old = nullptr;
+        size_t size_old = 0;
+        __sanitizer_finish_switch_fiber(co->asan_prev_stack, (const void**)&bottom_old, &size_old);
+        #endif
+
+        #ifdef _MCO_USE_TSAN
+        void* tsan_prev_fiber = co->tsan_prev_fiber;
+        co->tsan_prev_fiber = nullptr;
+        __tsan_switch_to_fiber(tsan_prev_fiber, 0);
+        #endif
+
+        Debug::FiberScopeProtector_Check();
+
+        _mco_context* context = (_mco_context*)co->context;
+        _mco_switch(&context->ctx, &context->back_ctx);
+    }
+}
+
+bool Jobs::IsRunning(JobsHandle handle)
+{
+    ASSERT(handle);
     ASSERT(!handle->isAutoDelete);    // Can't query for AutoDelete jobs
-    return atomicLoad32Explicit(&handle->counter, AtomicMemoryOrder::Acquire);
+    return Atomic::LoadExplicit(&handle->counter, AtomicMemoryOrder::Acquire);
 }
 
-JobsHandle jobsDispatch(JobsType type, JobsCallback callback, void* userData, uint32 groupSize, JobsPriority prio, JobsStackSize stackSize)
+void Jobs::Delete(JobsHandle handle)
 {
-    return jobsDispatchInternal(false, type, callback, userData, groupSize, prio, stackSize);
+    ASSERT_MSG(Atomic::LoadExplicit(&handle->counter, AtomicMemoryOrder::Acquire) == 0, "Job must be completed before deletion");
+    
+    gJobs.instancePool->Delete(handle);
 }
 
-void jobsDispatchAndForget(JobsType type, JobsCallback callback, void* userData, uint32 groupSize, JobsPriority prio, JobsStackSize stackSize)
+JobsHandle Jobs::Dispatch(JobsType type, JobsCallback callback, void* userData, uint32 groupSize, JobsPriority prio, JobsStackSize stackSize)
 {
-    jobsDispatchInternal(true, type, callback, userData, groupSize, prio, stackSize);
+    return _DispatchInternal(false, type, callback, userData, groupSize, prio, stackSize);
 }
 
-void jobsGetBudgetStats(JobsBudgetStats* stats)
+void Jobs::DispatchAndForget(JobsType type, JobsCallback callback, void* userData, uint32 groupSize, JobsPriority prio, JobsStackSize stackSize)
 {
-    JobsContext::MaxValues m = gJobs.maxValues[1];
-
-    stats->maxShortTaskThreads = gJobs.numThreads[uint32(JobsType::ShortTask)];
-    stats->maxLongTaskThreads = gJobs.numThreads[uint32(JobsType::LongTask)];
-    stats->numBusyShortThreads = m.numBusyShortThreadsMax;
-    stats->numBusyLongThreads = m.numBusyLongThreadsMax;
-
-    stats->numMaxActiveFibers = gJobs.maxActiveFibers;
-    stats->numActiveFibers = gJobs.numActiveFibers;
-
-    stats->maxJobs = _limits::JOBS_MAX_INSTANCES;
-    stats->numJobs = m.numInstancesMax;
-
-    stats->initHeapStart = gJobs.initHeapStart;
-    stats->initHeapSize = gJobs.initHeapSize;
-
-    size_t fibersAllocSize = 0;
-    for (uint32 i = 0; i < uint32(JobsStackSize::_Count); i++)
-        fibersAllocSize += gJobs.fiberAllocators[i].mAlloc.GetCommitedSize();
-    stats->fibersMemoryPoolSize = fibersAllocSize;
+    _DispatchInternal(true, type, callback, userData, groupSize, prio, stackSize);
 }
 
-void jobsResetBudgetStats()
-{
-    JobsContext::MaxValues* m = &gJobs.maxValues[0];
-    gJobs.maxValues[1] = *m;
-    memset(m, 0x0, sizeof(*m));    
-}
-
-uint32 jobsGetWorkerThreadsCount(JobsType type)
+uint32 Jobs::GetWorkerThreadsCount(JobsType type)
 {
     ASSERT(type != JobsType::_Count);
     return gJobs.numThreads[uint32(type)];
 }
 
 
-void jobsInitialize(const JobsInitParams& initParams)
+void Jobs::Initialize(const JobsInitParams& initParams)
 {
     ASSERT(initParams.alloc);
 
     gJobs.initParams = initParams;
-    if (initParams.alloc->GetType() == AllocatorType::Bump)
-        gJobs.initHeapStart = ((MemBumpAllocatorBase*)initParams.alloc)->GetOffset();
     
     SysInfo info {};
-    sysGetSysInfo(&info);
+    OS::GetSysInfo(&info);
     uint32 numCores = info.coreCount;
     ASSERT(numCores);
 
@@ -8709,13 +8955,11 @@ void jobsInitialize(const JobsInitParams& initParams)
     gJobs.numThreads[uint32(JobsType::LongTask)] =  initParams.numLongTaskThreads == 0 ? Max<uint32>(1, numCores - 1) : initParams.numLongTaskThreads;
 
     if constexpr (PLATFORM_ANDROID)
-        debugStacktraceSaveStopPoint((void*)jobsEntryFn);   // workaround for stacktrace crash bug. see `debugStacktraceSaveStopPoint`
+        Debug::StacktraceSaveStopPoint((void*)_EntryFn);   // workaround for stacktrace crash bug. see `debugStacktraceSaveStopPoint`
 
     #ifdef JOBS_USE_ANDERSON_LOCK
     uint32 numTotalThreads = gJobs.numThreads[0] + gJobs.numThreads[1] + 1;
-    gJobs.waitingListLock.Initialize(numTotalThreads, memAllocAlignedTyped<JobsAndersonLockThread>(numTotalThreads, alignof(JobsAndersonLockThread), initParams.alloc));
-    if (initParams.alloc->GetType() != AllocatorType::Bump)
-        gJobs.pointers.Add(Pair<void*, uint32>(gJobs.waitingListLock.mSlots, alignof(JobsAndersonLockThread)));
+    gJobs.waitingListLock.Initialize(numTotalThreads, Mem::AllocAlignedTyped<JobsAndersonLockThread>(numTotalThreads, alignof(JobsAndersonLockThread), initParams.alloc));
     #endif
 
     gJobs.semaphores[uint32(JobsType::ShortTask)].Initialize();
@@ -8728,17 +8972,15 @@ void jobsInitialize(const JobsInitParams& initParams)
     gJobs.fiberPropsPool = JobsAtomicPool<JobsFiberProperties, _limits::JOBS_MAX_PENDING>::Create(initParams.alloc);
 
     gJobs.threads[uint32(JobsType::LongTask)] = NEW_ARRAY(initParams.alloc, Thread, gJobs.numThreads[uint32(JobsType::LongTask)]);
-    if (initParams.alloc->GetType() != AllocatorType::Bump)
-        gJobs.pointers.Add(Pair<void*, uint32>(gJobs.threads[uint32(JobsType::LongTask)], 0));
 
     for (uint32 i = 0; i < gJobs.numThreads[uint32(JobsType::LongTask)]; i++) {
         char name[32];
-        strPrintFmt(name, sizeof(name), "LongTask_%u", i+1);
+        Str::PrintFmt(name, sizeof(name), "LongTask_%u", i+1);
         gJobs.threads[uint32(JobsType::LongTask)][i].Start(ThreadDesc {
-            .entryFn = jobsWorkerThread, 
+            .entryFn = _WorkerThread, 
             .userData = IntToPtr<uint64>((static_cast<uint64>(i+1) << 32) | uint32(JobsType::LongTask)), 
             .name = name, 
-            .stackSize = 64*kKB,
+            .stackSize = 64*SIZE_KB,
             .flags = ThreadCreateFlags::None
         });
         ASSERT(gJobs.threads[uint32(JobsType::LongTask)][i].IsRunning());
@@ -8746,72 +8988,67 @@ void jobsInitialize(const JobsInitParams& initParams)
     }
     
     gJobs.threads[uint32(JobsType::ShortTask)] = NEW_ARRAY(initParams.alloc, Thread, gJobs.numThreads[uint32(JobsType::ShortTask)]);
-    if (initParams.alloc->GetType() != AllocatorType::Bump)
-        gJobs.pointers.Add(Pair<void*, uint32>(gJobs.threads[uint32(JobsType::ShortTask)], 0));
 
     for (uint32 i = 0; i < gJobs.numThreads[uint32(JobsType::ShortTask)]; i++) {
         char name[32];
-        strPrintFmt(name, sizeof(name), "ShortTask_%u", i+1);
+        Str::PrintFmt(name, sizeof(name), "ShortTask_%u", i+1);
         gJobs.threads[uint32(JobsType::ShortTask)][i].Start(ThreadDesc {
-            .entryFn = jobsWorkerThread, 
+            .entryFn = _WorkerThread, 
             .userData = IntToPtr<uint64>((static_cast<uint64>(i+1) << 32) | uint32(JobsType::ShortTask)), 
             .name = name, 
-            .stackSize = 64*kKB,
+            .stackSize = 64*SIZE_KB,
             .flags = ThreadCreateFlags::None
         });
         ASSERT(gJobs.threads[uint32(JobsType::ShortTask)][i].IsRunning());
         gJobs.threads[uint32(JobsType::ShortTask)][i].SetPriority(ThreadPriority::High);
     }
 
-    debugFiberScopeProtector_RegisterCallback([](void*)->bool { return gIsInFiber; });
-
-    if (initParams.alloc->GetType() == AllocatorType::Bump)
-        gJobs.initHeapSize = ((MemBumpAllocatorBase*)initParams.alloc)->GetOffset() - gJobs.initHeapStart;
+    Debug::FiberScopeProtector_RegisterCallback([](void*)->bool { return gIsInFiber; });
 
     #if TRACY_ENABLE
     auto TracyEnterZone = [](TracyCZoneCtx* ctx, const ___tracy_source_location_data* sourceLoc)
     {
         ASSERT(ctx);
         if (gIsInFiber) {
-            JobsThreadData* tdata = jobsGetThreadData();
+            JobsThreadData* tdata = _GetThreadData();
             ASSERT(tdata->curFiber);
 
             ASSERT_MSG(!tdata->curFiber->tracyZonesStack.IsFull(), "Profile sampling stack is too deep. Either remove samples or increase the kJobsMaxTracyStackDepth");
-            tdata->curFiber->tracyZonesStack.Add(JobsTracyZone {*ctx, sourceLoc});
+            tdata->curFiber->tracyZonesStack.Push(JobsTracyZone {*ctx, sourceLoc});
         }
     };
 
     auto TracyExitZone = [](TracyCZoneCtx* ctx)->bool
     {
         if (gIsInFiber) {
-            JobsThreadData* tdata = jobsGetThreadData();
+            JobsThreadData* tdata = _GetThreadData();
             ASSERT(tdata->curFiber);
             JobsFiber* fiber = tdata->curFiber;
             if (fiber->tracyZonesStack.Count()) {
                 if (fiber->tracyZonesStack.Last().ctx.id != ctx->id) {
                     TracyCZoneEnd(fiber->tracyZonesStack.Last().ctx);
-                    fiber->tracyZonesStack.RemoveLast();
+                    fiber->tracyZonesStack.PopLast();
                     return true;
                 }
                 else {
-                    fiber->tracyZonesStack.RemoveLast();
+                    fiber->tracyZonesStack.PopLast();
                 }            
             }        
         }
         return false;
     };
 
-    tracySetZoneCallbacks(TracyEnterZone, TracyExitZone);
+    Tracy::SetZoneCallbacks(TracyEnterZone, TracyExitZone);
     #endif  // TRACY_ENABLE
 
-    logInfo("(init) Job dispatcher: %u short task threads, %u long task threads", 
+    LOG_INFO("(init) Job dispatcher: %u short task threads, %u long task threads", 
             gJobs.numThreads[uint32(JobsType::ShortTask)],
             gJobs.numThreads[uint32(JobsType::LongTask)]);
 }
 
-void jobsRelease()
+void Jobs::Release()
 {
-    atomicStore32Explicit(&gJobs.quit, 1, AtomicMemoryOrder::Release);
+    Atomic::StoreExplicit(&gJobs.quit, 1, AtomicMemoryOrder::Release);
 
     gJobs.semaphores[uint32(JobsType::ShortTask)].Post(gJobs.numThreads[uint32(JobsType::ShortTask)]);
     gJobs.semaphores[uint32(JobsType::LongTask)].Post(gJobs.numThreads[uint32(JobsType::LongTask)]);
@@ -8836,9 +9073,6 @@ void jobsRelease()
 
     for (uint32 i = 0; i < uint32(JobsStackSize::_Count); i++)
         gJobs.fiberAllocators[i].Release();
-
-    for (Pair<void*, uint32> p : gJobs.pointers)
-        memFreeAligned(p.first, p.second, gJobs.initParams.alloc);
 }
 
 JobsSignal::JobsSignal()
@@ -8851,7 +9085,7 @@ JobsSignal::JobsSignal()
 void JobsSignal::Raise()
 {
     JobsSignalInternal* self = reinterpret_cast<JobsSignalInternal*>(data);
-    atomicExchange32Explicit(&self->signaled, 1, AtomicMemoryOrder::Release);
+    Atomic::ExchangeExplicit(&self->signaled, 1, AtomicMemoryOrder::Release);
 }
 
 void JobsSignal::Wait()
@@ -8864,12 +9098,13 @@ void JobsSignal::WaitOnCondition(bool(*condFn)(int value, int reference), int re
     JobsSignalInternal* self = reinterpret_cast<JobsSignalInternal*>(data);
 
     uint32 spinCount = !PLATFORM_MOBILE;
-    while (condFn(atomicLoad32Explicit(&self->value, AtomicMemoryOrder::Acquire), reference)) {
-        if (jobsGetThreadData()) {
-            ASSERT_MSG(jobsGetThreadData()->curFiber, "'Wait' should only be called during running job tasks");
+    while (condFn(Atomic::LoadExplicit(&self->value, AtomicMemoryOrder::Acquire), reference)) {
+        JobsThreadData* tdata = Jobs::_GetThreadData();
+        if (tdata) {
+            JobsFiber* curFiber = tdata->curFiber;
+            ASSERT_MSG(curFiber, "'Wait' should only be called during running job tasks");
 
-            JobsFiber* curFiber = jobsGetThreadData()->curFiber;
-            curFiber->ownerTid = jobsGetThreadData()->threadId;    // save ownerTid as a hint so we can pick this up again on the same thread context
+            curFiber->ownerTid = tdata->threadId;    // save ownerTid as a hint so we can pick this up again on the same thread context
             curFiber->signal = self;
 
             {
@@ -8891,7 +9126,7 @@ void JobsSignal::WaitOnCondition(bool(*condFn)(int value, int reference), int re
                 __tsan_switch_to_fiber(tsan_prev_fiber, 0);
                 #endif
 
-                debugFiberScopeProtector_Check();
+                Debug::FiberScopeProtector_Check();
 
                 _mco_context* context = (_mco_context*)co->context;
                 _mco_switch(&context->ctx, &context->back_ctx);
@@ -8901,9 +9136,9 @@ void JobsSignal::WaitOnCondition(bool(*condFn)(int value, int reference), int re
         }
         else {
             if (spinCount++ & 1023)
-                sysPauseCpu();   // Main thread just loops 
+                OS::PauseCPU();   // Main thread just loops 
             else
-                threadYield();
+                Thread::SwitchContext();
         }
     }
 }
@@ -8911,29 +9146,35 @@ void JobsSignal::WaitOnCondition(bool(*condFn)(int value, int reference), int re
 void JobsSignal::Set(int value)
 {
     JobsSignalInternal* self = reinterpret_cast<JobsSignalInternal*>(data);
-    atomicExchange32Explicit(&self->value, uint32(value), AtomicMemoryOrder::Release);
+    Atomic::ExchangeExplicit(&self->value, uint32(value), AtomicMemoryOrder::Release);
+}
+
+void JobsSignal::Reset()
+{
+    JobsSignalInternal* self = reinterpret_cast<JobsSignalInternal*>(data);
+    Atomic::ExchangeExplicit(&self->value, uint32(0), AtomicMemoryOrder::Release);
 }
 
 void JobsSignal::Decrement()
 {
     JobsSignalInternal* self = reinterpret_cast<JobsSignalInternal*>(data);
-    atomicFetchAdd32Explicit(&self->value, 1, AtomicMemoryOrder::Release);
+    Atomic::FetchAddExplicit(&self->value, 1, AtomicMemoryOrder::Release);
 }
 
 void JobsSignal::Increment()
 {
     JobsSignalInternal* self = reinterpret_cast<JobsSignalInternal*>(data);
-    atomicFetchSub32Explicit(&self->value, 1, AtomicMemoryOrder::Release);
+    Atomic::FetchSubExplicit(&self->value, 1, AtomicMemoryOrder::Release);
 }
 
 
 template <typename _T, uint32 _MaxCount> 
-JobsAtomicPool<_T, _MaxCount>* JobsAtomicPool<_T, _MaxCount>::Create(Allocator* alloc)
+JobsAtomicPool<_T, _MaxCount>* JobsAtomicPool<_T, _MaxCount>::Create(MemAllocator* alloc)
 {
     MemSingleShotMalloc<JobsAtomicPool<_T, _MaxCount>> mallocator;
     using PoolT = JobsAtomicPool<_T, _MaxCount>;
-    mallocator.template AddMemberField<_T*>(offsetof(PoolT, mPtrs), _MaxCount);
-    mallocator.template AddMemberField<_T>(offsetof(PoolT, mProps), _MaxCount, false, alignof(_T));
+    mallocator.template AddMemberArray<_T*>(offsetof(PoolT, mPtrs), _MaxCount);
+    mallocator.template AddMemberArray<_T>(offsetof(PoolT, mProps), _MaxCount, false, alignof(_T));
     JobsAtomicPool<_T, _MaxCount>* p = mallocator.Calloc(alloc);
 
     p->mIndex = _MaxCount;
@@ -8944,7 +9185,7 @@ JobsAtomicPool<_T, _MaxCount>* JobsAtomicPool<_T, _MaxCount>::Create(Allocator* 
 }
 
 template <typename _T, uint32 _MaxCount> 
-void JobsAtomicPool<_T, _MaxCount>::Destroy(JobsAtomicPool<_T, _MaxCount>* p, Allocator* alloc)
+void JobsAtomicPool<_T, _MaxCount>::Destroy(JobsAtomicPool<_T, _MaxCount>* p, MemAllocator* alloc)
 {
     MemSingleShotMalloc<JobsAtomicPool<_T, _MaxCount>>::Free(p, alloc);
 }
@@ -8952,7 +9193,7 @@ void JobsAtomicPool<_T, _MaxCount>::Destroy(JobsAtomicPool<_T, _MaxCount>* p, Al
 template <typename _T, uint32 _MaxCount> 
 inline _T* JobsAtomicPool<_T, _MaxCount>::New()
 {
-    uint32 idx = atomicFetchSub32(&mIndex, 1);
+    uint32 idx = Atomic::FetchSub(&mIndex, 1);
     ASSERT_MSG(idx != 0, "Pool is full. Increase _MaxCount (%u). See _limits namespace", _MaxCount);
     return mPtrs[idx - 1];
 }
@@ -8960,7 +9201,7 @@ inline _T* JobsAtomicPool<_T, _MaxCount>::New()
 template <typename _T, uint32 _MaxCount>
 inline void JobsAtomicPool<_T, _MaxCount>::Delete(_T* p)
 {
-    uint32 idx = atomicFetchAdd32(&mIndex, 1);
+    uint32 idx = Atomic::FetchAdd(&mIndex, 1);
     ASSERT_MSG(idx != _MaxCount, "Pool delete fault");
     mPtrs[idx] = p;
 }
@@ -9048,7 +9289,7 @@ inline uint32 JobsAndersonLock::Enter()
     c89atomic_thread_fence(c89atomic_memory_order_acq_rel);
 
     while (c89atomic_load_explicit_32(&mSlots[position].locked, c89atomic_memory_order_acquire))
-        sysPauseCpu();
+        OS::PauseCPU();
 
     c89atomic_store_explicit_32(&mSlots[position].locked, 1, c89atomic_memory_order_release);
 
@@ -9074,23 +9315,27 @@ inline void JobsAndersonLock::Exit(uint32 slot)
                                                                                     
 void JobsFiberMemAllocator::Initialize(size_t allocationSize)
 {
-    size_t pageSize = sysGetPageSize();
+    size_t pageSize = OS::GetPageSize();
     ASSERT(allocationSize % pageSize == 0);
     allocationSize = AlignValue(allocationSize + pageSize, pageSize);   // Leave some room for mco_coro
-    const size_t numItemsInPool = (size_t(gJobs.numThreads[uint32(JobsType::ShortTask)]) + 
-                                   size_t(gJobs.numThreads[uint32(JobsType::LongTask)])) * 2;  
 
-    mPoolSize = allocationSize * numItemsInPool + pageSize; // leave some room for Pool struct
+    mBufferAlignment = uint32(pageSize);
     mAllocationSize = allocationSize;
-    mNumItemsInPool = uint32(numItemsInPool);
-    mAlloc.Initialize(mPoolSize * 16, mPoolSize);    // Can raise this number in the future
-
+    mNumItemsInPool = (gJobs.numThreads[uint32(JobsType::ShortTask)] + gJobs.numThreads[uint32(JobsType::LongTask)]) * 2;
     mPools = nullptr;
 }
 
 void JobsFiberMemAllocator::Release()
 {
-    mAlloc.Release();
+    MemAllocator* alloc = gJobs.initParams.alloc;
+    Pool* pool = mPools;
+    while (pool) {
+        Pool* curPool = pool;
+        Mem::FreeAligned(curPool->buffer, mBufferAlignment, alloc);
+        Mem::Free(curPool->ptrs, alloc);
+        Mem::Free(curPool, alloc);
+        pool = pool->next;
+    }
 }
 
 void* JobsFiberMemAllocator::Allocate()
@@ -9140,9 +9385,10 @@ void JobsFiberMemAllocator::Free(void* ptr)
 
 JobsFiberMemAllocator::Pool* JobsFiberMemAllocator::CreatePool()
 {
-    Pool* pool = memAllocTyped<Pool>(1, &mAlloc);
-    pool->ptrs = memAllocTyped<uint8*>(mNumItemsInPool, &mAlloc);
-    pool->buffer = (uint8*)memAllocAligned(mAllocationSize*size_t(mNumItemsInPool), 16, &mAlloc);
+    MemAllocator* alloc = gJobs.initParams.alloc;
+    Pool* pool = Mem::AllocTyped<Pool>(1, alloc);
+    pool->ptrs = Mem::AllocTyped<uint8*>(mNumItemsInPool, alloc);
+    pool->buffer = (uint8*)Mem::AllocAligned(mAllocationSize*size_t(mNumItemsInPool), mBufferAlignment, alloc);
     pool->index = mNumItemsInPool;
     pool->next = nullptr;
     for (uint32 i = 0; i < mNumItemsInPool; i++)
@@ -9150,7 +9396,11 @@ JobsFiberMemAllocator::Pool* JobsFiberMemAllocator::CreatePool()
     return pool;
 }
 
-
+bool Jobs::IsRunningOnCurrentThread()
+{
+    JobsThreadData* data = _GetThreadData();
+    return data && data->curFiber;
+}
 #define CJ5_IMPLEMENT
 #define CJ5_ASSERT(e) ASSERT(e)
 #define CJ5_SKIP_ASAN NO_ASAN
@@ -10380,18 +10630,18 @@ struct JsonContext
 {
     cj5_result r;       // This should always come first, because the wrapper API casts JsonContext to cj5_result*
     uint32 numTokens;
-    Allocator* alloc;
+    MemAllocator* alloc;
     cj5_token* tokens;
 };
 
-JsonContext* jsonParse(const char* json5, uint32 json5Len, JsonErrorLocation* outErrLoc, Allocator* alloc)
+JsonContext* Json::Parse(const char* json5, uint32 json5Len, JsonErrorLocation* outErrLoc, MemAllocator* alloc)
 {
     ASSERT(json5);
     ASSERT(json5Len < INT32_MAX);
     ASSERT(alloc);
 
-    bool mainAllocIsTemp = alloc->GetType() == AllocatorType::Temp;
-    MemTempId tempMemId = mainAllocIsTemp ? ((MemTempAllocator*)alloc)->GetId() : memTempPushId();
+    bool mainAllocIsTemp = alloc->GetType() == MemAllocatorType::Temp;
+    MemTempAllocator::ID tempMemId = mainAllocIsTemp ? ((MemTempAllocator*)alloc)->GetId() : MemTempAllocator::PushId();
     MemTempAllocator tmpAlloc(tempMemId);
     Array<cj5_token> tokens(&tmpAlloc);
     tokens.Reserve(64);
@@ -10404,15 +10654,15 @@ JsonContext* jsonParse(const char* json5, uint32 json5Len, JsonErrorLocation* ou
         .user_data = &tokens
     };
 
-    json5Len = json5Len == 0 ? json5Len : strLen(json5);
+    json5Len = json5Len == 0 ? json5Len : Str::Len(json5);
     cj5_result r = cj5_parse_with_factory(json5, (int)json5Len, factory);
 
     if (r.error == CJ5_ERROR_NONE) {
         ASSERT(tokens.Count());
 
         MemSingleShotMalloc<JsonContext> mallocator;
-        mallocator.AddMemberField<cj5_token>(offsetof(JsonContext, tokens), tokens.Count());
-        JsonContext* ctx = mallocator.Calloc(alloc);
+        mallocator.AddMemberArray<cj5_token>(offsetof(JsonContext, tokens), tokens.Count());
+        JsonContext* ctx = mallocator.Malloc(alloc);
 
         ctx->numTokens = tokens.Count();
         memcpy(ctx->tokens, r.tokens, tokens.Count());
@@ -10422,7 +10672,7 @@ JsonContext* jsonParse(const char* json5, uint32 json5Len, JsonErrorLocation* ou
         ctx->alloc = alloc;
 
         if (!mainAllocIsTemp)
-            memTempPopId(tempMemId);
+            MemTempAllocator::PopId(tempMemId);
         return ctx;
     }
     else {
@@ -10433,12 +10683,12 @@ JsonContext* jsonParse(const char* json5, uint32 json5Len, JsonErrorLocation* ou
             };
         }
         if (!mainAllocIsTemp)
-            memTempPopId(tempMemId);
+            MemTempAllocator::PopId(tempMemId);
         return nullptr;
     }
 }
 
-void jsonDestroy(JsonContext* ctx)
+void Json::Destroy(JsonContext* ctx)
 {
     if (ctx && ctx->alloc) 
         MemSingleShotMalloc<JsonContext>::Free(ctx, ctx->alloc);
@@ -10621,7 +10871,7 @@ struct LogContext
 
 static LogContext gLog;
 
-static const char* kLogEntryTypes[static_cast<uint32>(LogLevel::_Count)] = { 
+static const char* LOG_ENTRY_TYPES[static_cast<uint32>(LogLevel::_Count)] = { 
     "", 
     "[ERR] ",
     "[WRN] ",
@@ -10630,325 +10880,327 @@ static const char* kLogEntryTypes[static_cast<uint32>(LogLevel::_Count)] = {
     "[DBG] "
 };
 
-void logSetSettings(LogLevel logLevel, bool breakOnErrors, bool treatWarningsAsErrors)
+namespace Log
 {
-    ASSERT(logLevel != LogLevel::Default);
+    void SetSettings(LogLevel logLevel, bool breakOnErrors, bool treatWarningsAsErrors)
+    {
+        ASSERT(logLevel != LogLevel::Default);
 
-    gLog.logLevel = logLevel;
-    gLog.breakOnErrors = breakOnErrors;
-    gLog.treatWarningsAsErrors = treatWarningsAsErrors;
-}
-
-static void logPrintToTerminal(const LogEntry& entry)
-{
-    uint32 newSize = entry.textLen + 128;
-
-    MemTempAllocator tmp;
-    char* text = tmp.MallocTyped<char>(newSize);
-
-    if (text) {
-        const char* openFmt = "";
-        const char* closeFmt = "";
-
-        switch (entry.type) {
-        case LogLevel::Info:    openFmt = TERM_COLOR_WHITE; closeFmt = TERM_COLOR_WHITE; break;
-        case LogLevel::Debug:	openFmt = TERM_COLOR_CYAN; closeFmt = TERM_COLOR_RESET; break;
-        case LogLevel::Verbose:	openFmt = TERM_COLOR_RESET; closeFmt = TERM_COLOR_RESET; break;
-        case LogLevel::Warning:	openFmt = TERM_COLOR_YELLOW; closeFmt = TERM_COLOR_RESET; break;
-        case LogLevel::Error:	openFmt = TERM_COLOR_RED; closeFmt = TERM_COLOR_RESET; break;
-        default:			    break;
-        }
-
-        strPrintFmt(text, newSize, "%s%s%s%s", 
-            openFmt, 
-            kLogEntryTypes[static_cast<uint32>(entry.type)], 
-            entry.text, closeFmt);
-        
-        puts(text);
+        gLog.logLevel = logLevel;
+        gLog.breakOnErrors = breakOnErrors;
+        gLog.treatWarningsAsErrors = treatWarningsAsErrors;
     }
-    else {
-        ASSERT_ALWAYS(0, "Not enough stack memory: %u bytes", newSize);
-    }
-}
 
-#if PLATFORM_ANDROID
-static void logPrintToAndroidLog(const LogEntry& entry)
-{
-    SysAndroidLogType androidLogType;
-    switch (entry.type) {
-    case LogLevel::Info:	androidLogType = SysAndroidLogType::Info;        break;
-    case LogLevel::Debug:	androidLogType = SysAndroidLogType::Debug;       break;
-    case LogLevel::Verbose:	androidLogType = SysAndroidLogType::Verbose;     break;
-    case LogLevel::Warning:	androidLogType = SysAndroidLogType::Warn;        break;
-    case LogLevel::Error:	androidLogType = SysAndroidLogType::Error;       break;
-    default:			    androidLogType = SysAndroidLogType::Unknown;
-    }
-        
-    sysAndroidPrintToLog(androidLogType, CONFIG_APP_NAME, entry.text);
-}
-#endif // PLATFORM_ANDROID
-
-static void logPrintToDebugger(const LogEntry& entry)
-{
-    #if PLATFORM_WINDOWS
+    static void _PrintToTerminal(const LogEntry& entry)
+    {
         uint32 newSize = entry.textLen + 128;
+
         MemTempAllocator tmp;
         char* text = tmp.MallocTyped<char>(newSize);
 
         if (text) {
-            char source[kMaxPath];
-            if (entry.sourceFile)
-                strPrintFmt(source, sizeof(source), "%s(%d): ", entry.sourceFile, entry.line);
-            else 
-                source[0] = '\0';
-            strPrintFmt(text, newSize, "%s%s%s\n", source, kLogEntryTypes[static_cast<uint32>(entry.type)], entry.text);
-            debugPrint(text);
+            const char* openFmt = "";
+            const char* closeFmt = "";
+
+            switch (entry.type) {
+            case LogLevel::Info:    openFmt = TERM_COLOR_WHITE; closeFmt = TERM_COLOR_WHITE; break;
+            case LogLevel::Debug:	openFmt = TERM_COLOR_CYAN; closeFmt = TERM_COLOR_RESET; break;
+            case LogLevel::Verbose:	openFmt = TERM_COLOR_RESET; closeFmt = TERM_COLOR_RESET; break;
+            case LogLevel::Warning:	openFmt = TERM_COLOR_YELLOW; closeFmt = TERM_COLOR_RESET; break;
+            case LogLevel::Error:	openFmt = TERM_COLOR_RED; closeFmt = TERM_COLOR_RESET; break;
+            default:			    break;
+            }
+
+            Str::PrintFmt(text, newSize, "%s%s%s%s", 
+                openFmt, 
+                LOG_ENTRY_TYPES[static_cast<uint32>(entry.type)], 
+                entry.text, closeFmt);
+        
+            puts(text);
         }
         else {
             ASSERT_ALWAYS(0, "Not enough stack memory: %u bytes", newSize);
         }
-    #else
-        UNUSED(entry);
-    #endif
-}
-
-#ifdef TRACY_ENABLE
-static void logPrintToTracy(const LogEntry& entry)
-{
-    uint32 color;
-    switch (entry.type) {
-    case LogLevel::Info:	color = 0xFFFFFF; break;
-    case LogLevel::Debug:	color = 0xC8C8C8; break;
-    case LogLevel::Verbose:	color = 0x808080; break;
-    case LogLevel::Warning:	color = 0xFFFF00; break;
-    case LogLevel::Error:	color = 0xFF0000; break;
-    default:			    color = 0xFFFFFF; break;
     }
 
-    TracyCMessageC(entry.text, entry.textLen, color);
-}
-#endif
-
-static void engineDispatchLogEntry(const LogEntry& entry)
-{
-    logPrintToTerminal(entry); 
-    logPrintToDebugger(entry);
-    #ifdef TRACY_ENABLE
-        logPrintToTracy(entry);
-    #endif
     #if PLATFORM_ANDROID
-        logPrintToAndroidLog(entry);
+    static void _PrintToAndroidLog(const LogEntry& entry)
+    {
+        OSAndroidLogType androidLogType;
+        switch (entry.type) {
+        case LogLevel::Info:	androidLogType = OSAndroidLogType::Info;        break;
+        case LogLevel::Debug:	androidLogType = OSAndroidLogType::Debug;       break;
+        case LogLevel::Verbose:	androidLogType = OSAndroidLogType::Verbose;     break;
+        case LogLevel::Warning:	androidLogType = OSAndroidLogType::Warn;        break;
+        case LogLevel::Error:	androidLogType = OSAndroidLogType::Error;       break;
+        default:			    androidLogType = OSAndroidLogType::Unknown;
+        }
+        
+        OS::AndroidPrintToLog(androidLogType, CONFIG_APP_NAME, entry.text);
+    }
+    #endif // PLATFORM_ANDROID
+
+    static void _PrintToDebugger(const LogEntry& entry)
+    {
+        #if PLATFORM_WINDOWS
+            uint32 newSize = entry.textLen + 128;
+            MemTempAllocator tmp;
+            char* text = tmp.MallocTyped<char>(newSize);
+
+            if (text) {
+                char source[PATH_CHARS_MAX];
+                if (entry.sourceFile)
+                    Str::PrintFmt(source, sizeof(source), "%s(%d): ", entry.sourceFile, entry.line);
+                else 
+                    source[0] = '\0';
+                Str::PrintFmt(text, newSize, "%s%s%s\n", source, LOG_ENTRY_TYPES[static_cast<uint32>(entry.type)], entry.text);
+                Debug::Print(text);
+            }
+            else {
+                ASSERT_ALWAYS(0, "Not enough stack memory: %u bytes", newSize);
+            }
+        #else
+            UNUSED(entry);
+        #endif
+    }
+
+    #ifdef TRACY_ENABLE
+    static void _PrintToTracy(const LogEntry& entry)
+    {
+        uint32 color;
+        switch (entry.type) {
+        case LogLevel::Info:	color = 0xFFFFFF; break;
+        case LogLevel::Debug:	color = 0xC8C8C8; break;
+        case LogLevel::Verbose:	color = 0x808080; break;
+        case LogLevel::Warning:	color = 0xFFFF00; break;
+        case LogLevel::Error:	color = 0xFF0000; break;
+        default:			    color = 0xFFFFFF; break;
+        }
+
+        TracyCMessageC(entry.text, entry.textLen, color);
+    }
     #endif
 
-    for (Pair<LogCallback, void*> c : gLog.callbacks)
-        c.first(entry, c.second);
+    static void _DispatchLogEntry(const LogEntry& entry)
+    {
+        _PrintToTerminal(entry); 
+        _PrintToDebugger(entry);
+        #ifdef TRACY_ENABLE
+            _PrintToTracy(entry);
+        #endif
+        #if PLATFORM_ANDROID
+            _PrintToAndroidLog(entry);
+        #endif
 
-    if (entry.type == LogLevel::Error && gLog.breakOnErrors) {
-        ASSERT_MSG(0, "Breaking on error");
+        for (Pair<LogCallback, void*> c : gLog.callbacks)
+            c.first(entry, c.second);
+
+        if (entry.type == LogLevel::Error && gLog.breakOnErrors) {
+            ASSERT_MSG(0, "Breaking on error");
+        }
     }
-}
 
-void _private::logPrintInfo(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
-{
-    if (gLog.logLevel < LogLevel::Info)
-        return;
-
-    MemTempAllocator tmp;
-    uint32 fmtLen = strLen(fmt) + 1024;
-    char* text = tmp.MallocTyped<char>(fmtLen);
-
-    va_list args;
-    va_start(args, fmt);
-    strPrintFmtArgs(text, fmtLen, fmt, args);
-    va_end(args);
-
-    engineDispatchLogEntry({
-        .type = LogLevel::Info,
-        .channels = channels,
-        .textLen = strLen(text),
-        .sourceFileLen = sourceFile ? strLen(sourceFile) : 0,
-        .line = line,
-        .text = text,
-        .sourceFile = sourceFile
-    });
-}
-
-void _private::logPrintDebug(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
-{
-    #if !CONFIG_FINAL_BUILD
-        if (gLog.logLevel < LogLevel::Debug)
+    void _private::PrintInfo(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
+    {
+        if (gLog.logLevel < LogLevel::Info)
             return;
-        
+
         MemTempAllocator tmp;
-        uint32 fmtLen = strLen(fmt) + 1024;
+        uint32 fmtLen = Str::Len(fmt) + 1024;
         char* text = tmp.MallocTyped<char>(fmtLen);
 
         va_list args;
         va_start(args, fmt);
-        strPrintFmtArgs(text, fmtLen, fmt, args);
+        Str::PrintFmtArgs(text, fmtLen, fmt, args);
         va_end(args);
 
-        engineDispatchLogEntry({
-            .type = LogLevel::Debug,
+        _DispatchLogEntry({
+            .type = LogLevel::Info,
             .channels = channels,
-            .textLen = strLen(text),
-            .sourceFileLen = sourceFile ? strLen(sourceFile) : 0,
+            .textLen = Str::Len(text),
+            .sourceFileLen = sourceFile ? Str::Len(sourceFile) : 0,
             .line = line,
             .text = text,
             .sourceFile = sourceFile
         });
-    #else
-        UNUSED(channels);
-        UNUSED(sourceFile);
-        UNUSED(line);
-        UNUSED(fmt);
-    #endif
-}
+    }
 
-void _private::logPrintVerbose(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
-{
-    if (gLog.logLevel < LogLevel::Verbose)
-        return;
+    void _private::PrintDebug(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
+    {
+        #if !CONFIG_FINAL_BUILD
+            if (gLog.logLevel < LogLevel::Debug)
+                return;
+        
+            MemTempAllocator tmp;
+            uint32 fmtLen = Str::Len(fmt) + 1024;
+            char* text = tmp.MallocTyped<char>(fmtLen);
 
-    MemTempAllocator tmp;
-    uint32 fmtLen = strLen(fmt) + 1024;
-    char* text = tmp.MallocTyped<char>(fmtLen);
+            va_list args;
+            va_start(args, fmt);
+            Str::PrintFmtArgs(text, fmtLen, fmt, args);
+            va_end(args);
 
-    va_list args;
-    va_start(args, fmt);
-    strPrintFmtArgs(text, fmtLen, fmt, args);
-    va_end(args);
+            _DispatchLogEntry({
+                .type = LogLevel::Debug,
+                .channels = channels,
+                .textLen = Str::Len(text),
+                .sourceFileLen = sourceFile ? Str::Len(sourceFile) : 0,
+                .line = line,
+                .text = text,
+                .sourceFile = sourceFile
+            });
+        #else
+            UNUSED(channels);
+            UNUSED(sourceFile);
+            UNUSED(line);
+            UNUSED(fmt);
+        #endif
+    }
 
-    engineDispatchLogEntry({
-        .type = LogLevel::Verbose,
-        .channels = channels,
-        .textLen = strLen(text),
-        .sourceFileLen = sourceFile ? strLen(sourceFile) : 0,
-        .line = line,
-        .text = text,
-        .sourceFile = sourceFile
-    });
-}
+    void _private::PrintVerbose(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
+    {
+        if (gLog.logLevel < LogLevel::Verbose)
+            return;
 
-void _private::logPrintWarning(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
-{
-    if (gLog.logLevel < LogLevel::Warning)
-        return;
+        MemTempAllocator tmp;
+        uint32 fmtLen = Str::Len(fmt) + 1024;
+        char* text = tmp.MallocTyped<char>(fmtLen);
 
-    MemTempAllocator tmp;
-    uint32 fmtLen = strLen(fmt) + 1024;
-    char* text = tmp.MallocTyped<char>(fmtLen);
+        va_list args;
+        va_start(args, fmt);
+        Str::PrintFmtArgs(text, fmtLen, fmt, args);
+        va_end(args);
 
-    va_list args;
-    va_start(args, fmt);
-    strPrintFmtArgs(text, fmtLen, fmt, args);
-    va_end(args);
+        _DispatchLogEntry({
+            .type = LogLevel::Verbose,
+            .channels = channels,
+            .textLen = Str::Len(text),
+            .sourceFileLen = sourceFile ? Str::Len(sourceFile) : 0,
+            .line = line,
+            .text = text,
+            .sourceFile = sourceFile
+        });
+    }
 
-    engineDispatchLogEntry({
-        .type = !gLog.treatWarningsAsErrors ? LogLevel::Warning : LogLevel::Error,
-        .channels = channels,
-        .textLen = strLen(text),
-        .sourceFileLen = sourceFile ? strLen(sourceFile) : 0,
-        .line = line,
-        .text = text,
-        .sourceFile = sourceFile
-    });
-}
+    void _private::PrintWarning(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
+    {
+        if (gLog.logLevel < LogLevel::Warning)
+            return;
 
-void _private::logPrintError(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
-{
-    if (gLog.logLevel < LogLevel::Error)
-        return;
+        MemTempAllocator tmp;
+        uint32 fmtLen = Str::Len(fmt) + 1024;
+        char* text = tmp.MallocTyped<char>(fmtLen);
 
-    MemTempAllocator tmp;
-    uint32 fmtLen = strLen(fmt) + 1024;
-    char* text = tmp.MallocTyped<char>(fmtLen);
+        va_list args;
+        va_start(args, fmt);
+        Str::PrintFmtArgs(text, fmtLen, fmt, args);
+        va_end(args);
 
-    va_list args;
-    va_start(args, fmt);
-    strPrintFmtArgs(text, fmtLen, fmt, args);
-    va_end(args);
+        _DispatchLogEntry({
+            .type = !gLog.treatWarningsAsErrors ? LogLevel::Warning : LogLevel::Error,
+            .channels = channels,
+            .textLen = Str::Len(text),
+            .sourceFileLen = sourceFile ? Str::Len(sourceFile) : 0,
+            .line = line,
+            .text = text,
+            .sourceFile = sourceFile
+        });
+    }
 
-    engineDispatchLogEntry({
-        .type = LogLevel::Error,
-        .channels = channels,
-        .textLen = strLen(text),
-        .sourceFileLen = sourceFile ? strLen(sourceFile) : 0,
-        .line = line,
-        .text = text,
-        .sourceFile = sourceFile        
-    });
-}
+    void _private::PrintError(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
+    {
+        if (gLog.logLevel < LogLevel::Error)
+            return;
 
-void logRegisterCallback(LogCallback callback, void* userData)
-{
-    ASSERT(callback);
-    ASSERT_MSG(gLog.callbacks.FindIf([callback](const Pair<LogCallback, void*>& p) { return p.first == callback; }) == UINT32_MAX, 
-               "Callback already added");
-    gLog.callbacks.Add(Pair<LogCallback, void*>(callback, userData));
-}
+        MemTempAllocator tmp;
+        uint32 fmtLen = Str::Len(fmt) + 1024;
+        char* text = tmp.MallocTyped<char>(fmtLen);
 
-void logUnregisterCallback(LogCallback callback)
-{
-    uint32 index = gLog.callbacks.FindIf([callback](const Pair<LogCallback, void*>& p) { return p.first == callback; });
-    if (index != UINT32_MAX)
-        gLog.callbacks.RemoveAndSwap(index);
-}
+        va_list args;
+        va_start(args, fmt);
+        Str::PrintFmtArgs(text, fmtLen, fmt, args);
+        va_end(args);
+
+        _DispatchLogEntry({
+            .type = LogLevel::Error,
+            .channels = channels,
+            .textLen = Str::Len(text),
+            .sourceFileLen = sourceFile ? Str::Len(sourceFile) : 0,
+            .line = line,
+            .text = text,
+            .sourceFile = sourceFile        
+        });
+    }
+
+    void RegisterCallback(LogCallback callback, void* userData)
+    {
+        ASSERT(callback);
+        ASSERT_MSG(gLog.callbacks.FindIf([callback](const Pair<LogCallback, void*>& p) { return p.first == callback; }) == UINT32_MAX, "Callback already added");
+        gLog.callbacks.Push(Pair<LogCallback, void*>(callback, userData));
+    }
+
+    void UnregisterCallback(LogCallback callback)
+    {
+        uint32 index = gLog.callbacks.FindIf([callback](const Pair<LogCallback, void*>& p) { return p.first == callback; });
+        if (index != UINT32_MAX)
+            gLog.callbacks.RemoveAndSwap(index);
+    }
+} // Log
 
 #include <math.h>
 
-float mathCopySign(float _x, float _y)
+float M::CopySign(float _x, float _y)
 {
     return ::copysignf(_x, _y);
 }
 
-float mathFloor(float _f)
+float M::Floor(float _f)
 {
     return ::floorf(_f);
 }
 
-float mathCos(float _a)
+float M::Cos(float _a)
 {
     return ::cosf(_a);
 }
 
-float mathACos(float _a)
+float M::ACos(float _a)
 {
     return ::acosf(_a);
 }
 
-float mathSin(float _a)
+float M::Sin(float _a)
 {
     return ::sinf(_a);
 }
 
-float mathASin(float _a)
+float M::ASin(float _a)
 {
     return ::asinf(_a);
 }
 
-float mathATan2(float _y, float _x)
+float M::ATan2(float _y, float _x)
 {
     return ::atan2f(_y, _x);
 }
 
-float mathExp(float _a)
+float M::Exp(float _a)
 {
     return ::expf(_a);
 }
 
-float mathLog(float _a)
+float M::Log(float _a)
 {
     return ::logf(_a);
 }
 
 #if !(defined(__SSE2__) || (COMPILER_MSVC && (ARCH_64BIT || _M_IX86_FP >= 2)))
-    float mathSqrt(float _a)
+    float M::Sqrt(float _a)
     {
         return ::sqrtf(_a);
     }
 
-    float mathRsqrt(float _a)
+    float M::Rsqrt(float _a)
     {
         return 1.0f / ::sqrtf(_a);
     }
@@ -10956,57 +11208,57 @@ float mathLog(float _a)
 
     
                                         
-Mat4 mat4ViewLookAt(Float3 eye, Float3 target, Float3 up)
+Mat4 Mat4::ViewLookAt(Float3 eye, Float3 target, Float3 up)
 {
-    Float3 zaxis = float3Norm(float3Sub(target, eye));
-    Float3 xaxis = float3Norm(float3Cross(zaxis, up));
-    Float3 yaxis = float3Cross(xaxis, zaxis);
+    Float3 zaxis = Float3::Norm(Float3::Sub(target, eye));
+    Float3 xaxis = Float3::Norm(Float3::Cross(zaxis, up));
+    Float3 yaxis = Float3::Cross(xaxis, zaxis);
     
-    return Mat4(xaxis.x,    xaxis.y,    xaxis.z,    -float3Dot(xaxis, eye), 
-                yaxis.x,    yaxis.y,    yaxis.z,    -float3Dot(yaxis, eye), 
-                -zaxis.x,   -zaxis.y,   -zaxis.z,    float3Dot(zaxis, eye),
+    return Mat4(xaxis.x,    xaxis.y,    xaxis.z,    -Float3::Dot(xaxis, eye), 
+                yaxis.x,    yaxis.y,    yaxis.z,    -Float3::Dot(yaxis, eye), 
+                -zaxis.x,   -zaxis.y,   -zaxis.z,    Float3::Dot(zaxis, eye),
                 0,          0,          0,           1.0f);
 }
 
-Mat4 mat4ViewLookAtLH(Float3 eye, Float3 target, Float3 up)
+Mat4 Mat4::ViewLookAtLH(Float3 eye, Float3 target, Float3 up)
 {
-    Float3 zaxis = float3Norm(float3Sub(target, eye));
-    Float3 xaxis = float3Norm(float3Cross(up, zaxis));
-    Float3 yaxis = float3Cross(zaxis, xaxis);
+    Float3 zaxis = Float3::Norm(Float3::Sub(target, eye));
+    Float3 xaxis = Float3::Norm(Float3::Cross(up, zaxis));
+    Float3 yaxis = Float3::Cross(zaxis, xaxis);
     
-    return Mat4(xaxis.x, xaxis.y, xaxis.z, -float3Dot(xaxis, eye), 
-                yaxis.x, yaxis.y, yaxis.z, -float3Dot(yaxis, eye), 
-                zaxis.x, zaxis.y, zaxis.z, -float3Dot(zaxis, eye),
+    return Mat4(xaxis.x, xaxis.y, xaxis.z, -Float3::Dot(xaxis, eye), 
+                yaxis.x, yaxis.y, yaxis.z, -Float3::Dot(yaxis, eye), 
+                zaxis.x, zaxis.y, zaxis.z, -Float3::Dot(zaxis, eye),
                 0,       0,       0,        1.0f);
 }
 
-Mat4 mat4ViewFPS(Float3 eye, float pitch, float yaw)
+Mat4 Mat4::ViewFPS(Float3 eye, float pitch, float yaw)
 {
-    float cos_pitch = mathCos(pitch);
-    float sin_pitch = mathSin(pitch);
-    float cos_yaw = mathCos(yaw);
-    float sin_yaw = mathSin(yaw);
+    float cos_pitch = M::Cos(pitch);
+    float sin_pitch = M::Sin(pitch);
+    float cos_yaw = M::Cos(yaw);
+    float sin_yaw = M::Sin(yaw);
     
     Float3 xaxis = Float3(cos_yaw, 0, -sin_yaw);
     Float3 yaxis = Float3(sin_yaw * sin_pitch, cos_pitch, cos_yaw * sin_pitch);
     Float3 zaxis = Float3(sin_yaw * cos_pitch, -sin_pitch, cos_pitch * cos_yaw);
     
-    return Mat4(xaxis.x, xaxis.y, xaxis.z, -float3Dot(xaxis, eye), yaxis.x, yaxis.y, yaxis.z,
-                -float3Dot(yaxis, eye), zaxis.x, zaxis.y, zaxis.z, -float3Dot(zaxis, eye),
+    return Mat4(xaxis.x, xaxis.y, xaxis.z, -Float3::Dot(xaxis, eye), yaxis.x, yaxis.y, yaxis.z,
+                -Float3::Dot(yaxis, eye), zaxis.x, zaxis.y, zaxis.z, -Float3::Dot(zaxis, eye),
                 0, 0, 0, 1.0f);
 }
 
-Mat4 mat4ViewArcBall(Float3 move, Quat rot, Float3 target_pos)
+Mat4 Mat4::ViewArcBall(Float3 move, Quat rot, Float3 target_pos)
 {
-    Mat4 translateInv = mat4Translate(-move.x, -move.y, -move.z);
-    Mat4 rotateInv = quatToMat4(quatInverse(rot));
-    Mat4 translateObjInv = mat4Translate(-target_pos.x, -target_pos.y, -target_pos.z);
-    Mat4 TR = mat4Mul(translateObjInv, rotateInv);
-    return mat4Mul(TR, translateInv);
+    Mat4 translateInv = Mat4::Translate(-move.x, -move.y, -move.z);
+    Mat4 rotateInv = Mat4::FromQuat(Quat::Inverse(rot));
+    Mat4 translateObjInv = Mat4::Translate(-target_pos.x, -target_pos.y, -target_pos.z);
+    Mat4 TR = Mat4::Mul(translateObjInv, rotateInv);
+    return Mat4::Mul(TR, translateInv);
 }
 
 
-Mat4 mat4Perspective(float width, float height, float zn, float zf, bool d3dNdc)
+Mat4 Mat4::Perspective(float width, float height, float zn, float zf, bool d3dNdc)
 {
     const float d = zf - zn;
     const float aa = zf / d;
@@ -11018,7 +11270,7 @@ Mat4 mat4Perspective(float width, float height, float zn, float zf, bool d3dNdc)
                 0,      0,              -1.0f,  0);
 }
 
-Mat4 mat4PerspectiveLH(float width, float height, float zn, float zf, bool d3dNdc)
+Mat4 Mat4::PerspectiveLH(float width, float height, float zn, float zf, bool d3dNdc)
 {
     const float d = zf - zn;
     const float aa = zf / d;
@@ -11030,7 +11282,7 @@ Mat4 mat4PerspectiveLH(float width, float height, float zn, float zf, bool d3dNd
                 0,      0,              1.0f,   0);
 }
 
-Mat4 mat4PerspectiveOffCenter(float xmin, float ymin, float xmax, float ymax, float zn, float zf, bool d3dNdc)
+Mat4 Mat4::PerspectiveOffCenter(float xmin, float ymin, float xmax, float ymax, float zn, float zf, bool d3dNdc)
 {
     const float d = zf - zn;
     const float aa = zf / d;
@@ -11044,7 +11296,7 @@ Mat4 mat4PerspectiveOffCenter(float xmin, float ymin, float xmax, float ymax, fl
                 0,      0,              -1.0f,  0);
 }
 
-Mat4 mat4PerspectiveOffCenterLH(float xmin, float ymin, float xmax, float ymax, float zn, float zf, bool d3dNdc)
+Mat4 Mat4::PerspectiveOffCenterLH(float xmin, float ymin, float xmax, float ymax, float zn, float zf, bool d3dNdc)
 {
     const float d = zf - zn;
     const float aa = zf / d;
@@ -11058,21 +11310,21 @@ Mat4 mat4PerspectiveOffCenterLH(float xmin, float ymin, float xmax, float ymax, 
                 0,      0,              1.0f,   0);
 }
 
-Mat4 mat4PerspectiveFOV(float fov_y, float aspect, float zn, float zf, bool d3dNdc)
+Mat4 Mat4::PerspectiveFOV(float fov_y, float aspect, float zn, float zf, bool d3dNdc)
 {
-    const float height = 1.0f / mathTan(fov_y * 0.5f);
+    const float height = 1.0f / M::Tan(fov_y * 0.5f);
     const float width = height / aspect;
-    return mat4Perspective(width, height, zn, zf, d3dNdc);
+    return Mat4::Perspective(width, height, zn, zf, d3dNdc);
 }
 
-Mat4 mat4PerspectiveFOVLH(float fov_y, float aspect, float zn, float zf, bool d3dNdc)
+Mat4 Mat4::PerspectiveFOVLH(float fov_y, float aspect, float zn, float zf, bool d3dNdc)
 {
-    const float height = 1.0f / mathTan(fov_y * 0.5f);
+    const float height = 1.0f / M::Tan(fov_y * 0.5f);
     const float width = height / aspect;
-    return mat4PerspectiveLH(width, height, zn, zf, d3dNdc);
+    return Mat4::PerspectiveLH(width, height, zn, zf, d3dNdc);
 }
 
-Mat4 mat4Ortho(float width, float height, float zn, float zf, float offset, bool d3dNdc)
+Mat4 Mat4::Ortho(float width, float height, float zn, float zf, float offset, bool d3dNdc)
 {
     const float d = zf - zn;
     const float cc = 1.0f / d;
@@ -11085,7 +11337,7 @@ Mat4 mat4Ortho(float width, float height, float zn, float zf, float offset, bool
                 0,              0,                      0,      1.0f);
 }
 
-Mat4 mat4OrthoLH(float width, float height, float zn, float zf, float offset, bool d3dNdc)
+Mat4 Mat4::OrthoLH(float width, float height, float zn, float zf, float offset, bool d3dNdc)
 {
     const float d = zf - zn;
     const float cc = 1.0f / d;
@@ -11098,7 +11350,7 @@ Mat4 mat4OrthoLH(float width, float height, float zn, float zf, float offset, bo
                 0,              0,                      0,      1.0f);
 }
 
-Mat4 mat4OrthoOffCenter(float xmin, float ymin, float xmax, float ymax, float zn, float zf, float offset, bool d3dNdc)
+Mat4 Mat4::OrthoOffCenter(float xmin, float ymin, float xmax, float ymax, float zn, float zf, float offset, bool d3dNdc)
 {
     const float width = xmax - xmin;
     const float height = ymax - ymin;
@@ -11115,7 +11367,7 @@ Mat4 mat4OrthoOffCenter(float xmin, float ymin, float xmax, float ymax, float zn
                 0,              0,                  0,      1.0f);
 }
 
-Mat4 mat4OrthoOffCenterLH(float xmin, float ymin, float xmax, float ymax, float zn, float zf, float offset, bool d3dNdc)
+Mat4 Mat4::OrthoOffCenterLH(float xmin, float ymin, float xmax, float ymax, float zn, float zf, float offset, bool d3dNdc)
 {
     const float width = xmax - xmin;
     const float height = ymax - ymin;
@@ -11132,29 +11384,29 @@ Mat4 mat4OrthoOffCenterLH(float xmin, float ymin, float xmax, float ymax, float 
                 0,              0,                      0,      1.0f);
 }
 
-Mat4 mat4ScaleRotateTranslate(float _sx, float _sy, float _sz, float _ax, float _ay, float _az, float _tx, float _ty, float _tz)
+Mat4 Mat4::ScaleRotateTranslate(float _sx, float _sy, float _sz, float _ax, float _ay, float _az, float _tx, float _ty, float _tz)
 {
     float sx, cx, sy, cy, sz, cz;
     
     if (_ax != 0) {
-        sx = mathSin(_ax);
-        cx = mathCos(_ax);
+        sx = M::Sin(_ax);
+        cx = M::Cos(_ax);
     } else {
         sx = 0;
         cx = 1.0f;
     }
     
     if (_ay != 0) {
-        sy = mathSin(_ay);
-        cy = mathCos(_ay);
+        sy = M::Sin(_ay);
+        cy = M::Cos(_ay);
     } else {
         sy = 0;
         cy = 1.0f;
     }
     
     if (_az != 0) {
-        sz = mathSin(_az);
-        cz = mathCos(_az);
+        sz = M::Sin(_az);
+        cz = M::Cos(_az);
     } else {
         sz = 0;
         cz = 1.0f;
@@ -11169,20 +11421,20 @@ Mat4 mat4ScaleRotateTranslate(float _sx, float _sy, float _sz, float _ax, float 
                     0.0f,                           0.0f,           0.0f,                           1.0f);
 }
 
-Mat4 mat4FromNormal(Float3 _normal, float _scale, Float3 _pos)
+Mat4 Mat4::FromNormal(Float3 _normal, float _scale, Float3 _pos)
 {
     Float3 tangent;
     Float3 bitangent;
-    float3Tangent(&tangent, &bitangent, _normal);
+    Float3::Tangent(&tangent, &bitangent, _normal);
     
-    Float4 row1 = Float4(float3Mulf(bitangent, _scale), 0.0f);
-    Float4 row2 = Float4(float3Mulf(_normal, _scale), 0.0f);
-    Float4 row3 = Float4(float3Mulf(tangent, _scale), 0.0f);
+    Float4 row1 = Float4(Float3::Mul(bitangent, _scale), 0.0f);
+    Float4 row2 = Float4(Float3::Mul(_normal, _scale), 0.0f);
+    Float4 row3 = Float4(Float3::Mul(tangent, _scale), 0.0f);
     
     return Mat4(row1.f, row2.f, row3.f, Float4(_pos, 1.0f).f);
 }
 
-Mat4 mat4Inverse(const Mat4& _a)
+Mat4 Mat4::Inverse(const Mat4& _a)
 {
     float xx = _a.f[0];
     float xy = _a.f[1];
@@ -11232,125 +11484,10 @@ Mat4 mat4Inverse(const Mat4& _a)
             +(xx * (yy * zz - zy * yz) - xy * (yx * zz - zx * yz) + xz * (yx * zy - zx * yy))*det_rcp));
 }
 
-Quat mat4ToQuat(const Mat4& m)
+Mat4 Mat4::InverseTransformMat(const Mat4& _mat)
 {
-    float trace, r, rinv;
-    Quat q;
-    
-    trace = m.m11 + m.m22 + m.m33;
-    if (trace >= 0.0f) {
-        r = mathSqrt(1.0f + trace);
-        rinv = 0.5f / r;
-        
-        q.x = rinv * (m.m32 - m.m23);
-        q.y = rinv * (m.m13 - m.m31);
-        q.z = rinv * (m.m21 - m.m12);
-        q.w = r * 0.5f;
-    } 
-    else if (m.m11 >= m.m22 && m.m11 >= m.m33) {
-        r = mathSqrt(1.0f - m.m22 - m.m33 + m.m11);
-        rinv = 0.5f / r;
-        
-        q.x = r * 0.5f;
-        q.y = rinv * (m.m21 + m.m12);
-        q.z = rinv * (m.m31 + m.m13);
-        q.w = rinv * (m.m32 - m.m23);
-    } 
-    else if (m.m22 >= m.m33) {
-        r = mathSqrt(1.0f - m.m11 - m.m33 + m.m22);
-        rinv = 0.5f / r;
-        
-        q.x = rinv * (m.m21 + m.m12);
-        q.y = r * 0.5f;
-        q.z = rinv * (m.m32 + m.m23);
-        q.w = rinv * (m.m13 - m.m31);
-    } 
-    else {
-        r = mathSqrt(1.0f - m.m11 - m.m22 + m.m33);
-        rinv = 0.5f / r;
-        
-        q.x = rinv * (m.m31 + m.m13);
-        q.y = rinv * (m.m32 + m.m23);
-        q.z = r * 0.5f;
-        q.w = rinv * (m.m21 - m.m12);
-    }
-    
-    return q;
-}
+    ASSERT((_mat.m41 + _mat.m42 + _mat.m43) == 0 && _mat.m44 == 1.0f);
 
-Mat4 mat4FromNormalAngle(Float3 _normal, float _scale, Float3 _pos, float _angle)
-{
-    Float3 tangent;
-    Float3 bitangent;
-    float3TangentAngle(&tangent, &bitangent, _normal, _angle);
-    
-    Float4 row1 = Float4(float3Mulf(bitangent, _scale), 0.0f);
-    Float4 row2 = Float4(float3Mulf(_normal, _scale), 0.0f);
-    Float4 row3 = Float4(float3Mulf(tangent, _scale), 0.0f);
-    
-    return Mat4(row1.f, row2.f, row3.f, Float4(_pos, 1.0f).f);
-}
-
-Mat4 mat4ProjectPlane(Float3 planeNormal)
-{
-    float xx = planeNormal.x * planeNormal.x;
-    float yy = planeNormal.y * planeNormal.y;
-    float zz = planeNormal.z * planeNormal.z;
-    float xy = planeNormal.x * planeNormal.y;
-    float xz = planeNormal.x * planeNormal.z;
-    float yz = planeNormal.y * planeNormal.z;
-    
-    return Mat4(1.0f - xx,      -xy,        -xz,        0.0f,
-                -xy,            1.0f - yy,  -yz,        0.0f,
-                -xz,            -yz,        1.0f - zz,  0.0f,
-                0.0f,           0.0f,       0.0f,       1.0f);
-}
-
-Mat4 mat4Mul(const Mat4& _a, const Mat4& _b)
-{
-    return Mat4(
-        mat4MulFloat4(_a, Float4(_b.fc1)).f, 
-        mat4MulFloat4(_a, Float4(_b.fc2)).f,
-        mat4MulFloat4(_a, Float4(_b.fc3)).f, 
-        mat4MulFloat4(_a, Float4(_b.fc4)).f);
-}
-
-Mat3 mat3Inverse(const Mat3& _a)
-{
-    float xx = _a.f[0];
-    float xy = _a.f[3];
-    float xz = _a.f[6];
-    float yx = _a.f[1];
-    float yy = _a.f[4];
-    float yz = _a.f[7];
-    float zx = _a.f[2];
-    float zy = _a.f[5];
-    float zz = _a.f[8];
-    
-    float det = 0.0f;
-    det += xx * (yy * zz - yz * zy);
-    det -= xy * (yx * zz - yz * zx);
-    det += xz * (yx * zy - yy * zx);
-    
-    float det_rcp = 1.0f / det;
-    
-    return Mat3(+(yy * zz - yz * zy) * det_rcp, -(xy * zz - xz * zy) * det_rcp,
-        +(xy * yz - xz * yy) * det_rcp, -(yx * zz - yz * zx) * det_rcp,
-        +(xx * zz - xz * zx) * det_rcp, -(xx * yz - xz * yx) * det_rcp,
-        +(yx * zy - yy * zx) * det_rcp, -(xx * zy - xy * zx) * det_rcp,
-        +(xx * yy - xy * yx) * det_rcp);
-}
-
-Mat3 mat3Mul(const Mat3& _a, const Mat3& _b)
-{
-    return Mat3(
-        mat3MulFloat3(_a, Float3(_b.fc1)), 
-        mat3MulFloat3(_a, Float3(_b.fc2)),
-        mat3MulFloat3(_a, Float3(_b.fc3)));
-}
-
-Mat4 mat3InverseTransform(const Mat4& _mat)
-{
     float det = (_mat.m11 * (_mat.m22 * _mat.m33 - _mat.m23 * _mat.m32) +
         _mat.m12 * (_mat.m23 * _mat.m31 - _mat.m21 * _mat.m33) +
         _mat.m13 * (_mat.m21 * _mat.m32 - _mat.m22 * _mat.m31));
@@ -11376,14 +11513,181 @@ Mat4 mat3InverseTransform(const Mat4& _mat)
     return r;
 }
 
-Mat3 mat3Abs(const Mat3& m)
+Quat Mat4::ToQuat(const Mat4& m)
 {
-    return Mat3(
-        mathAbs(m.m11), mathAbs(m.m12), mathAbs(m.m13), 
-        mathAbs(m.m21), mathAbs(m.m22), mathAbs(m.m23), 
-        mathAbs(m.m31), mathAbs(m.m32), mathAbs(m.m33));
+    float trace, r, rinv;
+    Quat q;
+    
+    trace = m.m11 + m.m22 + m.m33;
+    if (trace >= 0.0f) {
+        r = M::Sqrt(1.0f + trace);
+        rinv = 0.5f / r;
+        
+        q.x = rinv * (m.m32 - m.m23);
+        q.y = rinv * (m.m13 - m.m31);
+        q.z = rinv * (m.m21 - m.m12);
+        q.w = r * 0.5f;
+    } 
+    else if (m.m11 >= m.m22 && m.m11 >= m.m33) {
+        r = M::Sqrt(1.0f - m.m22 - m.m33 + m.m11);
+        rinv = 0.5f / r;
+        
+        q.x = r * 0.5f;
+        q.y = rinv * (m.m21 + m.m12);
+        q.z = rinv * (m.m31 + m.m13);
+        q.w = rinv * (m.m32 - m.m23);
+    } 
+    else if (m.m22 >= m.m33) {
+        r = M::Sqrt(1.0f - m.m11 - m.m33 + m.m22);
+        rinv = 0.5f / r;
+        
+        q.x = rinv * (m.m21 + m.m12);
+        q.y = r * 0.5f;
+        q.z = rinv * (m.m32 + m.m23);
+        q.w = rinv * (m.m13 - m.m31);
+    } 
+    else {
+        r = M::Sqrt(1.0f - m.m11 - m.m22 + m.m33);
+        rinv = 0.5f / r;
+        
+        q.x = rinv * (m.m31 + m.m13);
+        q.y = rinv * (m.m32 + m.m23);
+        q.z = r * 0.5f;
+        q.w = rinv * (m.m21 - m.m12);
+    }
+    
+    return q;
 }
 
+Mat4 Mat4::FromQuat(Quat q)
+{
+    float norm = M::Sqrt(Quat::Dot(q, q));
+    float s = norm > 0.0f ? (2.0f / norm) : 0.0f;
+    
+    float x = q.x;
+    float y = q.y;
+    float z = q.z;
+    float w = q.w;
+    
+    float xx = s * x * x;
+    float xy = s * x * y;
+    float wx = s * w * x;
+    float yy = s * y * y;
+    float yz = s * y * z;
+    float wy = s * w * y;
+    float zz = s * z * z;
+    float xz = s * x * z;
+    float wz = s * w * z;
+    
+    return Mat4(1.0f - yy - zz,     xy - wz,            xz + wy,        0.0f,
+                xy + wz,            1.0f - xx - zz,     yz - wx,        0.0f,
+                xz - wy,            yz + wx,            1.0f - xx - yy, 0.0f,
+                0.0f,               0.0f,               0.0f,           1.0f);
+}
+
+Mat4 Mat4::FromNormalAngle(Float3 _normal, float _scale, Float3 _pos, float _angle)
+{
+    Float3 tangent;
+    Float3 bitangent;
+    Float3::TangentAngle(&tangent, &bitangent, _normal, _angle);
+    
+    Float4 row1 = Float4(Float3::Mul(bitangent, _scale), 0.0f);
+    Float4 row2 = Float4(Float3::Mul(_normal, _scale), 0.0f);
+    Float4 row3 = Float4(Float3::Mul(tangent, _scale), 0.0f);
+    
+    return Mat4(row1.f, row2.f, row3.f, Float4(_pos, 1.0f).f);
+}
+
+Mat4 Mat4::ProjectPlane(Float3 planeNormal)
+{
+    float xx = planeNormal.x * planeNormal.x;
+    float yy = planeNormal.y * planeNormal.y;
+    float zz = planeNormal.z * planeNormal.z;
+    float xy = planeNormal.x * planeNormal.y;
+    float xz = planeNormal.x * planeNormal.z;
+    float yz = planeNormal.y * planeNormal.z;
+    
+    return Mat4(1.0f - xx,      -xy,        -xz,        0.0f,
+                -xy,            1.0f - yy,  -yz,        0.0f,
+                -xz,            -yz,        1.0f - zz,  0.0f,
+                0.0f,           0.0f,       0.0f,       1.0f);
+}
+
+Mat4 Mat4::Mul(const Mat4& _a, const Mat4& _b)
+{
+    return Mat4(
+        Mat4::MulFloat4(_a, Float4(_b.fc1)).f, 
+        Mat4::MulFloat4(_a, Float4(_b.fc2)).f,
+        Mat4::MulFloat4(_a, Float4(_b.fc3)).f, 
+        Mat4::MulFloat4(_a, Float4(_b.fc4)).f);
+}
+
+Mat3 Mat3::Inverse(const Mat3& _a)
+{
+    float xx = _a.f[0];
+    float xy = _a.f[3];
+    float xz = _a.f[6];
+    float yx = _a.f[1];
+    float yy = _a.f[4];
+    float yz = _a.f[7];
+    float zx = _a.f[2];
+    float zy = _a.f[5];
+    float zz = _a.f[8];
+    
+    float det = 0.0f;
+    det += xx * (yy * zz - yz * zy);
+    det -= xy * (yx * zz - yz * zx);
+    det += xz * (yx * zy - yy * zx);
+    
+    float det_rcp = 1.0f / det;
+    
+    return Mat3(+(yy * zz - yz * zy) * det_rcp, -(xy * zz - xz * zy) * det_rcp,
+        +(xy * yz - xz * yy) * det_rcp, -(yx * zz - yz * zx) * det_rcp,
+        +(xx * zz - xz * zx) * det_rcp, -(xx * yz - xz * yx) * det_rcp,
+        +(yx * zy - yy * zx) * det_rcp, -(xx * zy - xy * zx) * det_rcp,
+        +(xx * yy - xy * yx) * det_rcp);
+}
+
+Mat3 Mat3::Mul(const Mat3& _a, const Mat3& _b)
+{
+    return Mat3(
+        Mat3::MulFloat3(_a, Float3(_b.fc1)), 
+        Mat3::MulFloat3(_a, Float3(_b.fc2)),
+        Mat3::MulFloat3(_a, Float3(_b.fc3)));
+}
+
+Mat3 Mat3::Abs(const Mat3& m)
+{
+    return Mat3(
+        M::Abs(m.m11), M::Abs(m.m12), M::Abs(m.m13), 
+        M::Abs(m.m21), M::Abs(m.m22), M::Abs(m.m23), 
+        M::Abs(m.m31), M::Abs(m.m32), M::Abs(m.m33));
+}
+
+Mat3 Mat3::FromQuat(Quat q)
+{
+    float norm = M::Sqrt(Quat::Dot(q, q));
+    float s = norm > 0.0f ? (2.0f / norm) : 0.0f;
+    
+    float x = q.x;
+    float y = q.y;
+    float z = q.z;
+    float w = q.w;
+    
+    float xx = s * x * x;
+    float xy = s * x * y;
+    float wx = s * w * x;
+    float yy = s * y * y;
+    float yz = s * y * z;
+    float wy = s * w * y;
+    float zz = s * z * z;
+    float xz = s * x * z;
+    float wz = s * w * z;
+    
+    return Mat3(1.0f - yy - zz,     xy - wz,            xz + wy,
+                xy + wz,            1.0f - xx - zz,     yz - wx,
+                xz - wy,            yz + wx,            1.0f - xx - yy);
+}
 
 Float2 float2CalcLinearFit2D(const Float2* _points, int _num)
 {
@@ -11409,7 +11713,7 @@ Float2 float2CalcLinearFit2D(const Float2* _points, int _num)
 }
 
 
-Float3 float3CalcLinearFit3D(const Float3* _points, int _num)
+Float3 Float3::CalcLinearFit3D(const Float3* _points, int _num)
 {
     float sumX = 0.0f;
     float sumY = 0.0f;
@@ -11437,7 +11741,7 @@ Float3 float3CalcLinearFit3D(const Float3* _points, int _num)
     
     
     Mat3 mat(sumXX, sumXY, sumX, sumXY, sumYY, sumY, sumX, sumY, (float)(_num));
-    Mat3 matInv = mat3Inverse(mat);
+    Mat3 matInv = Mat3::Inverse(mat);
     
     return Float3(matInv.f[0] * sumXZ + matInv.f[1] * sumYZ + matInv.f[2] * sumZ,
                   matInv.f[3] * sumXZ + matInv.f[4] * sumYZ + matInv.f[5] * sumZ,
@@ -11445,12 +11749,12 @@ Float3 float3CalcLinearFit3D(const Float3* _points, int _num)
 }
 
 
-void colorRGBtoHSV(float _hsv[3], const float _rgb[3])
+Float3 Color::RGBtoHSV(Float3 rgb)
 {
     float K = 0.f;
-    float r = _rgb[0];
-    float g = _rgb[1];
-    float b = _rgb[2];
+    float r = rgb.f[0];
+    float g = rgb.f[1];
+    float b = rgb.f[2];
     
     if (g < b)
     {
@@ -11465,112 +11769,61 @@ void colorRGBtoHSV(float _hsv[3], const float _rgb[3])
     }
     
     float chroma = r - Min(g, b);
-    _hsv[0] = mathAbs(K + (g - b) / (6.f * chroma + 1e-20f));
-    _hsv[1] = chroma / (r + 1e-20f);
-    _hsv[2] = r;
+    return Float3(M::Abs(K + (g - b) / (6.f * chroma + 1e-20f)),
+                  chroma / (r + 1e-20f),
+                  r);
 }
 
-void colorRGBToHSV(float _rgb[3], const float _hsv[3])
+Float3 Color::HSVtoRGB(Float3 hsv)
 {
-    const float hh = _hsv[0];
-    const float ss = _hsv[1];
-    const float vv = _hsv[2];
+    const float hh = hsv.f[0];
+    const float ss = hsv.f[1];
+    const float vv = hsv.f[2];
     
-    const float px = mathAbs(mathFract(hh + 1.0f) * 6.0f - 3.0f);
-    const float py = mathAbs(mathFract(hh + 2.0f / 3.0f) * 6.0f - 3.0f);
-    const float pz = mathAbs(mathFract(hh + 1.0f / 3.0f) * 6.0f - 3.0f);
+    const float px = M::Abs(M::Fract(hh + 1.0f) * 6.0f - 3.0f);
+    const float py = M::Abs(M::Fract(hh + 2.0f / 3.0f) * 6.0f - 3.0f);
+    const float pz = M::Abs(M::Fract(hh + 1.0f / 3.0f) * 6.0f - 3.0f);
     
-    _rgb[0] = vv * mathLerp(1.0f, mathSaturate(px - 1.0f), ss);
-    _rgb[1] = vv * mathLerp(1.0f, mathSaturate(py - 1.0f), ss);
-    _rgb[2] = vv * mathLerp(1.0f, mathSaturate(pz - 1.0f), ss);
+    return Float3(vv * M::Lerp(1.0f, M::Saturate(px - 1.0f), ss), 
+                  vv * M::Lerp(1.0f, M::Saturate(py - 1.0f), ss),
+                  vv * M::Lerp(1.0f, M::Saturate(pz - 1.0f), ss));
 }
 
-Color colorBlend(Color _a, Color _b, float _t)
+Color Color::Blend(Color _a, Color _b, float _t)
 {
-    Float4 c1 = colorToFloat4(_a);
-    Float4 c2 = colorToFloat4(_b);
+    Float4 c1 = Color::ToFloat4(_a);
+    Float4 c2 = Color::ToFloat4(_b);
     
     return Color(
-        mathLerp(c1.x, c2.x, _t),
-        mathLerp(c1.y, c2.y, _t),
-        mathLerp(c1.z, c2.z, _t),
-        mathLerp(c1.w, c2.w, _t)
+        M::Lerp(c1.x, c2.x, _t),
+        M::Lerp(c1.y, c2.y, _t),
+        M::Lerp(c1.z, c2.z, _t),
+        M::Lerp(c1.w, c2.w, _t)
     );
 }
 
-Float4 colorToFloat4Linear(Float4 c)
+Float4 Color::ToFloat4Linear(Float4 c)
 {
     for (int i = 0; i < 3; i++) {
-        c.f[i] = c.f[i] < 0.04045f ? c.f[i]/12.92f : mathPow((c.f[i] + 0.055f)/1.055f, 2.4f);
+        c.f[i] = c.f[i] < 0.04045f ? c.f[i]/12.92f : M::Pow((c.f[i] + 0.055f)/1.055f, 2.4f);
     }
     return c;
 }
 
-Float4 colorToFloat4SRGB(Float4 cf) 
+Float4 Color::ToFloat4SRGB(Float4 cf) 
 {
     for (int i = 0; i < 3; i++) {
         cf.f[i] = cf.f[i] <= 0.0031308 ? 
             (12.92f*cf.f[i]) : 
-            1.055f*mathPow(cf.f[i], 0.416666f) - 0.055f;
+            1.055f*M::Pow(cf.f[i], 0.416666f) - 0.055f;
     }
     return cf;
 }
 
-Mat3 quatToMat3(Quat quat)
-{
-    float norm = mathSqrt(quatDot(quat, quat));
-    float s = norm > 0.0f ? (2.0f / norm) : 0.0f;
-    
-    float x = quat.x;
-    float y = quat.y;
-    float z = quat.z;
-    float w = quat.w;
-    
-    float xx = s * x * x;
-    float xy = s * x * y;
-    float wx = s * w * x;
-    float yy = s * y * y;
-    float yz = s * y * z;
-    float wy = s * w * y;
-    float zz = s * z * z;
-    float xz = s * x * z;
-    float wz = s * w * z;
-    
-    return Mat3(1.0f - yy - zz,     xy - wz,            xz + wy,
-                xy + wz,            1.0f - xx - zz,     yz - wx,
-                xz - wy,            yz + wx,            1.0f - xx - yy);
-}
-
-Mat4 quatToMat4(Quat quat)
-{
-    float norm = mathSqrt(quatDot(quat, quat));
-    float s = norm > 0.0f ? (2.0f / norm) : 0.0f;
-    
-    float x = quat.x;
-    float y = quat.y;
-    float z = quat.z;
-    float w = quat.w;
-    
-    float xx = s * x * x;
-    float xy = s * x * y;
-    float wx = s * w * x;
-    float yy = s * y * y;
-    float yz = s * y * z;
-    float wy = s * w * y;
-    float zz = s * z * z;
-    float xz = s * x * z;
-    float wz = s * w * z;
-    
-    return Mat4(1.0f - yy - zz,     xy - wz,            xz + wy,        0.0f,
-                xy + wz,            1.0f - xx - zz,     yz - wx,        0.0f,
-                xz - wy,            yz + wx,            1.0f - xx - yy, 0.0f,
-                0.0f,               0.0f,               0.0f,           1.0f);
-}
-
-Quat quatLerp(Quat _a, Quat _b, float t)
+Quat Quat::Lerp(Quat _a, Quat _b, float t)
 {
     float tinv = 1.0f - t;
-    float dot = quatDot(_a, _b);
+    float dot = Quat::Dot(_a, _b);
     Quat r;
     if (dot >= 0.0f) {
         r = Quat(tinv * _a.x + t * _b.x, 
@@ -11583,14 +11836,14 @@ Quat quatLerp(Quat _a, Quat _b, float t)
                  tinv * _a.z - t * _b.z, 
                  tinv * _a.w - t * _b.w);
     }
-    return quatNorm(r);
+    return Quat::Norm(r);
 }
 
-Quat quatSlerp(Quat _a, Quat _b, float t)
+Quat Quat::Slerp(Quat _a, Quat _b, float t)
 {
     const float epsilon = 1e-6f;
     
-    float dot = quatDot(_a, _b);
+    float dot = Quat::Dot(_a, _b);
     bool flip = false;
     if (dot < 0.0f) {
         flip = true;
@@ -11604,10 +11857,10 @@ Quat quatSlerp(Quat _a, Quat _b, float t)
         if (flip)
             s2 *= -1.0f;
     } else {
-        float omega = mathACos(dot);
-        float inv_omega_sin = 1.0f / mathSin(omega);
-        s1 = mathSin((1.0f - t) * omega) * inv_omega_sin;
-        s2 = mathSin(t * omega) * inv_omega_sin;
+        float omega = M::ACos(dot);
+        float inv_omega_sin = 1.0f / M::Sin(omega);
+        s1 = M::Sin((1.0f - t) * omega) * inv_omega_sin;
+        s2 = M::Sin(t * omega) * inv_omega_sin;
         if (flip)
             s2 *= -1.0f;
     }
@@ -11618,38 +11871,38 @@ Quat quatSlerp(Quat _a, Quat _b, float t)
                 s1 * _a.w + s2 * _b.w);
 }
 
-Float3 quatToEuler(Quat _quat)
+Float3 Quat::ToEuler(Quat q)
 {
-    float sinr_cosp = 2 * (_quat.w * _quat.x + _quat.y * _quat.z);
-    float cosr_cosp = 1 - 2 * (_quat.x * _quat.x + _quat.y * _quat.y);
-    float x = mathATan2(sinr_cosp, cosr_cosp);
+    float sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
+    float cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
+    float x = M::ATan2(sinr_cosp, cosr_cosp);
     
-    float sinp = 2 * (_quat.w * _quat.y - _quat.z * _quat.x);
+    float sinp = 2 * (q.w * q.y - q.z * q.x);
     float y;
-    if (mathAbs(sinp) >= 1)
-        y = mathCopySign(M_HALFPI, sinp);
+    if (M::Abs(sinp) >= 1)
+        y = M::CopySign(M_HALFPI, sinp);
     else
-        y = mathASin(sinp);
+        y = M::ASin(sinp);
     
-    float siny_cosp = 2 * (_quat.w * _quat.z + _quat.x * _quat.y);
-    float cosy_cosp = 1 - 2 * (_quat.y * _quat.y + _quat.z * _quat.z);
-    float z = mathATan2(siny_cosp, cosy_cosp);
+    float siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+    float cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+    float z = M::ATan2(siny_cosp, cosy_cosp);
     
     return Float3(x, y, z);
 }
 
-Quat quatFromEuler(Float3 _vec3)
+Quat Quat::FromEuler(Float3 _vec3)
 {
     float z = _vec3.z;
     float x = _vec3.x;
     float y = _vec3.y;
     
-    float cy = mathCos(z * 0.5f);
-    float sy = mathSin(z * 0.5f);
-    float cp = mathCos(y * 0.5f);
-    float sp = mathSin(y * 0.5f);
-    float cr = mathCos(x * 0.5f);
-    float sr = mathSin(x * 0.5f);
+    float cy = M::Cos(z * 0.5f);
+    float sy = M::Sin(z * 0.5f);
+    float cp = M::Cos(y * 0.5f);
+    float sp = M::Sin(y * 0.5f);
+    float cr = M::Cos(x * 0.5f);
+    float sr = M::Sin(x * 0.5f);
     
     Quat q;
     q.w = cr * cp * cy + sr * sp * sy;
@@ -11661,73 +11914,75 @@ Quat quatFromEuler(Float3 _vec3)
 }
 
 
-Float3 planeNormal(Float3 _va, Float3 _vb, Float3 _vc)
+Float3 Plane::CalcNormal(Float3 _va, Float3 _vb, Float3 _vc)
 {
-    Float3 ba = float3Sub(_vb, _va);
-    Float3 ca = float3Sub(_vc, _va);
-    Float3 baca = float3Cross(ca, ba);
+    Float3 ba = Float3::Sub(_vb, _va);
+    Float3 ca = Float3::Sub(_vc, _va);
+    Float3 baca = Float3::Cross(ca, ba);
     
-    return float3Norm(baca);
+    return Float3::Norm(baca);
 }
 
-Plane plane3Points(Float3 _va, Float3 _vb, Float3 _vc)
+Plane Plane::From3Points(Float3 _va, Float3 _vb, Float3 _vc)
 {
-    Float3 normal = planeNormal(_va, _vb, _vc);
-    return Plane(normal, -float3Dot(normal, _va));
+    Float3 normal = Plane::CalcNormal(_va, _vb, _vc);
+    return Plane(normal, -Float3::Dot(normal, _va));
 }
 
-Plane planeNormalPoint(Float3 _normal, Float3 _p)
+Plane Plane::FromNormalPoint(Float3 _normal, Float3 _p)
 {
-    Float3 normal = float3Norm(_normal);
-    float d = float3Dot(_normal, _p);
+    Float3 normal = Float3::Norm(_normal);
+    float d = Float3::Dot(_normal, _p);
     return Plane(normal, -d);
 }
 
-float planeDistance(Plane _plane, Float3 _p)
+float Plane::Distance(Plane _plane, Float3 _p)
 {
-    return float3Dot(Float3(_plane.normal), _p) + _plane.dist;
+    return Float3::Dot(Float3(_plane.normal), _p) + _plane.dist;
 }
 
-Float3 planeProjectPoint(Plane _plane, Float3 _p)
+Float3 Plane::ProjectPoint(Plane _plane, Float3 _p)
 {
-    return float3Sub(_p, float3Mulf(Float3(_plane.normal), planeDistance(_plane, _p)));
+    return Float3::Sub(_p, Float3::Mul(Float3(_plane.normal), Distance(_plane, _p)));
 }
 
-Float3 planeOrigin(Plane _plane)
+Float3 Plane::Origin(Plane _plane)
 {
-    return float3Mulf(Float3(_plane.normal), -_plane.dist);
+    return Float3::Mul(Float3(_plane.normal), -_plane.dist);
 }
 
-AABB AABBFromBox(const Box* box)
+AABB AABB::Transform(const AABB& aabb, const Mat4& mat)
 {
-    Float3 center = box->tx.pos;
-    Mat3 absMat = mat3Abs(box->tx.rot);
-    Float3 extents = mat3MulFloat3(absMat, box->e);
-    return AABB(float3Sub(center, extents), float3Add(center, extents));
-}
-
-AABB AABBTransform(const AABB& aabb, const Mat4& mat)
-{
-    Float3 center = AABBCenter(aabb);
-    Float3 extents = AABBExtents(aabb);
+    Float3 center = aabb.Center();
+    Float3 extents = aabb.Extents();
     
     Mat3 rotMat = Mat3(mat.fc1, mat.fc2, mat.fc3);
-    Mat3 absMat  = mat3Abs(rotMat);
-    Float3 newCenter = mat4MulFloat3(mat, center);
-    Float3 newExtents = mat3MulFloat3(absMat, extents);
+    Mat3 absMat  = Mat3::Abs(rotMat);
+    Float3 newCenter = Mat4::MulFloat3(mat, center);
+    Float3 newExtents = Mat3::MulFloat3(absMat, extents);
     
-    return AABB(float3Sub(newCenter, newExtents), float3Add(newCenter, newExtents));
+    return AABB(Float3::Sub(newCenter, newExtents), Float3::Add(newCenter, newExtents));
 }
+
+AABB Box::ToAABB(const Box& box)
+{
+    Float3 center = box.tx.pos;
+    Mat3 absMat = Mat3::Abs(box.tx.rot);
+    Float3 extents = Mat3::MulFloat3(absMat, box.e);
+    return AABB(Float3::Sub(center, extents), Float3::Add(center, extents));
+}
+
+
 
 DEFINE_HANDLE(HandleDummy);
 
-_private::HandlePoolTable* _private::handleCreatePoolTable(uint32 capacity, Allocator* alloc)
+_private::HandlePoolTable* _private::handleCreatePoolTable(uint32 capacity, MemAllocator* alloc)
 {
     uint32 maxSize = AlignValue(capacity, 16u);
 
     MemSingleShotMalloc<HandlePoolTable> buff;
-    HandlePoolTable* tbl = buff.AddMemberField<uint32>(offsetof(HandlePoolTable, dense), maxSize)
-    .AddMemberField<uint32>(offsetof(HandlePoolTable, sparse), maxSize)
+    HandlePoolTable* tbl = buff.AddMemberArray<uint32>(offsetof(HandlePoolTable, dense), maxSize)
+    .AddMemberArray<uint32>(offsetof(HandlePoolTable, sparse), maxSize)
     .Calloc(alloc);
     tbl->capacity = capacity;
     handleResetPoolTable(tbl);
@@ -11735,12 +11990,12 @@ _private::HandlePoolTable* _private::handleCreatePoolTable(uint32 capacity, Allo
     return tbl;
 }
 
-void _private::handleDestroyPoolTable(HandlePoolTable* tbl, Allocator* alloc)
+void _private::handleDestroyPoolTable(HandlePoolTable* tbl, MemAllocator* alloc)
 {
     MemSingleShotMalloc<HandlePoolTable>::Free(tbl, alloc);
 }
 
-bool _private::handleGrowPoolTable(HandlePoolTable** pTbl, Allocator* alloc)
+bool _private::handleGrowPoolTable(HandlePoolTable** pTbl, MemAllocator* alloc)
 {
     HandlePoolTable* tbl = *pTbl;
     uint32 newCapacity = tbl->capacity << 1;
@@ -11757,7 +12012,7 @@ bool _private::handleGrowPoolTable(HandlePoolTable** pTbl, Allocator* alloc)
     return true;
 }
 
-_private::HandlePoolTable* _private::handleClone(HandlePoolTable* tbl, Allocator* alloc)
+_private::HandlePoolTable* _private::handleClone(HandlePoolTable* tbl, MemAllocator* alloc)
 {
     ASSERT(tbl->capacity);
     HandlePoolTable* newTable = handleCreatePoolTable(tbl->capacity, alloc);
@@ -11843,8 +12098,8 @@ size_t _private::handleGetMemoryRequirement(uint32 capacity)
     uint32 maxSize = AlignValue(capacity, 16u);
     
     MemSingleShotMalloc<HandlePoolTable> mallocator;
-    return mallocator.AddMemberField<uint32>(offsetof(HandlePoolTable, dense), maxSize)
-        .AddMemberField<uint32>(offsetof(HandlePoolTable, sparse), maxSize)
+    return mallocator.AddMemberArray<uint32>(offsetof(HandlePoolTable, dense), maxSize)
+        .AddMemberArray<uint32>(offsetof(HandlePoolTable, sparse), maxSize)
         .GetMemoryRequirement();
 }
 
@@ -11853,8 +12108,8 @@ _private::HandlePoolTable* _private::handleCreatePoolTableWithBuffer(uint32 capa
     uint32 maxSize = AlignValue(capacity, 16u);
     
     MemSingleShotMalloc<HandlePoolTable> mallocator;
-    HandlePoolTable* tbl = mallocator.AddMemberField<uint32>(offsetof(HandlePoolTable, dense), maxSize)
-        .AddMemberField<uint32>(offsetof(HandlePoolTable, sparse), maxSize)
+    HandlePoolTable* tbl = mallocator.AddMemberArray<uint32>(offsetof(HandlePoolTable, dense), maxSize)
+        .AddMemberArray<uint32>(offsetof(HandlePoolTable, sparse), maxSize)
         .Calloc(data, size);
     tbl->capacity = capacity;
     handleResetPoolTable(tbl);
@@ -11882,9 +12137,9 @@ bool _private::handleGrowPoolTableWithBuffer(HandlePoolTable** pTbl, void* buff,
 
 #define SOKOL_ARGS_IMPL
 #define SOKOL_ASSERT(c)     ASSERT(c)
-#define SOKOL_LOG(msg)      logDebug(msg)
-#define SOKOL_CALLOC(n,s)   memAllocZero((n)*(s))
-#define SOKOL_FREE(p)       memFree(p)
+#define SOKOL_LOG(msg)      LOG_DEBUG(msg)
+#define SOKOL_CALLOC(n,s)   Mem::AllocZero((n)*(s))
+#define SOKOL_FREE(p)       Mem::Free(p)
 #define SOKOL_ARGS_API_DECL 
 #define SOKOL_API_IMPL      
 PRAGMA_DIAGNOSTIC_PUSH()
@@ -12674,16 +12929,19 @@ struct SettingsContext
 
 static SettingsContext gSettings;
 
-void settingsAddCustomCallbacks(SettingsCustomCallbacks* callbacks)
+namespace Settings
+{
+
+void AddCustomCallbacks(SettingsCustomCallbacks* callbacks)
 {
     ASSERT(callbacks);
 
     uint32 index = gSettings.customCallbacks.Find(callbacks);
     if (index == UINT32_MAX) 
-        gSettings.customCallbacks.Add(callbacks);
+        gSettings.customCallbacks.Push(callbacks);
 }
 
-void settingsRemoveCustomCallbacks(SettingsCustomCallbacks* callbacks)
+void RemoveCustomCallbacks(SettingsCustomCallbacks* callbacks)
 {
     ASSERT(callbacks);
 
@@ -12696,7 +12954,7 @@ static bool settingsLoadFromINIInternal(const Blob& blob)
 {
     ASSERT(blob.IsValid());
 
-    ini_t* ini = ini_load(reinterpret_cast<const char*>(blob.Data()), memDefaultAlloc());
+    ini_t* ini = ini_load(reinterpret_cast<const char*>(blob.Data()), Mem::GetDefaultAlloc());
     if (!ini)
         return false;
 
@@ -12712,7 +12970,7 @@ static bool settingsLoadFromINIInternal(const Blob& blob)
 
             uint32 foundCatId = UINT32_MAX;
             for (uint32 catId = 0, catIdCount = callbacks->GetCategoryCount(); catId < catIdCount; catId++) {
-                if (strIsEqualNoCase(sectionName, callbacks->GetCategory(catId))) {
+                if (Str::IsEqualNoCase(sectionName, callbacks->GetCategory(catId))) {
                     foundCatId = catId;
                     break;
                 }
@@ -12721,25 +12979,25 @@ static bool settingsLoadFromINIInternal(const Blob& blob)
             for (int j = 0; j < ini_property_count(ini, i); j++) {
                 const char* key = ini_property_name(ini, i, j);
                 const char* value = ini_property_value(ini, i, j);
-                strTrim(keyTrimmed, sizeof(keyTrimmed), key);
-                strTrim(valueTrimmed, sizeof(valueTrimmed), value);
+                Str::Trim(keyTrimmed, sizeof(keyTrimmed), key);
+                Str::Trim(valueTrimmed, sizeof(valueTrimmed), value);
 
                 bool predefined = foundCatId != UINT32_MAX ? callbacks->ParseSetting(foundCatId, keyTrimmed, valueTrimmed) : false;
 
                 if (!predefined)
-                    settingsSetValue(keyTrimmed, valueTrimmed);
+                    SetValue(keyTrimmed, valueTrimmed);
 
                 char msg[256];
-                strPrintFmt(msg, sizeof(msg), "\t%u) %s%s = %s\n", ++count, keyTrimmed, !predefined ? "(*)" : "", valueTrimmed);
-                debugPrint(msg);
+                Str::PrintFmt(msg, sizeof(msg), "\t%u) %s%s = %s\n", ++count, keyTrimmed, !predefined ? "(*)" : "", valueTrimmed);
+                Debug::Print(msg);
             }
         } // for each custom settings parser
     }
 
-    int sectionId = ini_find_section(ini, SETTINGS_NONE_PREDEFINED, strLen(SETTINGS_NONE_PREDEFINED));
+    int sectionId = ini_find_section(ini, SETTINGS_NONE_PREDEFINED, Str::Len(SETTINGS_NONE_PREDEFINED));
     if (sectionId != -1) {
         for (int i = 0; i < ini_property_count(ini, sectionId); i++) {
-            settingsSetValue(ini_property_name(ini, sectionId, i), ini_property_value(ini, sectionId, i));
+            SetValue(ini_property_name(ini, sectionId, i), ini_property_value(ini, sectionId, i));
         }
     }
 
@@ -12748,11 +13006,11 @@ static bool settingsLoadFromINIInternal(const Blob& blob)
 }
 
 #if PLATFORM_ANDROID
-bool settingsInitializeFromAndroidAsset(AAssetManager* assetMgr, const char* iniFilepath)
+bool InitializeFromAndroidAsset(AAssetManager* assetMgr, const char* iniFilepath)
 {
     char msg[256];
-    strPrintFmt(msg, sizeof(msg), "Loading settings from assets: %s\n", iniFilepath);
-    debugPrint(msg);
+    Str::PrintFmt(msg, sizeof(msg), "Loading settings from assets: %s\n", iniFilepath);
+    Debug::Print(msg);
 
     Blob blob;
     AAsset* asset = AAssetManager_open(assetMgr, iniFilepath, AASSET_MODE_BUFFER);
@@ -12770,8 +13028,8 @@ bool settingsInitializeFromAndroidAsset(AAssetManager* assetMgr, const char* ini
     }
 
     if (!blob.IsValid()) {
-        strPrintFmt(msg, sizeof(msg), "Opening ini file '%s' failed\n", iniFilepath);
-        debugPrint(msg);
+        Str::PrintFmt(msg, sizeof(msg), "Opening ini file '%s' failed\n", iniFilepath);
+        Debug::Print(msg);
         return false;
     }
 
@@ -12779,18 +13037,18 @@ bool settingsInitializeFromAndroidAsset(AAssetManager* assetMgr, const char* ini
     blob.Free();
 
     if (!r) {
-        strPrintFmt(msg, sizeof(msg), "Parsing ini file '%s' failed\n", iniFilepath);
-        debugPrint(msg);
+        Str::PrintFmt(msg, sizeof(msg), "Parsing ini file '%s' failed\n", iniFilepath);
+        Debug::Print(msg);
     }
     return r;
 }
 #endif  // PLATFORM_ANDROID
 
-bool settingsInitializeFromINI(const char* iniFilepath)
+bool InitializeFromINI(const char* iniFilepath)
 {
     char msg[256];
-    strPrintFmt(msg, sizeof(msg), "Loading settings from file: %s", iniFilepath);
-    debugPrint(msg);
+    Str::PrintFmt(msg, sizeof(msg), "Loading settings from file: %s", iniFilepath);
+    Debug::Print(msg);
 
     Blob blob;
     File f;
@@ -12806,8 +13064,8 @@ bool settingsInitializeFromINI(const char* iniFilepath)
     }
 
     if (!blob.IsValid()) {
-        strPrintFmt(msg, sizeof(msg), "Opening ini file '%s' failed", iniFilepath);
-        debugPrint(msg);
+        Str::PrintFmt(msg, sizeof(msg), "Opening ini file '%s' failed", iniFilepath);
+        Debug::Print(msg);
         return false;
     }
 
@@ -12815,17 +13073,17 @@ bool settingsInitializeFromINI(const char* iniFilepath)
     blob.Free();
 
     if (!r) {
-        strPrintFmt(msg, sizeof(msg), "Parsing ini file '%s' failed", iniFilepath);
-        debugPrint(msg);
+        Str::PrintFmt(msg, sizeof(msg), "Parsing ini file '%s' failed", iniFilepath);
+        Debug::Print(msg);
     }
     return r;
 }
 
-void settingsSaveToINI(const char* iniFilepath)
+void SaveToINI(const char* iniFilepath)
 {
     char msg[256];
-    strPrintFmt(msg, sizeof(msg), "Saving settings to file: %s", iniFilepath);
-    debugPrint(msg);
+    Str::PrintFmt(msg, sizeof(msg), "Saving settings to file: %s", iniFilepath);
+    Debug::Print(msg);
     
     MemTempAllocator tmpAlloc;
     ini_t* ini = ini_create(&tmpAlloc);
@@ -12834,7 +13092,7 @@ void settingsSaveToINI(const char* iniFilepath)
         for (uint32 cId = 0; cId < callbacks->GetCategoryCount(); cId++) {
             Array<SettingsKeyValue> items(&tmpAlloc);
             const char* catName = callbacks->GetCategory(cId);
-            int sectionId = ini_section_add(ini, catName, strLen(catName));
+            int sectionId = ini_section_add(ini, catName, Str::Len(catName));
             
             callbacks->SaveCategory(cId, items);
             
@@ -12848,7 +13106,7 @@ void settingsSaveToINI(const char* iniFilepath)
     }
 
     if (gSettings.keyValuePairs.Count()) {
-        int sectionId = ini_section_add(ini, SETTINGS_NONE_PREDEFINED, strLen(SETTINGS_NONE_PREDEFINED));
+        int sectionId = ini_section_add(ini, SETTINGS_NONE_PREDEFINED, Str::Len(SETTINGS_NONE_PREDEFINED));
         
         for (SettingsKeyValue& item : gSettings.keyValuePairs) {
             if (item.value.Length())
@@ -12871,7 +13129,7 @@ void settingsSaveToINI(const char* iniFilepath)
     ini_destroy(ini);
 }
 
-bool settingsInitializeFromCommandLine(int argc, char* argv[])
+bool InitializeFromCommandLine(int argc, char* argv[])
 {
     sargs_state* args = sargs_create(sargs_desc {
         .argc = argc,
@@ -12879,9 +13137,9 @@ bool settingsInitializeFromCommandLine(int argc, char* argv[])
     });
 
     if (sargs_num_args(args) > 0) {
-        debugPrint("Loading settings from CommandLine:");
+        Debug::Print("Loading settings from CommandLine:");
         #if PLATFORM_WINDOWS
-        debugPrint("\n");
+        Debug::Print("\n");
         #endif
     }
 
@@ -12900,8 +13158,8 @@ bool settingsInitializeFromCommandLine(int argc, char* argv[])
             uint32 catLen = 0;
             for (uint32 catId = 0, catIdCount = callbacks->GetCategoryCount(); catId < catIdCount; catId++) {
                 const char* cat = callbacks->GetCategory(catId);
-                catLen = strLen(cat);
-                if (strIsEqualNoCaseCount(key, cat, catLen)) {
+                catLen = Str::Len(cat);
+                if (Str::IsEqualNoCaseCount(key, cat, catLen)) {
                     foundCatId = catId;
                     break;
                 }
@@ -12910,13 +13168,13 @@ bool settingsInitializeFromCommandLine(int argc, char* argv[])
             bool predefined = foundCatId != UINT32_MAX ? callbacks->ParseSetting(foundCatId, key + catLen, value) : false;
 
             if (!predefined)
-                settingsSetValue(key, value);
+                SetValue(key, value);
 
             char msg[256];
-            strPrintFmt(msg, sizeof(msg), "\t%d) %s%s = %s", i+1, key, !predefined ? "(*)" : "", value);
-            debugPrint(msg);
+            Str::PrintFmt(msg, sizeof(msg), "\t%d) %s%s = %s", i+1, key, !predefined ? "(*)" : "", value);
+            Debug::Print(msg);
             #if PLATFORM_WINDOWS
-            debugPrint("\n");
+            Debug::Print("\n");
             #endif
         }
 
@@ -12926,7 +13184,7 @@ bool settingsInitializeFromCommandLine(int argc, char* argv[])
     return true;
 }
 
-void settingsSetValue(const char* key, const char* value)
+void SetValue(const char* key, const char* value)
 {
     if (value[0] == 0)
         return;
@@ -12941,7 +13199,7 @@ void settingsSetValue(const char* key, const char* value)
         gSettings.keyValuePairs.Push(SettingsKeyValue {.key = key, .value = value});
 }
 
-const char* settingsGetValue(const char* key, const char* defaultValue)
+const char* GetValue(const char* key, const char* defaultValue)
 {
     uint32 index = gSettings.keyValuePairs.FindIf([key](const SettingsKeyValue& keyval) {
         return keyval.key.IsEqual(key);
@@ -12950,12 +13208,12 @@ const char* settingsGetValue(const char* key, const char* defaultValue)
     return index != UINT32_MAX ? gSettings.keyValuePairs[index].value.CStr() : defaultValue;
 }
 
-void settingsRelease()
+void Release()
 {
     gSettings.keyValuePairs.Free();
 }
 
-
+} // Settings
 #include <string.h>
 #include <stdlib.h>
 
@@ -14756,7 +15014,7 @@ PRAGMA_DIAGNOSTIC_POP();
 #if PLATFORM_WINDOWS
 
 
-bool strUt8ToWide(const char* src, wchar_t* dst, size_t dstNumBytes)
+bool Str::Utf8ToWide(const char* src, wchar_t* dst, size_t dstNumBytes)
 {
 	ASSERT(src && dst && (dstNumBytes > 1));
 
@@ -14772,7 +15030,7 @@ bool strUt8ToWide(const char* src, wchar_t* dst, size_t dstNumBytes)
     }
 }
 
-bool strWideToUtf8(const wchar_t* src, char* dst, size_t dstNumBytes)
+bool Str::WideToUtf8(const wchar_t* src, char* dst, size_t dstNumBytes)
 {
 	ASSERT(src && dst && (dstNumBytes > 1));
 
@@ -14793,34 +15051,97 @@ bool strWideToUtf8(const wchar_t* src, char* dst, size_t dstNumBytes)
 #endif
 
 
-uint32 strPrintFmt(char* str, uint32 size, const char* fmt, ...)
+namespace Str
+{
+    NO_ASAN INLINE uint32 LenCount(const char* str, uint32 _max)
+    {
+        const char* char_ptr;
+        const uintptr* longWordPtr;
+        uintptr longword, himagic, lomagic;
+
+        for (char_ptr = str; ((uintptr)char_ptr & (sizeof(longword) - 1)) != 0; ++char_ptr) {
+            if (*char_ptr == '\0') {
+                uint32 _len = (uint32)(uintptr)(char_ptr - str);
+                return (_len > _max) ? _max : _len;
+            }
+        }
+
+        longWordPtr = (uintptr*)char_ptr;
+        himagic = 0x80808080L;
+        lomagic = 0x01010101L;
+        #if ARCH_64BIT
+        /* 64-bit version of the magic.  */
+        /* Do the shift in two steps to avoid a warning if long has 32 bits.  */
+        himagic = ((himagic << 16) << 16) | himagic;
+        lomagic = ((lomagic << 16) << 16) | lomagic;
+        #endif
+
+        for (;;) {
+            longword = *longWordPtr++;
+
+            if (((longword - lomagic) & ~longword & himagic) != 0) {
+                const char* cp = (const char*)(longWordPtr - 1);
+                uint32 baseOffset = (uint32)(intptr_t)(cp - str);
+                if (baseOffset > _max)
+                return _max;
+
+                if (cp[0] == 0)
+                return Min(_max, baseOffset);
+                if (cp[1] == 0)
+                return Min(_max, baseOffset + 1);
+                if (cp[2] == 0)
+                return Min(_max, baseOffset + 2);
+                if (cp[3] == 0)
+                return Min(_max, baseOffset + 3);
+                #if ARCH_64BIT
+                if (cp[4] == 0)
+                return Min(_max, baseOffset + 4);
+                if (cp[5] == 0)
+                return Min(_max, baseOffset + 5);
+                if (cp[6] == 0)
+                return Min(_max, baseOffset + 6);
+                if (cp[7] == 0)
+                return Min(_max, baseOffset + 7);
+                #endif // ARCH_64BIT
+            }
+        }
+
+        #if !COMPILER_MSVC
+        ASSERT_MSG(0, "Not a null-terminated string");
+        return 0;
+        #endif
+    }
+} // Str
+
+
+uint32 Str::PrintFmt(char* str, uint32 size, const char* fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    uint32 r = strPrintFmtArgs(str, size, fmt, args);
+    uint32 r = Str::PrintFmtArgs(str, size, fmt, args);
     va_end(args);
     return r;
 }
 
-uint32 strPrintFmtArgs(char* str, uint32 size, const char* fmt, va_list args)
+uint32 Str::PrintFmtArgs(char* str, uint32 size, const char* fmt, va_list args)
 {
     return (uint32)stbsp_vsnprintf(str, (int)size, fmt, args);
 }
 
-char* strPrintFmtAlloc(Allocator* alloc, const char* fmt, ...)
+char* Str::PrintFmtAlloc(MemAllocator* alloc, const char* fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    char* str = strPrintFmtAllocArgs(alloc, fmt, args);
+    char* str = Str::PrintFmtAllocArgs(alloc, fmt, args);
     va_end(args);
     return str;
 }
 
-char* strPrintFmtAllocArgs(Allocator* alloc, const char* fmt, va_list args)
+char* Str::PrintFmtAllocArgs(MemAllocator* alloc, const char* fmt, va_list args)
 {
     struct strPrintfContext
     {
-        Allocator* alloc;
+        MemAllocator* alloc;
         char* buff;
         int len;
         char tmp[STB_SPRINTF_MIN];
@@ -14830,7 +15151,7 @@ char* strPrintFmtAllocArgs(Allocator* alloc, const char* fmt, va_list args)
     {
         strPrintfContext* ctx = reinterpret_cast<strPrintfContext*>(user);
         int len_ = len + 1;    // Reserve one character for null-termination
-        ctx->buff = memReallocTyped<char>(ctx->buff, len_, ctx->alloc);
+        ctx->buff = Mem::ReallocTyped<char>(ctx->buff, len_, ctx->alloc);
         memcpy(ctx->buff + ctx->len, ctx->tmp, len);
         ctx->len += len;
         return ctx->tmp;
@@ -14845,12 +15166,12 @@ char* strPrintFmtAllocArgs(Allocator* alloc, const char* fmt, va_list args)
     return ctx.buff;
 }
 
-char* strCopy(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src)
+char* Str::Copy(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src)
 {
     ASSERT(dst);
     ASSERT(src);		
 
-    const uint32 len = strLen(src);
+    const uint32 len = Str::Len(src);
     const uint32 max = dstSize ? dstSize - 1 : 0;
     const uint32 num = (len < max ? len : max);
     if (num > 0) {
@@ -14861,7 +15182,7 @@ char* strCopy(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src)
     return &dst[num];
 }
 
-uint32 strLen(const char* str)
+uint32 Str::Len(const char* str)
 {
     const char* char_ptr;
     const uintptr* longWordPtr;
@@ -14914,103 +15235,43 @@ uint32 strLen(const char* str)
     #endif
 }
 
-NO_ASAN INLINE uint32 strLenCount(const char* str, uint32 _max)
-{
-    const char* char_ptr;
-    const uintptr* longWordPtr;
-    uintptr longword, himagic, lomagic;
-
-    for (char_ptr = str; ((uintptr)char_ptr & (sizeof(longword) - 1)) != 0; ++char_ptr) {
-        if (*char_ptr == '\0') {
-            uint32 _len = (uint32)(uintptr)(char_ptr - str);
-            return (_len > _max) ? _max : _len;
-        }
-    }
-
-    longWordPtr = (uintptr*)char_ptr;
-    himagic = 0x80808080L;
-    lomagic = 0x01010101L;
-    #if ARCH_64BIT
-    /* 64-bit version of the magic.  */
-    /* Do the shift in two steps to avoid a warning if long has 32 bits.  */
-    himagic = ((himagic << 16) << 16) | himagic;
-    lomagic = ((lomagic << 16) << 16) | lomagic;
-    #endif
-
-    for (;;) {
-        longword = *longWordPtr++;
-
-        if (((longword - lomagic) & ~longword & himagic) != 0) {
-            const char* cp = (const char*)(longWordPtr - 1);
-            uint32 baseOffset = (uint32)(intptr_t)(cp - str);
-            if (baseOffset > _max)
-                return _max;
-
-            if (cp[0] == 0)
-                return Min(_max, baseOffset);
-            if (cp[1] == 0)
-                return Min(_max, baseOffset + 1);
-            if (cp[2] == 0)
-                return Min(_max, baseOffset + 2);
-            if (cp[3] == 0)
-                return Min(_max, baseOffset + 3);
-            #if ARCH_64BIT
-            if (cp[4] == 0)
-                return Min(_max, baseOffset + 4);
-            if (cp[5] == 0)
-                return Min(_max, baseOffset + 5);
-            if (cp[6] == 0)
-                return Min(_max, baseOffset + 6);
-            if (cp[7] == 0)
-                return Min(_max, baseOffset + 7);
-            #endif // ARCH_64BIT
-        }
-    }
-
-    #if !COMPILER_MSVC
-        ASSERT_MSG(0, "Not a null-terminated string");
-        return 0;
-    #endif
-}
-
-char* strCopyCount(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src, uint32 count)
+char* Str::CopyCount(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src, uint32 count)
 {
     ASSERT(dst);
     ASSERT(src);
 
-    const uint32 len = strLenCount(src, count);
+    const uint32 len = LenCount(src, count);
     const uint32 max = dstSize ? dstSize - 1 : 0;
     const uint32 num = (len < max ? len : max);
-    if (num > 0) {
+    if (num > 0) 
         memcpy(dst, src, num);
-    }
     dst[num] = '\0';
 
     return &dst[num];
 }
 
-char* strConcat(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src)
+char* Str::Concat(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src)
 {
     ASSERT(dst);
     ASSERT(src);
 
-    uint32 len = strLen(dst);
-    return strCopy(dst + len, dstSize - len, src);
+    uint32 len = Str::Len(dst);
+    return Str::Copy(dst + len, dstSize - len, src);
 }
 
-char* strConcatCount(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src, uint32 count)
+char* Str::ConcatCount(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src, uint32 count)
 {
     ASSERT(dst);
     ASSERT(src);
 
-    uint32 len = strLen(dst);
-    return strCopyCount(dst + len, dstSize - len, src, count);
+    uint32 len = Str::Len(dst);
+    return Str::CopyCount(dst + len, dstSize - len, src, count);
 }
 
-bool strIsEqual(const char* s1, const char* s2)
+bool Str::IsEqual(const char* s1, const char* s2)
 {
-    uint32 alen = strLen(s1);
-    uint32 blen = strLen(s2);
+    uint32 alen = Str::Len(s1);
+    uint32 blen = Str::Len(s2);
     if (alen != blen)
         return false;
 
@@ -15021,24 +15282,24 @@ bool strIsEqual(const char* s1, const char* s2)
     return true;
 }
 
-bool strIsEqualNoCase(const char* s1, const char* s2)
+bool Str::IsEqualNoCase(const char* s1, const char* s2)
 {
-    uint32 alen = strLen(s1);
-    uint32 blen = strLen(s2);
+    uint32 alen = Str::Len(s1);
+    uint32 blen = Str::Len(s2);
     if (alen != blen)
         return false;
 
     for (uint32 i = 0; i < alen; i++) {
-        if (strToLower(s1[i]) != strToLower(s2[i]))
+        if (Str::ToLower(s1[i]) != Str::ToLower(s2[i]))
             return false;
     }
     return true;    
 }
 
-bool strIsEqualCount(const char* a, const char* b, uint32 count)
+bool Str::IsEqualCount(const char* a, const char* b, uint32 count)
 {
-    uint32 _alen = strLen(a);
-    uint32 _blen = strLen(b);
+    uint32 _alen = Str::Len(a);
+    uint32 _blen = Str::Len(b);
     uint32 alen = Min(count, _alen);
     uint32 blen = Min(count, _blen);
     if (alen != blen)
@@ -15051,89 +15312,116 @@ bool strIsEqualCount(const char* a, const char* b, uint32 count)
     return true;
 }
 
-bool strIsEqualNoCaseCount(const char* a, const char* b, uint32 count)
+bool Str::IsEqualNoCaseCount(const char* a, const char* b, uint32 count)
 {
-    uint32 _alen = strLen(a);
-    uint32 _blen = strLen(b);
+    uint32 _alen = Str::Len(a);
+    uint32 _blen = Str::Len(b);
     uint32 alen = Min(count, _alen);
     uint32 blen = Min(count, _blen);
     if (alen != blen)
         return false;
 
     for (uint32 i = 0; i < alen; i++) {
-        if (strToLower(a[i]) != strToLower(b[i]))
+        if (Str::ToLower(a[i]) != Str::ToLower(b[i]))
             return false;
     }
     return true;
 }
 
-bool strEndsWith(const char* str, const char* endsWith)
+int Str::Compare(const char* a, const char* b)
 {
-    uint32 len = strLen(str);
-    uint32 endsWithLen = strLen(endsWith);
-    if (endsWithLen > len)
-        return false;
-    return strIsEqual(str + len - endsWithLen, endsWith);   
+    return strcmp(a, b);
 }
 
-bool strIsWhitespace(char ch)
+uint32 Str::CountMatchingFirstChars(const char* s1, const char* s2)
+{
+    uint32 count = 0;
+    while (true) {
+        if (s1[count] == 0 || s2[count] == 0 || s1[count] != s2[count])
+            return count;
+        count++;
+    }
+    
+    return count;
+}
+
+bool Str::StartsWith(const char* str, const char* startsWith)
+{
+    uint32 len = Str::Len(str);
+    uint32 startsWithLen = Str::Len(startsWith);
+    if (startsWithLen > len)
+        return false;
+
+    return Str::IsEqualCount(str, startsWith, startsWithLen);
+}
+
+bool Str::EndsWith(const char* str, const char* endsWith)
+{
+    uint32 len = Str::Len(str);
+    uint32 endsWithLen = Str::Len(endsWith);
+    if (endsWithLen > len)
+        return false;
+    return Str::IsEqual(str + len - endsWithLen, endsWith);   
+}
+
+bool Str::IsWhitespace(char ch)
 {
     return static_cast<uint32>(ch - 1) < 32 && ((0x80001F00 >> static_cast<uint32>(ch - 1)) & 1) == 1;
 }
 
-char strToLower(char ch)
+char Str::ToLower(char ch)
 {
-    return ch + (strIsInRange(ch, 'A', 'Z') ? 0x20 : 0);
+    return ch + (Str::IsInRange(ch, 'A', 'Z') ? 0x20 : 0);
 }
 
-char* strToLower(char* dst, uint32 dstSize, const char* src)
+char* Str::ToLower(char* dst, uint32 dstSize, const char* src)
 {
     uint32 offset = 0;
     uint32 dstMax = dstSize - 1;
     while (*src && offset < dstMax) {
-        dst[offset++] = strToLower(*src);
+        dst[offset++] = Str::ToLower(*src);
         ++src;
     }
     dst[offset] = '\0';
     return dst;
 }
 
-char strToUpper(char ch)
+char Str::ToUpper(char ch)
 {
-    return ch - (strIsInRange(ch, 'a', 'z') ? 0x20 : 0);
+    return ch - (Str::IsInRange(ch, 'a', 'z') ? 0x20 : 0);
 }
 
-char* strToUpper(char* dst, uint32 dstSize, const char* src)
+char* Str::ToUpper(char* dst, uint32 dstSize, const char* src)
 {
     uint32 offset = 0;
     uint32 dstMax = dstSize - 1;
     while (*src && offset < dstMax) {
-        dst[offset++] = strToUpper(*src);
+        dst[offset++] = Str::ToUpper(*src);
         ++src;
     }
     dst[offset] = '\0';
     return dst;
 }
 
-char strIsInRange(char ch, char from, char to)
+char Str::IsInRange(char ch, char from, char to)
 {
     return static_cast<uint8>(ch - from) <= static_cast<uint8>(to - from);
 }
 
-char strIsNumber(char ch)
+char Str::IsNumber(char ch)
 {
-    return strIsInRange(ch, '0', '9');
+    return Str::IsInRange(ch, '0', '9');
 }
 
-char* strTrim(char* dst, uint32 dstSize, const char* src)
+char* Str::Trim(char* dst, uint32 dstSize, const char* src)
 {
-    uint32 len = Min(strLen(src), dstSize - 1);
+    uint32 len = Min(Str::Len(src), dstSize - 1);
     uint32 startOffset = 0;
     uint32 endOffset = len;
     
     {
         for (uint32 i = 0; i < len; i++) {
-            if (strIsWhitespace(src[i]))
+            if (Str::IsWhitespace(src[i]))
                 startOffset++;
             else
                 break;
@@ -15142,7 +15430,7 @@ char* strTrim(char* dst, uint32 dstSize, const char* src)
 
     if (len) {
         for (uint32 i = len; --i > 0; ) {
-            if (!strIsWhitespace(src[i]))   {
+            if (!Str::IsWhitespace(src[i]))   {
                 endOffset = i + 1;  
                 break;
             }
@@ -15156,9 +15444,9 @@ char* strTrim(char* dst, uint32 dstSize, const char* src)
     return dst;
 }
 
-char* strTrim(char* dst, uint32 dstSize, const char* src, char ch)
+char* Str::Trim(char* dst, uint32 dstSize, const char* src, char ch)
 {
-    uint32 len = Min(strLen(src), dstSize - 1);
+    uint32 len = Min(Str::Len(src), dstSize - 1);
     uint32 startOffset = 0;
     uint32 endOffset = len;
     
@@ -15187,11 +15475,11 @@ char* strTrim(char* dst, uint32 dstSize, const char* src, char ch)
     return dst;
 }
 
-char* strRemoveWhitespace(char* dst, uint32 dstSize, const char* src)
+char* Str::RemoveWhitespace(char* dst, uint32 dstSize, const char* src)
 {
     uint32 c = 0;
     while (*src) {
-        if (!strIsWhitespace(*src)) {
+        if (!Str::IsWhitespace(*src)) {
             if (c < (dstSize - 1))
                 dst[c++] = *src;
             else
@@ -15203,7 +15491,7 @@ char* strRemoveWhitespace(char* dst, uint32 dstSize, const char* src)
     return dst;
 }
 
-char* strRemoveChar(char* dst, uint32 dstSize, const char* src, char ch)
+char* Str::RemoveChar(char* dst, uint32 dstSize, const char* src, char ch)
 {
     uint32 c = 0;
     while (*src) {
@@ -15219,7 +15507,7 @@ char* strRemoveChar(char* dst, uint32 dstSize, const char* src, char ch)
     return dst;
 }
 
-const char* strFindChar(const char* str, char ch)
+const char* Str::FindChar(const char* str, char ch)
 {
     const uint8* charPtr;
     uintptr* longwordPtr;
@@ -15291,29 +15579,29 @@ const char* strFindChar(const char* str, char ch)
     return nullptr;
 }
 
-const char* strFindCharRev(const char* str, char ch)
+const char* Str::FindCharRev(const char* str, char ch)
 {
     const char *found = nullptr, *p;
     ch = (uint8)ch;
     
     if (ch == '\0')
-        return strFindChar(str, '\0');
-    while ((p = strFindChar(str, ch)) != NULL) {
+        return Str::FindChar(str, '\0');
+    while ((p = Str::FindChar(str, ch)) != NULL) {
         found = p;
         str = p + 1;
     }
     return (const char*)found;
 }
 
-const char* strFindStr(const char* RESTRICT str, const char* RESTRICT find)
+const char* Str::FindStr(const char* RESTRICT str, const char* RESTRICT find)
 {
     ASSERT(str);
     ASSERT(find);
     
     char ch = find[0];
-    const char* _start = strFindChar(str, ch);
-    uint32 find_len = strLen(find);
-    uint32 len = strLen(str);
+    const char* _start = Str::FindChar(str, ch);
+    uint32 find_len = Str::Len(find);
+    uint32 len = Str::Len(str);
     
     while (_start) {
         len -= (uint32)(intptr_t)(_start - str);
@@ -15324,44 +15612,44 @@ const char* strFindStr(const char* RESTRICT str, const char* RESTRICT find)
         if (memcmp(_start, find, find_len) == 0)
             return str;
         
-        _start = strFindChar(_start + 1, ch);
+        _start = Str::FindChar(_start + 1, ch);
     }
     
     return nullptr;
 }
 
-bool strToBool(const char* str)
+bool Str::ToBool(const char* str)
 {
     if (!str || str[0] == '\0')
         return false;
 
-    if (strIsEqualNoCase(str, "true") || strIsEqualNoCase(str, "on") || str[0] == '1')
+    if (Str::IsEqualNoCase(str, "true") || Str::IsEqualNoCase(str, "on") || str[0] == '1')
         return true;
 
     return false;    
 }
 
-int strToInt(const char* str)
+int Str::ToInt(const char* str)
 {
     return atoi(str);
 }
 
-uint32 strToUint(const char* str)
+uint32 Str::ToUint(const char* str, uint32 radix)
 {
-    return static_cast<uint32>(strtoul(str, nullptr, 10));
+    return static_cast<uint32>(strtoul(str, nullptr, radix));
 }
 
-uint64 strToUint64(const char* str)
+uint64 Str::ToUint64(const char* str, uint32 radix)
 {
-    return static_cast<uint64>(strtoull(str, nullptr, 10));
+    return static_cast<uint64>(strtoull(str, nullptr, radix));
 }
 
-double strToDouble(const char* str)
+double Str::ToDouble(const char* str)
 {
     return strtod(str, nullptr);
 }
 
-char* strReplaceChar(char* dst, uint32 dstSize, char ch, char replaceWith)
+char* Str::ReplaceChar(char* dst, uint32 dstSize, char ch, char replaceWith)
 {
     char* s = dst;
     uint32 count = 0; 
@@ -15373,10 +15661,24 @@ char* strReplaceChar(char* dst, uint32 dstSize, char ch, char replaceWith)
     return dst;
 }
 
-const char* strSkipWhitespace(const char* str)
+char* Str::SubStr(char* dst, uint32 dstSize, const char* str, uint32 startIdx, uint32 endIdx)
+{
+    if (endIdx == 0)
+        endIdx = Str::Len(str);
+
+    ASSERT(startIdx < endIdx);
+
+    uint32 srcCopyLen = Min(endIdx - startIdx, dstSize - 1);
+    memcpy(dst, str + startIdx, srcCopyLen);
+    dst[srcCopyLen] = '\0';
+
+    return dst;
+}
+
+const char* Str::SkipWhitespace(const char* str)
 {
     while (*str) {
-        if (strIsWhitespace(*str))
+        if (Str::IsWhitespace(*str))
             ++str;
         else
             break;
@@ -15384,7 +15686,7 @@ const char* strSkipWhitespace(const char* str)
     return str;
 }
 
-const char* strSkipChar(const char* str, char ch)
+const char* Str::SkipChar(const char* str, char ch)
 {
     while (*str) {
         if (*str == ch)
@@ -15395,7 +15697,7 @@ const char* strSkipChar(const char* str, char ch)
     return str;
 }
 
-Span<char*> strSplit(const char* str, char ch, Allocator* alloc)
+Span<char*> Str::Split(const char* str, char ch, MemAllocator* alloc)
 {
     Array<char*> splits(alloc);
 
@@ -15404,12 +15706,12 @@ Span<char*> strSplit(const char* str, char ch, Allocator* alloc)
     while (*s) {
         if (*s == ch) {
             uint32 len = PtrToInt<uint32>((void*)(s - start));
-            char* splitItem = memAllocCopy<char>(start, len + 1, alloc);
+            char* splitItem = Mem::AllocCopy<char>(start, len + 1, alloc);
             splitItem[len] = 0;
             splits.Push(splitItem);
 
-            s = strSkipChar(s, ch);
-            start = strSkipChar(s, ch);
+            s = Str::SkipChar(s, ch);
+            start = Str::SkipChar(s, ch);
         }
 
         if (*s) ++s;
@@ -15417,37 +15719,31 @@ Span<char*> strSplit(const char* str, char ch, Allocator* alloc)
 
     if (start < s) {
         uint32 len = PtrToInt<uint32>((void*)(s - start));
-        char* splitItem = memAllocCopy<char>(start, len + 1, alloc);
+        char* splitItem = Mem::AllocCopy<char>(start, len + 1, alloc);
         splits.Push(splitItem);
     }
 
     return splits.Detach();
 }
 
-Span<char*> strSplitWhitespace(const char* str, Allocator* alloc)
+Span<char*> Str::SplitWhitespace(const char* str, MemAllocator* alloc)
 {
     Array<char*> splits(alloc);
 
     const char* s = str;
     const char* start = str;
     while (*s) {
-        if (strIsWhitespace(*s)) {
+        if (Str::IsWhitespace(*s)) {
             if (start != s) {
                 uint32 len = PtrToInt<uint32>((void*)(s - start));
-                char* splitItem = memAllocCopy<char>(start, len + 1, alloc);
+                char* splitItem = Mem::AllocCopy<char>(start, len + 1, alloc);
                 splitItem[len] = 0;
                 splits.Push(splitItem);
             }
 
-            s = strSkipWhitespace(s);
+            s = Str::SkipWhitespace(s);
 
-            if (*s) {
-                start = s + 1;
-                ++s;
-            }
-            else {
-                start = s;
-            }
+            start = s;
         }
         else {
             ++s;
@@ -15456,7 +15752,7 @@ Span<char*> strSplitWhitespace(const char* str, Allocator* alloc)
 
     if (start != s) {
         uint32 len = PtrToInt<uint32>((void*)(s - start));
-        char* splitItem = memAllocCopy<char>(start, len + 1, alloc);
+        char* splitItem = Mem::AllocCopy<char>(start, len + 1, alloc);
         splits.Push(splitItem);
     }
 
@@ -15471,7 +15767,6 @@ Span<char*> strSplitWhitespace(const char* str, Allocator* alloc)
 
 #if PLATFORM_WINDOWS
 
-#include <limits.h>     // LONG_MAX
 #include <synchapi.h>   // InitializeCriticalSectionAndSpinCount, InitializeCriticalSection, ...
 #include <sysinfoapi.h> // GetPhysicallyInstalledSystemMemory
 #include <intrin.h>     // __cpuid
@@ -15578,16 +15873,16 @@ struct Shell32
 
 static AdvApi32 gAdvApi32;
 
-static void sysLoadAdvApi32()
+static void _LoadAdvApi32()
 {
     if (gAdvApi32.dll == nullptr) {
-        gAdvApi32.dll = (HANDLE)sysLoadDLL("Advapi32.dll");
+        gAdvApi32.dll = (HANDLE)OS::LoadDLL("Advapi32.dll");
         ASSERT_ALWAYS(gAdvApi32.dll, "Could not load system DLL: Advapi32.dll");
 
-        gAdvApi32.RegGetValueA = (AdvApi32::RegGetValueAFn)sysSymbolAddress(gAdvApi32.dll, "RegGetValueA");
-        gAdvApi32.OpenProcessToken = (AdvApi32::OpenProcessTokenFn)sysSymbolAddress(gAdvApi32.dll, "OpenProcessToken");
-        gAdvApi32.AdjustTokenPrivileges = (AdvApi32::AdjustTokenPrivilegesFn)sysSymbolAddress(gAdvApi32.dll, "AdjustTokenPrivileges");
-        gAdvApi32.LookupPrivilegeValueA = (AdvApi32::LookupPrivilegeValueAFn)sysSymbolAddress(gAdvApi32.dll, "LookupPrivilegeValueA");
+        gAdvApi32.RegGetValueA = (AdvApi32::RegGetValueAFn)OS::GetSymbolAddress(gAdvApi32.dll, "RegGetValueA");
+        gAdvApi32.OpenProcessToken = (AdvApi32::OpenProcessTokenFn)OS::GetSymbolAddress(gAdvApi32.dll, "OpenProcessToken");
+        gAdvApi32.AdjustTokenPrivileges = (AdvApi32::AdjustTokenPrivilegesFn)OS::GetSymbolAddress(gAdvApi32.dll, "AdjustTokenPrivileges");
+        gAdvApi32.LookupPrivilegeValueA = (AdvApi32::LookupPrivilegeValueAFn)OS::GetSymbolAddress(gAdvApi32.dll, "LookupPrivilegeValueA");
 
         ASSERT_ALWAYS(gAdvApi32.RegGetValueA && gAdvApi32.OpenProcessToken && gAdvApi32.AdjustTokenPrivileges && gAdvApi32.LookupPrivilegeValueA,
                       "Loading AdvApi32 API failed");
@@ -15596,16 +15891,16 @@ static void sysLoadAdvApi32()
 
 static Ole32 gOle32;
 
-static void sysLoadOle32()
+static void _LoadOle32()
 {
     if (gOle32.dll == nullptr) {
-        gOle32.dll = (HANDLE)sysLoadDLL("Ole32.dll");
+        gOle32.dll = (HANDLE)OS::LoadDLL("Ole32.dll");
         ASSERT_ALWAYS(gOle32.dll, "Could not load system DLL: Ole32.dll");
 
-        gOle32.StringFromGUID2 = (Ole32::StringFromGUID2Fn)sysSymbolAddress(gOle32.dll, "StringFromGUID2");
-        gOle32.CoCreateGuid = (Ole32::CoCreateGuidFn)sysSymbolAddress(gOle32.dll, "CoCreateGuid");
-        gOle32.CoTaskMemFree = (Ole32::CoTaskMemFreeFn)sysSymbolAddress(gOle32.dll, "CoTaskMemFree");
-        gOle32.CLSIDFromString = (Ole32::CLSIDFromStringFn)sysSymbolAddress(gOle32.dll, "CLSIDFromString");
+        gOle32.StringFromGUID2 = (Ole32::StringFromGUID2Fn)OS::GetSymbolAddress(gOle32.dll, "StringFromGUID2");
+        gOle32.CoCreateGuid = (Ole32::CoCreateGuidFn)OS::GetSymbolAddress(gOle32.dll, "CoCreateGuid");
+        gOle32.CoTaskMemFree = (Ole32::CoTaskMemFreeFn)OS::GetSymbolAddress(gOle32.dll, "CoTaskMemFree");
+        gOle32.CLSIDFromString = (Ole32::CLSIDFromStringFn)OS::GetSymbolAddress(gOle32.dll, "CLSIDFromString");
 
         ASSERT_ALWAYS(gOle32.StringFromGUID2 && gOle32.CoCreateGuid && gOle32.CoTaskMemFree && gOle32.CLSIDFromString,
                       "Loading Ole32 API failed");
@@ -15614,14 +15909,14 @@ static void sysLoadOle32()
 
 static Shell32 gShell32;
 
-static void sysLoadShell32()
+static void _LoadShell32()
 {
     if (gShell32.dll == nullptr) {
-        gShell32.dll = (HANDLE)sysLoadDLL("Shell32.dll");
+        gShell32.dll = (HANDLE)OS::LoadDLL("Shell32.dll");
         ASSERT_ALWAYS(gShell32.dll, "Could not load system DLL: Shell32.dll");
 
-        gShell32.ShellExecuteA = (Shell32::ShellExecuteAFn)sysSymbolAddress(gShell32.dll, "ShellExecuteA");
-        gShell32.SHGetKnownFolderPath = (Shell32::SHGetKnownFolderPathFn)sysSymbolAddress(gShell32.dll, "SHGetKnownFolderPath");
+        gShell32.ShellExecuteA = (Shell32::ShellExecuteAFn)OS::GetSymbolAddress(gShell32.dll, "ShellExecuteA");
+        gShell32.SHGetKnownFolderPath = (Shell32::SHGetKnownFolderPathFn)OS::GetSymbolAddress(gShell32.dll, "SHGetKnownFolderPath");
 
         ASSERT_ALWAYS(gShell32.ShellExecuteA && gShell32.SHGetKnownFolderPath, "Loading Shell32 API failed");
     }
@@ -15637,22 +15932,22 @@ struct ThreadImpl
     size_t stackSize;
     char name[32];
     DWORD tId;
-    atomicUint32 running;
+    AtomicUint32 running;
     bool init;
 };
 static_assert(sizeof(ThreadImpl) <= sizeof(Thread), "Thread size mismatch");
 
-static DWORD WINAPI threadStubFn(LPVOID arg)
+static DWORD WINAPI _ThreadStubFn(LPVOID arg)
 {
     ThreadImpl* thrd = reinterpret_cast<ThreadImpl*>(arg);
     thrd->tId = GetCurrentThreadId();
-    threadSetCurrentThreadName(thrd->name);
+    Thread::SetCurrentThreadName(thrd->name);
 
     ASSERT(thrd->threadFn);
-    atomicStore32Explicit(&thrd->running, 1, AtomicMemoryOrder::Release);
+    Atomic::StoreExplicit(&thrd->running, 1, AtomicMemoryOrder::Release);
     thrd->sem.Post();
     DWORD r = static_cast<DWORD>(thrd->threadFn(thrd->userData));
-    atomicStore32Explicit(&thrd->running, 0, AtomicMemoryOrder::Release);
+    Atomic::StoreExplicit(&thrd->running, 0, AtomicMemoryOrder::Release);
 
     return r;
 }
@@ -15678,10 +15973,10 @@ bool Thread::Start(const ThreadDesc& desc)
     thrd->sem.Initialize();
     thrd->threadFn = desc.entryFn;
     thrd->userData = desc.userData;
-    thrd->stackSize = Max<size_t>(desc.stackSize, 64*kKB);
-    strCopy(thrd->name, sizeof(thrd->name), desc.name ? desc.name : "");
+    thrd->stackSize = Max<size_t>(desc.stackSize, 64*SIZE_KB);
+    Str::Copy(thrd->name, sizeof(thrd->name), desc.name ? desc.name : "");
 
-    thrd->handle = CreateThread(nullptr, thrd->stackSize, (LPTHREAD_START_ROUTINE)threadStubFn, thrd, 0, nullptr);
+    thrd->handle = CreateThread(nullptr, thrd->stackSize, (LPTHREAD_START_ROUTINE)_ThreadStubFn, thrd, 0, nullptr);
     if (thrd->handle == nullptr) {
         thrd->sem.Release();
         return false;
@@ -15691,7 +15986,7 @@ bool Thread::Start(const ThreadDesc& desc)
     thrd->sem.Wait();   // Ensure that thread callback is init
     thrd->init = true;
 
-    _private::sysCountersAddThread(thrd->stackSize);
+    _private::CountersAddThread(thrd->stackSize);
 
     return true;
 }
@@ -15713,7 +16008,7 @@ int Thread::Stop()
 
     thrd->init = false;
 
-    _private::sysCountersRemoveThread(thrd->stackSize);
+    _private::CountersRemoveThread(thrd->stackSize);
 
     return static_cast<int>(exitCode);
 }
@@ -15721,7 +16016,7 @@ int Thread::Stop()
 bool Thread::IsRunning()
 {
     ThreadImpl* thrd = reinterpret_cast<ThreadImpl*>(mData);
-    return atomicLoad32Explicit(&thrd->running, AtomicMemoryOrder::Acquire) == 1;
+    return Atomic::LoadExplicit(&thrd->running, AtomicMemoryOrder::Acquire) == 1;
 }
 
 void Thread::SetPriority(ThreadPriority prio)
@@ -15741,22 +16036,22 @@ void Thread::SetPriority(ThreadPriority prio)
     ASSERT(r);
 }
 
-void threadYield()
+void Thread::SwitchContext()
 {
     SwitchToThread();
 }
 
-uint32 threadGetCurrentId()
+uint32 Thread::GetCurrentId()
 {
     return GetCurrentThreadId();
 }
 
-void threadSleep(uint32 msecs)
+void Thread::Sleep(uint32 msecs)
 {
-    Sleep((DWORD)msecs);
+    ::Sleep((DWORD)msecs);
 }
 
-void threadSetCurrentThreadPriority(ThreadPriority prio)
+void Thread::SetCurrentThreadPriority(ThreadPriority prio)
 {
     int prioWin = 0;
     switch (prio) {
@@ -15771,10 +16066,10 @@ void threadSetCurrentThreadPriority(ThreadPriority prio)
     ASSERT(r);
 }
 
-void threadSetCurrentThreadName(const char* name)
+void Thread::SetCurrentThreadName(const char* name)
 {
     wchar_t namew[32];
-    strUt8ToWide(name, namew, sizeof(namew));
+    Str::Utf8ToWide(name, namew, sizeof(namew));
     SetThreadDescription(GetCurrentThread(), namew);
 
     #if TRACY_ENABLE
@@ -15782,11 +16077,11 @@ void threadSetCurrentThreadName(const char* name)
     #endif
 }
 
-void threadGetCurrentThreadName(char* nameOut, uint32 nameSize)
+void Thread::GetCurrentThreadName(char* nameOut, uint32 nameSize)
 {
     PWSTR namew;
     if (SUCCEEDED(GetThreadDescription(GetCurrentThread(), &namew)))
-        strWideToUtf8(namew, nameOut, nameSize);
+        Str::WideToUtf8(namew, nameOut, nameSize);
     else 
         nameOut[0] = 0;
 }
@@ -15804,7 +16099,7 @@ void Mutex::Initialize(uint32 spinCount)
     [[maybe_unused]] BOOL r = InitializeCriticalSectionAndSpinCount(&_m->handle, spinCount);
     ASSERT_ALWAYS(r, "InitializeCriticalSection failed");
 
-    _private::sysCountersAddMutex();
+    _private::CountersAddMutex();
 }
 
 void Mutex::Release()
@@ -15812,7 +16107,7 @@ void Mutex::Release()
     MutexImpl* _m = reinterpret_cast<MutexImpl*>(mData);
     DeleteCriticalSection(&_m->handle);
 
-    _private::sysCountersRemoveMutex();
+    _private::CountersRemoveMutex();
 }
 
 void Mutex::Enter()
@@ -15899,7 +16194,7 @@ void Semaphore::Initialize()
     _sem->handle = CreateSemaphoreA(nullptr, 0, LONG_MAX, nullptr);
     ASSERT_ALWAYS(_sem->handle != INVALID_HANDLE_VALUE, "Failed to create semaphore");
 
-    _private::sysCountersAddSemaphore();
+    _private::CountersAddSemaphore();
 }
 
 void Semaphore::Release()
@@ -15909,7 +16204,7 @@ void Semaphore::Release()
         CloseHandle(_sem->handle);
         _sem->handle = INVALID_HANDLE_VALUE;
 
-        _private::sysCountersRemoveSemaphore();
+        _private::CountersRemoveSemaphore();
     }
 }
 
@@ -15944,7 +16239,7 @@ void Signal::Initialize()
     InitializeConditionVariable(&_sig->cond);
     _sig->value = 0;
 
-    _private::sysCountersAddSignal();
+    _private::CountersAddSignal();
 }
 
 void Signal::Release()
@@ -15952,7 +16247,7 @@ void Signal::Release()
     SignalImpl* _sig = reinterpret_cast<SignalImpl*>(mData);
     DeleteCriticalSection(&_sig->mutex);
 
-    _private::sysCountersRemoveSignal();
+    _private::CountersRemoveSignal();
 }
 
 void Signal::Raise()
@@ -15986,19 +16281,19 @@ bool Signal::Wait(uint32 msecs)
     return !timedOut;
 }
 
-void Signal::Decrement()
+void Signal::Decrement(uint32 count)
 {
     SignalImpl* _sig = reinterpret_cast<SignalImpl*>(mData);
     EnterCriticalSection(&_sig->mutex);
-    --_sig->value;
+    _sig->value -= int(count);
     LeaveCriticalSection(&_sig->mutex);
 }
 
-void Signal::Increment()
+void Signal::Increment(uint32 count)
 {
     SignalImpl* _sig = reinterpret_cast<SignalImpl*>(mData);
     EnterCriticalSection(&_sig->mutex);
-    ++_sig->value;
+    _sig->value += int(count);
     LeaveCriticalSection(&_sig->mutex);
 }
 
@@ -16045,7 +16340,7 @@ FORCE_INLINE int64 timerInt64MulDiv(int64 value, int64 numer, int64 denom)
     return q * numer + r * numer / denom;
 }
 
-void _private::timerInitialize() 
+void Timer::Initialize() 
 {
     gTimer.init = true;
     
@@ -16053,7 +16348,7 @@ void _private::timerInitialize()
     QueryPerformanceCounter(&gTimer.start);
 }
 
-uint64 timerGetTicks() 
+uint64 Timer::GetTicks() 
 {
     ASSERT_MSG(gTimer.init, "Timer not initialized. call timerInitialize()");
     
@@ -16066,16 +16361,16 @@ struct UUIDImpl
 {
     GUID guid;
 };
-static_assert(sizeof(UUIDImpl) <= sizeof(SysUUID), "UUID size mismatch");
+static_assert(sizeof(UUIDImpl) <= sizeof(UniqueID), "UUID size mismatch");
 
-bool SysUUID::operator==(const SysUUID& uuid) const
+bool UniqueID::operator==(const UniqueID& uuid) const
 {
     return memcmp(data, uuid.data, sizeof(UUIDImpl)) == 0;
 }
 
-bool uuidGenerate(SysUUID* _uuid)
+bool uuidGenerate(UniqueID* _uuid)
 {
-    sysLoadOle32();
+    _LoadOle32();
 
     UUIDImpl* uuid = reinterpret_cast<UUIDImpl*>(_uuid);
     if (gOle32.CoCreateGuid(&uuid->guid) != S_OK)
@@ -16084,9 +16379,9 @@ bool uuidGenerate(SysUUID* _uuid)
     return true;
 }
 
-bool uuidToString(const SysUUID& _uuid, char* str, uint32 size)
+bool uuidToString(const UniqueID& _uuid, char* str, uint32 size)
 {
-    sysLoadOle32();
+    _LoadOle32();
 
     const UUIDImpl& uuid = reinterpret_cast<const UUIDImpl&>(_uuid);
     wchar_t guidStr[39];
@@ -16095,7 +16390,7 @@ bool uuidToString(const SysUUID& _uuid, char* str, uint32 size)
     if (WideCharToMultiByte(CP_UTF8, 0, guidStr, -1, str, size, nullptr, nullptr) == 0)
     return false;
 
-    uint32 len = strLen(str);
+    uint32 len = Str::Len(str);
     if (str[0] == '{') {
         memmove(str, str + 1, len + 1);
         --len;
@@ -16105,9 +16400,9 @@ bool uuidToString(const SysUUID& _uuid, char* str, uint32 size)
     return true;
 }
 
-bool uuidFromString(SysUUID* _uuid, const char* str)
+bool uuidFromString(UniqueID* _uuid, const char* str)
 {
-    sysLoadOle32();
+    _LoadOle32();
 
     ASSERT(str);
 
@@ -16116,16 +16411,16 @@ bool uuidFromString(SysUUID* _uuid, const char* str)
 
     char strTmp[64] {};
 
-    uint32 len = strLen(str);
+    uint32 len = Str::Len(str);
     if (str[0] != '{') {
         strTmp[0] = '{';
-        strConcat(strTmp, sizeof(strTmp), str);
+        Str::Concat(strTmp, sizeof(strTmp), str);
         if (str[len - 1] != '}') 
-        strConcat(strTmp, sizeof(strTmp), "}");
+        Str::Concat(strTmp, sizeof(strTmp), "}");
     }
     else {
         ASSERT(str[len - 1] == '}');
-        strCopy(strTmp, sizeof(strTmp), str);
+        Str::Copy(strTmp, sizeof(strTmp), str);
     }        
 
     UUIDImpl* uuid = reinterpret_cast<UUIDImpl*>(_uuid);
@@ -16139,12 +16434,12 @@ bool uuidFromString(SysUUID* _uuid, const char* str)
 
 
 
-DLLHandle sysLoadDLL(const char* filepath, char** pErrorMsg)
+OSDLL OS::LoadDLL(const char* filepath, char** pErrorMsg)
 {
-    DLLHandle dll = (DLLHandle)LoadLibraryA(filepath);
+    OSDLL dll = (OSDLL)LoadLibraryA(filepath);
     if (dll == nullptr && pErrorMsg) {
         static char errMsg[64];
-        strPrintFmt(errMsg, sizeof(errMsg), "GetLastError: %u", GetLastError());
+        Str::PrintFmt(errMsg, sizeof(errMsg), "GetLastError: %u", GetLastError());
         *pErrorMsg = errMsg;
     }
     else {
@@ -16154,33 +16449,33 @@ DLLHandle sysLoadDLL(const char* filepath, char** pErrorMsg)
     return dll;
 }
 
-void sysUnloadDLL(DLLHandle dll)
+void OS::UnloadDLL(OSDLL dll)
 {
     if (dll)
         FreeLibrary((HMODULE)dll);
 }
 
-void* sysSymbolAddress(DLLHandle dll, const char* symbolName)
+void* OS::GetSymbolAddress(OSDLL dll, const char* symbolName)
 {
     return (void*)GetProcAddress((HMODULE)dll, symbolName);
 }
 
-size_t sysGetPageSize()
+size_t OS::GetPageSize()
 {
     SYSTEM_INFO si;
     GetSystemInfo(&si);
     return (size_t)si.dwPageSize;
 }
 
-bool sysWin32GetRegisterLocalMachineString(const char* subkey, const char* value, char* dst, size_t dstSize)
+bool OS::Win32GetRegisterLocalMachineString(const char* subkey, const char* value, char* dst, size_t dstSize)
 {
-    sysLoadAdvApi32();
+    _LoadAdvApi32();
 
     DWORD dataSize = (DWORD)dstSize;
     return gAdvApi32.RegGetValueA(HKEY_LOCAL_MACHINE, subkey, value, RRF_RT_REG_SZ|RRF_RT_REG_EXPAND_SZ, nullptr, dst, &dataSize) == ERROR_SUCCESS;
 }
 
-static uint32 sysGetPhysicalCoresCount()
+static uint32 _GetPhysicalCoresCount()
 {
 	static uint32 cachedCoreCount = UINT32_MAX;
 	if (cachedCoreCount != UINT32_MAX)
@@ -16191,7 +16486,7 @@ static uint32 sysGetPhysicalCoresCount()
 	DWORD countCount = 0;
 	if (!GetLogicalProcessorInformation(buffer, &returnLen)) {
 		if (GetLastError() == ERROR_INSUFFICIENT_BUFFER)
-			buffer = (SYSTEM_LOGICAL_PROCESSOR_INFORMATION*)memAlloc(returnLen);
+			buffer = (SYSTEM_LOGICAL_PROCESSOR_INFORMATION*)Mem::Alloc(returnLen);
 	}
 
 	if (buffer != nullptr && GetLogicalProcessorInformation(buffer, &returnLen)) {
@@ -16206,14 +16501,14 @@ static uint32 sysGetPhysicalCoresCount()
 		}
 	}
 
-	memFree(buffer);
+	Mem::Free(buffer);
 
 	cachedCoreCount = Clamp<uint32>(countCount, 1, _limits::SYS_MAX_CORES);
     ASSERT_MSG(cachedCoreCount <= _limits::SYS_MAX_CORES, "CPU core count appears to be too high (%u). Consider increasing SYS_MAX_CORES", cachedCoreCount);
 	return cachedCoreCount;
 }
 
-void sysGetSysInfo(SysInfo* info)
+void OS::GetSysInfo(SysInfo* info)
 {
     struct i4 
     {
@@ -16245,7 +16540,7 @@ void sysGetSysInfo(SysInfo* info)
     *(int*)(vendor + 4) = data[0].i[3];
     *(int*)(vendor + 8) = data[0].i[2];
     
-    strCopy(info->cpuName, sizeof(info->cpuName), vendor);
+    Str::Copy(info->cpuName, sizeof(info->cpuName), vendor);
     
     if (ids >= 1) {
         f_1_ECX_ = static_cast<uint32>(data[1].i[2]);
@@ -16282,13 +16577,13 @@ void sysGetSysInfo(SysInfo* info)
         memcpy(brand + 32, extData[4].i, sizeof(cpui));
     }
 
-    strCopy(info->cpuModel, sizeof(info->cpuModel), brand);
-    strTrim(info->cpuModel, sizeof(info->cpuModel), info->cpuModel);
+    Str::Copy(info->cpuModel, sizeof(info->cpuModel), brand);
+    Str::Trim(info->cpuModel, sizeof(info->cpuModel), info->cpuModel);
 
     #if CPU_X86
-        info->cpuFamily = SysCpuFamily::x86_64;
+        info->cpuFamily = SysInfo::CpuFamily::x86_64;
     #else
-        info->cpuFamily = SysCpuFamily::ARM64;
+        info->cpuFamily = SysInfo::CpuFamily::ARM64;
     #endif
     info->cpuCapsSSE = ((f_1_EDX_ >> 25) & 0x1) ? true : false;
     info->cpuCapsSSE2 = ((f_1_EDX_ >> 26) & 0x1) ? true : false;
@@ -16303,7 +16598,7 @@ void sysGetSysInfo(SysInfo* info)
     GetSystemInfo(&sysinfo);
     
     info->pageSize = sysinfo.dwPageSize;
-    info->coreCount = sysGetPhysicalCoresCount();
+    info->coreCount = _GetPhysicalCoresCount();
 
     ULONGLONG memSizeKb;
     if (GetPhysicallyInstalledSystemMemory(&memSizeKb)) 
@@ -16314,14 +16609,14 @@ void sysGetSysInfo(SysInfo* info)
 }
 
 #if PLATFORM_DESKTOP
-SysProcess::SysProcess() :
+OSProcess::OSProcess() :
     mProcess(INVALID_HANDLE_VALUE),
     mStdOutPipeRead(INVALID_HANDLE_VALUE),
     mStdErrPipeRead(INVALID_HANDLE_VALUE)
 {
 }
 
-SysProcess::~SysProcess()
+OSProcess::~OSProcess()
 {
     if (mStdOutPipeRead != INVALID_HANDLE_VALUE) 
         CloseHandle(mStdOutPipeRead);
@@ -16331,16 +16626,16 @@ SysProcess::~SysProcess()
         CloseHandle(mProcess);
 }
 
-bool SysProcess::Run(const char* cmdline, SysProcessFlags flags, const char* cwd)
+bool OSProcess::Run(const char* cmdline, OSProcessFlags flags, const char* cwd)
 {
     ASSERT(mProcess == INVALID_HANDLE_VALUE);
 
     HANDLE stdOutPipeWrite = INVALID_HANDLE_VALUE;
     HANDLE stdErrPipeWrite = INVALID_HANDLE_VALUE;
     BOOL r;
-    BOOL inheritHandles = (flags & SysProcessFlags::InheritHandles) == SysProcessFlags::InheritHandles ? TRUE : FALSE;
+    BOOL inheritHandles = (flags & OSProcessFlags::InheritHandles) == OSProcessFlags::InheritHandles ? TRUE : FALSE;
 
-    if ((flags & SysProcessFlags::CaptureOutput) == SysProcessFlags::CaptureOutput) {
+    if ((flags & OSProcessFlags::CaptureOutput) == OSProcessFlags::CaptureOutput) {
         SECURITY_ATTRIBUTES saAttr {}; 
         saAttr.nLength = sizeof(SECURITY_ATTRIBUTES); 
         saAttr.bInheritHandle = inheritHandles; 
@@ -16362,7 +16657,7 @@ bool SysProcess::Run(const char* cmdline, SysProcessFlags flags, const char* cwd
     PROCESS_INFORMATION procInfo {};
     STARTUPINFOA startInfo {};
     startInfo.cb = sizeof(startInfo);
-    if ((flags & SysProcessFlags::CaptureOutput) == SysProcessFlags::CaptureOutput) {
+    if ((flags & OSProcessFlags::CaptureOutput) == OSProcessFlags::CaptureOutput) {
         startInfo.dwFlags = STARTF_USESTDHANDLES;
         startInfo.hStdOutput = stdOutPipeWrite;
         startInfo.hStdError = stdErrPipeWrite;
@@ -16370,24 +16665,24 @@ bool SysProcess::Run(const char* cmdline, SysProcessFlags flags, const char* cwd
     }
 
     MemTempAllocator tmpAlloc;
-    char* cmdLineCopy = memAllocCopy<char>(cmdline, strLen(cmdline)+1, &tmpAlloc);
+    char* cmdLineCopy = Mem::AllocCopy<char>(cmdline, Str::Len(cmdline)+1, &tmpAlloc);
     DWORD createProcessFlags = 0; // TODO
 
-    if ((flags & SysProcessFlags::DontCreateConsole) == SysProcessFlags::DontCreateConsole) 
+    if ((flags & OSProcessFlags::DontCreateConsole) == OSProcessFlags::DontCreateConsole) 
         createProcessFlags |= CREATE_NO_WINDOW;
-    if ((flags & SysProcessFlags::ForceCreateConsole) == SysProcessFlags::ForceCreateConsole)
+    if ((flags & OSProcessFlags::ForceCreateConsole) == OSProcessFlags::ForceCreateConsole)
         createProcessFlags |= CREATE_NEW_CONSOLE;
 
     r = CreateProcessA(nullptr, cmdLineCopy, nullptr, nullptr, inheritHandles, createProcessFlags, NULL, cwd, &startInfo, &procInfo);
     if (!r) {
-        logError("Run process failed: %s", cmdline);
+        LOG_ERROR("Run process failed: %s", cmdline);
         return false;
     }
 
     CloseHandle(procInfo.hThread);
     mProcess = procInfo.hProcess;
 
-    if ((flags & SysProcessFlags::CaptureOutput) == SysProcessFlags::CaptureOutput) {
+    if ((flags & OSProcessFlags::CaptureOutput) == OSProcessFlags::CaptureOutput) {
         CloseHandle(stdOutPipeWrite);
         CloseHandle(stdErrPipeWrite);
     }
@@ -16395,24 +16690,24 @@ bool SysProcess::Run(const char* cmdline, SysProcessFlags flags, const char* cwd
     return true;
 }
 
-void SysProcess::Wait() const
+void OSProcess::Wait() const
 {
     ASSERT(mProcess != INVALID_HANDLE_VALUE);
     WaitForSingleObject(mProcess, INFINITE);
 }
 
-bool SysProcess::IsRunning() const
+bool OSProcess::IsRunning() const
 {
     ASSERT(mProcess != INVALID_HANDLE_VALUE);
     return WaitForSingleObject(mProcess, 0) != WAIT_OBJECT_0;
 }
 
-bool SysProcess::IsValid() const
+bool OSProcess::IsValid() const
 {
     return mProcess != INVALID_HANDLE_VALUE;
 }
 
-static void sysTerminateChildProcesses(DWORD parentProcessId) 
+static void _TerminateChildProcesses(DWORD parentProcessId) 
 {
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnapshot != INVALID_HANDLE_VALUE) {
@@ -16423,8 +16718,8 @@ static void sysTerminateChildProcesses(DWORD parentProcessId)
                 if (pe.th32ParentProcessID == parentProcessId) {
                     HANDLE childProcess = OpenProcess(PROCESS_TERMINATE, TRUE, pe.th32ProcessID);
                     if (childProcess) {
-                        logDebug("Terminating child process: %u (%s)", pe.th32ProcessID, pe.szExeFile);
-                        sysTerminateChildProcesses(pe.th32ProcessID);
+                        LOG_DEBUG("Terminating child process: %u (%s)", pe.th32ProcessID, pe.szExeFile);
+                        _TerminateChildProcesses(pe.th32ProcessID);
 
                         TerminateProcess(childProcess, 1);
                         CloseHandle(childProcess);
@@ -16437,23 +16732,23 @@ static void sysTerminateChildProcesses(DWORD parentProcessId)
     }
 };
 
-void SysProcess::Abort()
+void OSProcess::Abort()
 {
     ASSERT(mProcess != INVALID_HANDLE_VALUE);
 
     DWORD processId = GetProcessId(mProcess);
-    sysTerminateChildProcesses(processId);
+    _TerminateChildProcesses(processId);
 
     BOOL r = TerminateProcess(mProcess, 1);
     if (!r) {
-        logError("Process failed to terminate: 0x%x (ErrorCode: %u)", mProcess, GetLastError());
+        LOG_ERROR("Process failed to terminate: 0x%x (ErrorCode: %u)", mProcess, GetLastError());
     }
     else {
         mProcess = INVALID_HANDLE_VALUE;
     }
 }
 
-int SysProcess::GetExitCode() const
+int OSProcess::GetExitCode() const
 {
     ASSERT(mProcess != INVALID_HANDLE_VALUE);
     DWORD exitCode = UINT32_MAX;
@@ -16461,7 +16756,7 @@ int SysProcess::GetExitCode() const
     return static_cast<int>(exitCode);
 }
 
-uint32 SysProcess::ReadStdOut(void* data, uint32 size) const
+uint32 OSProcess::ReadStdOut(void* data, uint32 size) const
 {
     ASSERT(mStdOutPipeRead != INVALID_HANDLE_VALUE);
 
@@ -16470,7 +16765,7 @@ uint32 SysProcess::ReadStdOut(void* data, uint32 size) const
     return (r && bytesRead) ? bytesRead : 0; 
 }
 
-uint32 SysProcess::ReadStdErr(void* data, uint32 size) const
+uint32 OSProcess::ReadStdErr(void* data, uint32 size) const
 {
     ASSERT(mStdErrPipeRead != INVALID_HANDLE_VALUE);
 
@@ -16480,13 +16775,13 @@ uint32 SysProcess::ReadStdErr(void* data, uint32 size) const
 }
 #endif  // PLATFORM_DESKTOP
 
-bool sysWin32IsProcessRunning(const char* execName)
+bool OS::Win32IsProcessRunning(const char* execName)
 {
     PROCESSENTRY32 entry { sizeof(PROCESSENTRY32) };
 
-    char execNameTrimmed[kMaxPath];
-    strTrim(execNameTrimmed, sizeof(execNameTrimmed), execName, '\'');
-    strTrim(execNameTrimmed, sizeof(execNameTrimmed), execNameTrimmed, '"');
+    char execNameTrimmed[PATH_CHARS_MAX];
+    Str::Trim(execNameTrimmed, sizeof(execNameTrimmed), execName, '\'');
+    Str::Trim(execNameTrimmed, sizeof(execNameTrimmed), execNameTrimmed, '"');
 
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, TH32CS_SNAPPROCESS);
     if (!Process32First(snapshot, &entry)) {
@@ -16498,11 +16793,11 @@ bool sysWin32IsProcessRunning(const char* execName)
     do {
         if constexpr (sizeof(CHAR) == 2) {
             char exeFile[MAX_PATH];
-            if (strWideToUtf8((const wchar_t*)entry.szExeFile, exeFile, sizeof(exeFile)))
-                isRunning = strIsEqualNoCase(exeFile, execNameTrimmed);
+            if (Str::WideToUtf8((const wchar_t*)entry.szExeFile, exeFile, sizeof(exeFile)))
+                isRunning = Str::IsEqualNoCase(exeFile, execNameTrimmed);
         }
         else {
-            isRunning = strIsEqualNoCase((const char*)entry.szExeFile, execNameTrimmed);
+            isRunning = Str::IsEqualNoCase((const char*)entry.szExeFile, execNameTrimmed);
         }
     } while (!isRunning && Process32Next(snapshot, &entry));
 
@@ -16510,12 +16805,12 @@ bool sysWin32IsProcessRunning(const char* execName)
     return false;
 }
 
-SysWin32ShellExecuteResult sysWin32ShellExecute(const char* filepath, const char* args, 
-                                                const char* cwd, SysWin32ShowWindow showFlag, 
+OSWin32ShellExecuteResult OS::Win32ShellExecute(const char* filepath, const char* args, 
+                                                const char* cwd, OSWin32ShowWindow showFlag, 
                                                 const char* operation,
                                                 void** pInstance)
 {
-    sysLoadShell32();
+    _LoadShell32();
 
     HINSTANCE hInst = gShell32.ShellExecuteA(nullptr, operation, filepath, args, cwd, (INT)showFlag);
 
@@ -16524,55 +16819,55 @@ SysWin32ShellExecuteResult sysWin32ShellExecute(const char* filepath, const char
         switch (errCode) {
         case 0:
         case SE_ERR_OOM:
-            return SysWin32ShellExecuteResult::OutOfMemory;
+            return OSWin32ShellExecuteResult::OutOfMemory;
         case SE_ERR_DLLNOTFOUND:
         case SE_ERR_FNF:
-            return SysWin32ShellExecuteResult::FileNotFound;
+            return OSWin32ShellExecuteResult::FileNotFound;
         case SE_ERR_PNF:
-            return SysWin32ShellExecuteResult::PathNotFound;
+            return OSWin32ShellExecuteResult::PathNotFound;
         case ERROR_BAD_FORMAT:
-            return SysWin32ShellExecuteResult::BadFormat;
+            return OSWin32ShellExecuteResult::BadFormat;
         case SE_ERR_ASSOCINCOMPLETE:
         case SE_ERR_NOASSOC:
-            return SysWin32ShellExecuteResult::NoAssociation;
+            return OSWin32ShellExecuteResult::NoAssociation;
         case SE_ERR_ACCESSDENIED:
-            return SysWin32ShellExecuteResult::AccessDenied;
+            return OSWin32ShellExecuteResult::AccessDenied;
         default:
-            return SysWin32ShellExecuteResult::UnknownError;
+            return OSWin32ShellExecuteResult::UnknownError;
         }
     }
     else {
         if (pInstance)
             *pInstance = hInst;
-        return SysWin32ShellExecuteResult::Ok;
+        return OSWin32ShellExecuteResult::Ok;
     }
 }
 
 
-bool sysSetEnvVar(const char* name, const char* value)
+bool OS::SetEnvVar(const char* name, const char* value)
 {
     return SetEnvironmentVariableA(name, value) == TRUE;
 }
 
-bool sysGetEnvVar(const char* name, char* outValue, uint32 valueSize)
+bool OS::GetEnvVar(const char* name, char* outValue, uint32 valueSize)
 {
     DWORD dwValueSize = GetEnvironmentVariableA(name, outValue, valueSize);
     return dwValueSize != 0 && dwValueSize < valueSize;
 }
 
-bool sysIsDebuggerPresent()
+bool OS::IsDebuggerPresent()
 {
-    return IsDebuggerPresent();
+    return ::IsDebuggerPresent();
 }
 
-void sysWin32PrintToDebugger(const char* text)
+void OS::Win32PrintToDebugger(const char* text)
 {
     OutputDebugStringA(text);
 }
 
-bool sysWin32SetPrivilege(const char* name, bool enable)
+bool OS::Win32SetPrivilege(const char* name, bool enable)
 {
-    sysLoadAdvApi32();
+    _LoadAdvApi32();
 
     HANDLE tokenHandle;
     TOKEN_PRIVILEGES tp;
@@ -16592,39 +16887,133 @@ bool sysWin32SetPrivilege(const char* name, bool enable)
     BOOL status = gAdvApi32.AdjustTokenPrivileges(tokenHandle, FALSE, &tp, 0, nullptr, 0);
     DWORD error = GetLastError();
     if (!status || error != ERROR_SUCCESS) {
-        logError("AdjustTokenPrivileges failed. Code: %u", error);
+        LOG_ERROR("AdjustTokenPrivileges failed. Code: %u", error);
     }
     
     CloseHandle(tokenHandle);
     return true;
 }
 
-
-char* pathGetMyPath(char* dst, size_t dstSize)
+char* OS::GetMyPath(char* dst, size_t dstSize)
 {
     GetModuleFileNameA(NULL, dst, (DWORD)dstSize);
     return dst;
 }
 
-char* pathAbsolute(const char* path, char* dst, size_t dstSize)
+char* OS::GetAbsolutePath(const char* path, char* dst, size_t dstSize)
 {
     if (GetFullPathNameA(path, (DWORD)dstSize, dst, NULL) == 0)
         dst[0] = '\0';
     return dst;
 }
 
-char* pathGetCurrentDir(char* dst, size_t dstSize)
+char* OS::GetCurrentDir(char* dst, size_t dstSize)
 {
     GetCurrentDirectoryA((DWORD)dstSize, dst);
     return dst;
 }
 
-void pathSetCurrentDir(const char* path)
+void OS::SetCurrentDir(const char* path)
 {
     SetCurrentDirectoryA(path);
 }
 
-PathInfo pathStat(const char* path)
+bool OS::CreateDir(const char* path)
+{
+    return bool(CreateDirectoryA(path, nullptr)); 
+}
+
+bool OS::MovePath(const char* src, const char* dest)
+{
+    return bool(MoveFileExA(src, dest, MOVEFILE_REPLACE_EXISTING|MOVEFILE_COPY_ALLOWED));
+}
+
+char* OS::GetHomeDir(char* dst, size_t dstSize)
+{
+    _LoadOle32();
+    _LoadShell32();
+
+    PWSTR homeDir = nullptr;
+    if (SUCCEEDED(gShell32.SHGetKnownFolderPath(FOLDERID_Profile, 0, nullptr, &homeDir))) {
+        Str::WideToUtf8(homeDir, dst, (uint32)dstSize);
+        gOle32.CoTaskMemFree(homeDir);
+        return dst;
+    }
+    else {
+        ASSERT_MSG(0, "Getting home directory failed");
+        return nullptr;
+    }
+}
+
+char* OS::GetCacheDir(char* dst, size_t dstSize, const char* appName)
+{
+    _LoadOle32();
+    _LoadShell32();
+
+    PWSTR homeDir = nullptr;
+    if (SUCCEEDED(gShell32.SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &homeDir))) {
+        char homeDirUtf8[CONFIG_MAX_PATH];
+        Str::WideToUtf8(homeDir, homeDirUtf8, sizeof(homeDirUtf8));
+        gOle32.CoTaskMemFree(homeDir);
+        PathUtils::Join(dst, dstSize, homeDirUtf8, appName);
+        return dst;
+    }
+    else {
+        ASSERT_MSG(0, "Getting LOCALAPPDATA directory failed");
+        return nullptr;
+    }
+}
+
+bool OS::MakeTempPath(char* dst, [[maybe_unused]] size_t dstSize, const char* namePrefix, const char* dir)
+{
+    static char osTempPath[PATH_CHARS_MAX] = {};
+    if (dir == nullptr) {
+        if (osTempPath[0] == '\0')
+            GetTempPathA(sizeof(osTempPath), osTempPath);
+        dir = osTempPath;
+    }
+
+    ASSERT(dstSize >= PATH_CHARS_MAX);
+    return GetTempFileNameA(dir, namePrefix, 0, dst) != 0;
+}
+
+bool OS::DeleteFilePath(const char* path)
+{
+    ASSERT(path);
+    return DeleteFileA(path);
+}
+
+char* OS::Win32GetFolder(OSWin32Folder folder, char* dst, size_t dstSize)
+{
+    _LoadOle32();
+    _LoadShell32();
+
+    static const KNOWNFOLDERID folderIds[] = {
+        FOLDERID_Documents,
+        FOLDERID_Fonts,
+        FOLDERID_Downloads,
+        FOLDERID_RoamingAppData,
+        FOLDERID_LocalAppData,
+        FOLDERID_ProgramFiles,
+        FOLDERID_System,
+        FOLDERID_CommonStartup,
+        FOLDERID_Desktop
+    };
+    static_assert(CountOf(folderIds) == uint32(OSWin32Folder::_Count));
+
+    PWSTR folderPath = nullptr;
+    if (SUCCEEDED(gShell32.SHGetKnownFolderPath(folderIds[uint32(folder)], 0, nullptr, &folderPath))) {
+        Str::WideToUtf8(folderPath, dst, (uint32)dstSize);
+        gOle32.CoTaskMemFree(folderPath);
+        return dst;
+    }
+    else {
+        ASSERT_MSG(0, "SHGetKnownFolderPath failed");
+        return nullptr;
+    }
+}
+
+PathInfo OS::GetPathInfo(const char* path)
 {
     WIN32_FILE_ATTRIBUTE_DATA fad;
     if (!GetFileAttributesExA(path, GetFileExInfoStandard, &fad)) {
@@ -16652,148 +17041,59 @@ PathInfo pathStat(const char* path)
     };
 }
 
-bool pathCreateDir(const char* path)
-{
-    return bool(CreateDirectoryA(path, nullptr)); 
-}
-
-bool pathMove(const char* src, const char* dest)
-{
-    return bool(MoveFileExA(src, dest, MOVEFILE_REPLACE_EXISTING|MOVEFILE_COPY_ALLOWED));
-}
-
-char* pathGetHomeDir(char* dst, size_t dstSize)
-{
-    sysLoadOle32();
-    sysLoadShell32();
-
-    PWSTR homeDir = nullptr;
-    if (SUCCEEDED(gShell32.SHGetKnownFolderPath(FOLDERID_Profile, 0, nullptr, &homeDir))) {
-        strWideToUtf8(homeDir, dst, (uint32)dstSize);
-        gOle32.CoTaskMemFree(homeDir);
-        return dst;
-    }
-    else {
-        ASSERT_MSG(0, "Getting home directory failed");
-        return nullptr;
-    }
-}
-
-char* pathGetCacheDir(char* dst, size_t dstSize, const char* appName)
-{
-    sysLoadOle32();
-    sysLoadShell32();
-
-    PWSTR homeDir = nullptr;
-    if (SUCCEEDED(gShell32.SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &homeDir))) {
-        char homeDirUtf8[CONFIG_MAX_PATH];
-        strWideToUtf8(homeDir, homeDirUtf8, sizeof(homeDirUtf8));
-        gOle32.CoTaskMemFree(homeDir);
-        pathJoin(dst, dstSize, homeDirUtf8, appName);
-        return dst;
-    }
-    else {
-        ASSERT_MSG(0, "Getting LOCALAPPDATA directory failed");
-        return nullptr;
-    }
-}
-
-bool pathMakeTemp(char* dst, [[maybe_unused]] size_t dstSize, const char* namePrefix, const char* dir)
-{
-    static char osTempPath[kMaxPath] = {};
-    if (dir == nullptr) {
-        if (osTempPath[0] == '\0')
-            GetTempPathA(sizeof(osTempPath), osTempPath);
-        dir = osTempPath;
-    }
-
-    ASSERT(dstSize >= kMaxPath);
-    return GetTempFileNameA(dir, namePrefix, 0, dst) != 0;
-}
-
-char* pathWin32GetFolder(SysWin32Folder folder, char* dst, size_t dstSize)
-{
-    sysLoadOle32();
-    sysLoadShell32();
-
-    static const KNOWNFOLDERID folderIds[] = {
-        FOLDERID_Documents,
-        FOLDERID_Fonts,
-        FOLDERID_Downloads,
-        FOLDERID_RoamingAppData,
-        FOLDERID_LocalAppData,
-        FOLDERID_ProgramFiles,
-        FOLDERID_System,
-        FOLDERID_CommonStartup,
-        FOLDERID_Desktop
-    };
-    static_assert(CountOf(folderIds) == uint32(SysWin32Folder::_Count));
-
-    PWSTR folderPath = nullptr;
-    if (SUCCEEDED(gShell32.SHGetKnownFolderPath(folderIds[uint32(folder)], 0, nullptr, &folderPath))) {
-        strWideToUtf8(folderPath, dst, (uint32)dstSize);
-        gOle32.CoTaskMemFree(folderPath);
-        return dst;
-    }
-    else {
-        ASSERT_MSG(0, "SHGetKnownFolderPath failed");
-        return nullptr;
-    }
-}
-
 static MemVirtualStats gVMStats;
 
-void* memVirtualReserve(size_t size, MemVirtualFlags flags)
+void* Mem::VirtualReserve(size_t size, MemVirtualFlags flags)
 {
     DWORD extraFlags = (flags & MemVirtualFlags::Watch) == MemVirtualFlags::Watch ? MEM_WRITE_WATCH : 0;
     void* ptr = VirtualAlloc(NULL, size, MEM_RESERVE | extraFlags, PAGE_READWRITE);
     if (!ptr) {
-        MEMORY_FAIL();
+        MEM_FAIL();
     }
 
-    atomicFetchAdd64(&gVMStats.reservedBytes, size);
+    Atomic::FetchAdd(&gVMStats.reservedBytes, size);
     return ptr;
 }
 
-void* memVirtualCommit(void* ptr, size_t size)
+void* Mem::VirtualCommit(void* ptr, size_t size)
 {
     ASSERT(ptr);
     ptr = VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE);
     if (!ptr) {
-        MEMORY_FAIL();
+        MEM_FAIL();
     }
 
-    atomicFetchAdd64(&gVMStats.commitedBytes, size);
+    Atomic::FetchAdd(&gVMStats.commitedBytes, size);
     return ptr;
 }
 
-void memVirtualDecommit(void* ptr, size_t size)
+void Mem::VirtualDecommit(void* ptr, size_t size)
 {
     [[maybe_unused]] BOOL r = VirtualFree(ptr, size, MEM_DECOMMIT);
     ASSERT(r);
 
     ASSERT(size <= gVMStats.commitedBytes);
-    atomicFetchSub64(&gVMStats.commitedBytes, size);
+    Atomic::FetchSub(&gVMStats.commitedBytes, size);
 }
 
-void memVirtualRelease(void* ptr, size_t size)
+void Mem::VirtualRelease(void* ptr, size_t size)
 {
     [[maybe_unused]] BOOL r = VirtualFree(ptr, 0, MEM_RELEASE);
     ASSERT(r);
 
     ASSERT(size <= gVMStats.reservedBytes);
-    atomicFetchSub64(&gVMStats.reservedBytes, size);
+    Atomic::FetchSub(&gVMStats.reservedBytes, size);
 }
 
-MemVirtualStats memVirtualGetStats()
+MemVirtualStats Mem::VirtualGetStats()
 {
     return gVMStats;
 }
 
-bool memVirtualEnableLargePages(size_t* largePageSize)
+bool Mem::VirtualEnableLargePages(size_t* largePageSize)
 {
     ASSERT(largePageSize);
-    if (!sysWin32SetPrivilege("SeLockMemoryPrivilege"))
+    if (!OS::Win32SetPrivilege("SeLockMemoryPrivilege"))
         return false;
 
     *largePageSize = GetLargePageMinimum();
@@ -16809,7 +17109,7 @@ struct FileWin
 };
 static_assert(sizeof(FileWin) <= sizeof(File));
 
-static inline bool fileGetInfo(HANDLE hFile, uint64* outFileSize, uint64* outModifiedTime)
+static inline bool _GetFileInfo(HANDLE hFile, uint64* outFileSize, uint64* outModifiedTime)
 {
     BY_HANDLE_FILE_INFORMATION fileInfo {};
     if (!GetFileInformationByHandle(hFile, &fileInfo)) 
@@ -16865,7 +17165,7 @@ bool File::Open(const char* filepath, FileOpenFlags flags)
     f->handle = hfile;
     f->flags = flags;
     
-    return fileGetInfo(hfile, &f->size, &f->lastModifiedTime);
+    return _GetFileInfo(hfile, &f->size, &f->lastModifiedTime);
 }
 
 void File::Close()
@@ -16886,7 +17186,7 @@ size_t File::Read(void* dst, size_t size)
     if ((f->flags & FileOpenFlags::NoCache) == FileOpenFlags::NoCache) {
         static size_t pagesz = 0;
         if (pagesz == 0) {
-            pagesz = sysGetPageSize();
+            pagesz = OS::GetPageSize();
         }
         ASSERT_ALWAYS((uintptr_t)dst % pagesz == 0, "buffers must be aligned with NoCache flag");
     }
@@ -16959,47 +17259,189 @@ bool File::IsOpen() const
     return f->handle != INVALID_HANDLE_VALUE;
 }
 
-struct AsyncFileWin
+struct alignas(4096) AsyncFileWin
 {
+    OVERLAPPED overlapped;
     AsyncFile f;
     HANDLE hFile;
-    OVERLAPPED overlapped;
-    Allocator* alloc;
+    MemAllocator* alloc;
     AsyncFileCallback readFn;
+    uint8 _reserved[4096 - 352];
 };
 
-static void asyncReadFileCallback(DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped)
+struct AsyncContext
 {
-    size_t overlappedOffset = offsetof(AsyncFileWin, overlapped);
-    AsyncFileWin* file = (AsyncFileWin*)((uint8*)lpOverlapped - overlappedOffset);
-    ASSERT(file->readFn);
+    Semaphore submitSem;
+    Mutex requestsMtx;
+    HANDLE completionPort;
+    Thread* threads;
+    Thread* submitThreads;
+    Array<AsyncFileWin*> requests;
+    uint32 numThreads;
+    AtomicUint32 quit;
+};
 
-    file->readFn(&file->f, dwErrorCode != 0 && dwNumberOfBytesTransfered == file->f.size);
+static AsyncContext gAsyncCtx;
+
+namespace Async
+{
+    static int _IOThreadCallback(void* userData)
+    {
+        HANDLE completionPort = (HANDLE)userData;
+
+        while (!Atomic::Load(&gAsyncCtx.quit)) {
+            DWORD dwNumberOfBytesTransfered;
+            ULONG_PTR completionKey;
+            AsyncFileWin* file;
+            if (GetQueuedCompletionStatus(completionPort, &dwNumberOfBytesTransfered, &completionKey, (LPOVERLAPPED*)&file, INFINITE)) {
+                ASSERT(file->readFn);
+                file->readFn(&file->f, dwNumberOfBytesTransfered != file->f.size);
+            }
+        }
+
+        return 0;
+    }
+
+    static int _IOSubmitCallback(void*)
+    {
+        while (!Atomic::Load(&gAsyncCtx.quit)) {
+            gAsyncCtx.submitSem.Wait();
+            
+            AsyncFileWin* file = nullptr;
+            {
+                MutexScope lock(gAsyncCtx.requestsMtx);
+                if (!gAsyncCtx.requests.IsEmpty())
+                    file = gAsyncCtx.requests.PopLast();
+            }
+
+            if (file) {
+                HANDLE completionPort = CreateIoCompletionPort(file->hFile, gAsyncCtx.completionPort, 0, 0);
+                ASSERT(completionPort == gAsyncCtx.completionPort);
+
+                ASSERT(uintptr_t(file->f.data) % 4096 == 0);
+                DWORD dwNumberOfBytesTransfered = 0;
+                BOOL r = ReadFile(file->hFile, file->f.data, DWORD(AlignValue(file->f.size, 4096u)), nullptr, &file->overlapped);
+                if (!r) {
+                    if (GetLastError() != ERROR_IO_PENDING) {
+                        CloseHandle(file->hFile);
+                        MemSingleShotMalloc<AsyncFileWin>::Free(file, file->alloc);
+                        ASSERT_MSG(0, "Unexpected ReadFile error with file: %s", file->f.filepath.CStr());
+                    }
+                }
+                else {
+                    file->readFn(&file->f, dwNumberOfBytesTransfered != file->f.size);
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    FORCE_INLINE AsyncFileWin* _GetInternalFilePtr(AsyncFile* file)
+    {
+        return (AsyncFileWin*)((uint8*)file - offsetof(AsyncFileWin, f));
+    }
+} // Async
+
+bool Async::Initialize()
+{
+    gAsyncCtx.completionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 0);
+    if (!gAsyncCtx.completionPort) {
+        LOG_ERROR("Creating async completion port failed");
+        return false;
+    }
+    
+    SysInfo info {};
+    OS::GetSysInfo(&info);
+    ASSERT(info.coreCount);
+
+    gAsyncCtx.submitSem.Initialize();
+    gAsyncCtx.requestsMtx.Initialize();
+    
+    gAsyncCtx.threads = NEW_ARRAY(Mem::GetDefaultAlloc(), Thread, info.coreCount);
+    gAsyncCtx.submitThreads = NEW_ARRAY(Mem::GetDefaultAlloc(), Thread, info.coreCount);
+    gAsyncCtx.numThreads = info.coreCount;
+
+    for (uint32 i = 0; i < gAsyncCtx.numThreads; i++) {
+        String<32> name = String<32>::Format("IO_%u", i+1);
+        ThreadDesc tdesc {
+            .entryFn = Async::_IOThreadCallback,
+            .userData = gAsyncCtx.completionPort,
+            .name = name.CStr(),
+            .stackSize = 64*SIZE_KB
+        };
+        
+        gAsyncCtx.threads[i].Start(tdesc);
+    }
+
+    for (uint32 i = 0; i < gAsyncCtx.numThreads; i++) {
+        String<32> name = String<32>::Format("IOSubmit_%u", i+1);
+        ThreadDesc tdesc {
+            .entryFn = Async::_IOSubmitCallback,
+            .name = name.CStr(),
+            .stackSize = 64*SIZE_KB
+        };
+        
+        gAsyncCtx.submitThreads[i].Start(tdesc);
+    }
+
+    LOG_INFO("(init) Initialized %u Async IO Threads", gAsyncCtx.numThreads);
+
+    return true;
 }
 
-AsyncFile* asyncReadFile(const char* filepath, const AsyncFileRequest& request)
+void Async::Release()
 {
-    HANDLE hFile = CreateFileA(filepath, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_OVERLAPPED, NULL);
+    Atomic::Store(&gAsyncCtx.quit, 1);
+    if (gAsyncCtx.completionPort) {
+        CloseHandle(gAsyncCtx.completionPort);
+        gAsyncCtx.completionPort = nullptr;
+    }
+    gAsyncCtx.submitSem.Post(gAsyncCtx.numThreads);
+
+    for (uint32 i = 0; i < gAsyncCtx.numThreads; i++) {
+        gAsyncCtx.threads[i].Stop();
+        gAsyncCtx.submitThreads[i].Stop();
+    }
+    Mem::Free(gAsyncCtx.threads, Mem::GetDefaultAlloc());
+    Mem::Free(gAsyncCtx.submitThreads, Mem::GetDefaultAlloc());
+
+    gAsyncCtx.requestsMtx.Release();
+    gAsyncCtx.submitSem.Release();
+
+    gAsyncCtx.threads = nullptr;
+    gAsyncCtx.submitThreads = nullptr;
+}
+
+AsyncFile* Async::ReadFile(const char* filepath, const AsyncFileRequest& request)
+{
+    ASSERT(request.readFn);
+
+    HANDLE hFile = CreateFileA(filepath, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_SEQUENTIAL_SCAN|FILE_FLAG_OVERLAPPED, NULL);
     if (hFile == INVALID_HANDLE_VALUE)
         return nullptr;
     
-    uint64 fileSize;
-    uint64 fileModificationTime;
-    if (!fileGetInfo(hFile, &fileSize, &fileModificationTime) || fileSize == 0) {
-        CloseHandle(hFile);
-        return nullptr;
+    uint64 fileSize = request.sizeHint;
+    uint64 fileModificationTime = 0;
+    if (!fileSize) {
+        if (!_GetFileInfo(hFile, &fileSize, &fileModificationTime) || fileSize == 0) {
+            CloseHandle(hFile);
+            return nullptr;
+        }
     }
     ASSERT_MSG(fileSize < UINT32_MAX, "Large file sizes are not supported by win32 overlapped API");
     ASSERT_MSG(!request.userDataAllocateSize || (request.userData && request.userDataAllocateSize), 
-            "`userDataAllocatedSize` should be accompanied with a valid `userData` pointer");
+               "`userDataAllocatedSize` should be accompanied with a valid `userData` pointer");
 
     MemSingleShotMalloc<AsyncFileWin> mallocator;
     uint8* data;
     uint8* userData = nullptr;
     if (request.userDataAllocateSize) 
         mallocator.AddExternalPointerField<uint8>(&userData, request.userDataAllocateSize);
-    mallocator.AddExternalPointerField<uint8>(&data, fileSize);
-    AsyncFileWin* file = mallocator.Calloc(request.alloc);
+    mallocator.AddExternalPointerField<uint8>(&data, fileSize, 4096);
+    
+    AsyncFileWin* file = mallocator.Malloc(request.alloc);
+    memset(file, 0x0, sizeof(*file));
     file->f.filepath = filepath;
     file->f.data = data;
     file->f.size = uint32(fileSize);
@@ -17016,33 +17458,21 @@ AsyncFile* asyncReadFile(const char* filepath, const AsyncFileRequest& request)
 
     file->hFile = hFile;
     file->alloc = request.alloc;
+    file->readFn = request.readFn;
 
-    if (request.readFn) {
-        file->readFn = request.readFn;
-        if (!BindIoCompletionCallback(file->hFile, asyncReadFileCallback, 0)) {
-            CloseHandle(file->hFile);
-            memFree(file, file->alloc);
-            return nullptr;
-        }
-    }
-
-    if (!ReadFile(hFile, file->f.data, DWORD(file->f.size), nullptr, &file->overlapped)) {
-        if (GetLastError() != ERROR_IO_PENDING) {
-            CloseHandle(file->hFile);
-            memFree(file, file->alloc);
-            return nullptr;
-        }
-    }
+    MutexScope lock(gAsyncCtx.requestsMtx);
+    gAsyncCtx.requests.Push(file);
+    gAsyncCtx.submitSem.Post(1);
 
     return &file->f;
 }
 
-void asyncClose(AsyncFile* file)
+void Async::Close(AsyncFile* file)
 {
     if (!file)
         return;
 
-    AsyncFileWin* fw = (AsyncFileWin*)file;
+    AsyncFileWin* fw = Async::_GetInternalFilePtr(file);
     if (fw->hFile != INVALID_HANDLE_VALUE) {
         DWORD numBytesTransfered;
         if (!GetOverlappedResult(fw->hFile, &fw->overlapped, &numBytesTransfered, FALSE) && GetLastError() == ERROR_IO_PENDING)
@@ -17055,10 +17485,10 @@ void asyncClose(AsyncFile* file)
     }    
 }
 
-bool asyncWait(AsyncFile* file)
+bool Async::Wait(AsyncFile* file)
 {
     ASSERT(file);
-    AsyncFileWin* fw = (AsyncFileWin*)file;
+    AsyncFileWin* fw = Async::_GetInternalFilePtr(file);
     ASSERT(fw->hFile != INVALID_HANDLE_VALUE);
 
     DWORD numBytesTransfered;
@@ -17066,10 +17496,10 @@ bool asyncWait(AsyncFile* file)
     return r && numBytesTransfered == fw->f.size;
 }
 
-bool asyncIsFinished(AsyncFile* file, bool* outError)
+bool Async::IsFinished(AsyncFile* file, bool* outError)
 {
     ASSERT(file);
-    AsyncFileWin* fw = (AsyncFileWin*)file;
+    AsyncFileWin* fw = Async::_GetInternalFilePtr(file);
     ASSERT(fw->hFile != INVALID_HANDLE_VALUE);
 
     DWORD numBytesTransfered;
@@ -17086,7 +17516,7 @@ namespace _private
     static void socketInitializeWin32()
     {
         if (!gSocketInitialized) {
-            logDebug("SocketTCP: Initialize");
+            LOG_DEBUG("SocketTCP: Initialize");
             WSADATA wsaData;
             if (WSAStartup(MAKEWORD(1, 0), &wsaData) != 0) {
                 ASSERT_ALWAYS(false, "Windows sockets initialization failed");
@@ -17097,7 +17527,7 @@ namespace _private
         }
     }
 
-    static SocketErrorCode socketTranslatePlatformErrorCode()
+    static SocketErrorCode::Enum socketTranslatePlatformErrorCode()
     {
         int errorCode = WSAGetLastError();
         switch (errorCode) {
@@ -17152,7 +17582,7 @@ SocketTCP SocketTCP::CreateListener()
     sock.mSock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock.mSock == SOCKET_INVALID) {
         sock.mErrCode = _private::socketTranslatePlatformErrorCode();
-        logError("SocketTCP: Opening the socket failed");
+        LOG_ERROR("SocketTCP: Opening the socket failed");
         return sock;
     }
     return sock;    
@@ -17169,11 +17599,11 @@ bool SocketTCP::Listen(uint16 port, uint32 maxConnections)
 
     if (bind(mSock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         mErrCode = _private::socketTranslatePlatformErrorCode();
-        logError("SocketTCP: failed binding the socket to port: %d", port);
+        LOG_ERROR("SocketTCP: failed binding the socket to port: %d", port);
         return false;
     }
 
-    logVerbose("SocketTCP: Listening on port '%d' for incoming connections ...", port);
+    LOG_VERBOSE("SocketTCP: Listening on port '%d' for incoming connections ...", port);
     int _maxConnections = maxConnections > INT32_MAX ? INT32_MAX : static_cast<int>(maxConnections);
     bool success = listen(mSock, _maxConnections) >= 0;
     
@@ -17196,7 +17626,7 @@ SocketTCP SocketTCP::Accept(char* clientUrl, uint32 clientUrlSize)
     newSock.mSock = accept(mSock, (struct sockaddr*)&addr, &addrlen);
     if (mLive && newSock.mSock == SOCKET_INVALID) {
         newSock.mErrCode = _private::socketTranslatePlatformErrorCode();
-        logError("SocketTCP: failed to accept the new socket");
+        LOG_ERROR("SocketTCP: failed to accept the new socket");
         return newSock;
     }
 
@@ -17205,7 +17635,7 @@ SocketTCP SocketTCP::Accept(char* clientUrl, uint32 clientUrlSize)
         inet_ntop(AF_INET, &addr.sin_addr, ip, sizeof(ip));
         uint16 port = htons(addr.sin_port);
         
-        strPrintFmt(clientUrl, clientUrlSize, "%s:%d", ip, port);
+        Str::PrintFmt(clientUrl, clientUrlSize, "%s:%d", ip, port);
     }
 
     newSock.mLive = true;
@@ -17220,8 +17650,8 @@ SocketTCP SocketTCP::Connect(const char* url)
 
     char address[256];
     char port[16];
-    if (!_private::socketParseUrl(url, address, sizeof(address), port, sizeof(port))) {
-        logError("SocketTCP: failed parsing the url: %s", url);
+    if (!SocketTCP::ParseUrl(url, address, sizeof(address), port, sizeof(port))) {
+        LOG_ERROR("SocketTCP: failed parsing the url: %s", url);
         return sock;
     }
 
@@ -17234,21 +17664,21 @@ SocketTCP SocketTCP::Connect(const char* url)
 
     struct addrinfo* addri = nullptr;
     if (getaddrinfo(address, port, &hints, &addri) != 0) {
-        logError("SocketTCP: failed to resolve url: %s", url);
+        LOG_ERROR("SocketTCP: failed to resolve url: %s", url);
         return sock;
     }
 
     sock.mSock = socket(addri->ai_family, addri->ai_socktype, addri->ai_protocol);
     if (sock.mSock == SOCKET_INVALID) {
         freeaddrinfo(addri);
-        logError("SocketTCP: failed to create socket");
+        LOG_ERROR("SocketTCP: failed to create socket");
         return sock;
     }
 
     if (connect(sock.mSock, addri->ai_addr, (int)addri->ai_addrlen) == -1) {
         freeaddrinfo(addri);
         sock.mErrCode = _private::socketTranslatePlatformErrorCode();
-        logError("SocketTCP: failed to connect to url: %s", url);
+        LOG_ERROR("SocketTCP: failed to connect to url: %s", url);
         sock.Close();
         return sock;
     }
@@ -17275,7 +17705,7 @@ uint32 SocketTCP::Write(const void* src, uint32 size)
             if (mErrCode == SocketErrorCode::SocketShutdown ||
                 mErrCode == SocketErrorCode::NotConnected)
             {
-                logDebug("SocketTCP: socket connection closed forcefully by the peer");
+                LOG_DEBUG("SocketTCP: socket connection closed forcefully by the peer");
                 mLive = false;
             }
             return UINT32_MAX;
@@ -17299,7 +17729,7 @@ uint32 SocketTCP::Read(void* dst, uint32 dstSize)
         if (mErrCode == SocketErrorCode::SocketShutdown ||
             mErrCode == SocketErrorCode::NotConnected)
         {
-            logDebug("SocketTCP: socket connection closed forcefully by the peer");
+            LOG_DEBUG("SocketTCP: socket connection closed forcefully by the peer");
             mLive = false;
         }
         return UINT32_MAX;
@@ -17329,6 +17759,7 @@ bool SocketTCP::IsValid() const
 #if PLATFORM_ANDROID || PLATFORM_LINUX
     #include <sys/prctl.h>          // prctl
     #include <semaphore.h>
+    #include <sys/syscall.h>
 #else
     #include <sched.h>
 #endif
@@ -17342,11 +17773,10 @@ bool SocketTCP::IsValid() const
 #include <netdb.h>              // getaddrinfo, freeaddrinfo
 #include <netinet/in.h>         // sockaddr_in
 #include <arpa/inet.h>          // inet_ntop
+#include <poll.h>               // async file poll
 
-#if !PLATFORM_ANDROID
+#if PLATFORM_APPLE || PLATFORM_LINUX
     #include <uuid/uuid.h>
-#else
-    #include <linux/uuid.h>
 #endif
 
 
@@ -17370,19 +17800,19 @@ static inline void timespecAdd(struct timespec* _ts, int32_t _msecs)
 struct ThreadImpl
 {
     Semaphore sem;
-    Allocator* alloc;
+    MemAllocator* alloc;
     ThreadEntryFunc entryFn;
     pthread_t handle;
     char name[32];
     void* userData;
     size_t stackSize;
     pid_t tId;
-    atomicUint32 running;
+    AtomicUint32 running;
     bool init;
 };
 static_assert(sizeof(ThreadImpl) <= sizeof(Thread), "Thread size mismatch");
 
-static void* threadStubFn(void* arg)
+static void* _ThreadStubFn(void* arg)
 {
     ThreadImpl* thrd = reinterpret_cast<ThreadImpl*>(arg);
 
@@ -17391,23 +17821,57 @@ static void* threadStubFn(void* arg)
         int32 i;
     };
 
-    thrd->tId = threadGetCurrentId();
-    threadSetCurrentThreadName(thrd->name);
+    thrd->tId = Thread::GetCurrentId();
+    Thread::SetCurrentThreadName(thrd->name);
 
     ASSERT(thrd->entryFn);
-    atomicStore32Explicit(&thrd->running, 1, AtomicMemoryOrder::Release);
+    Atomic::StoreExplicit(&thrd->running, 1, AtomicMemoryOrder::Release);
     thrd->sem.Post();
 
     cast c;
     c.i = thrd->entryFn(thrd->userData);
 
-    atomicStore32Explicit(&thrd->running, 0, AtomicMemoryOrder::Release);
+    Atomic::StoreExplicit(&thrd->running, 0, AtomicMemoryOrder::Release);
     return c.ptr;
 }
 
 Thread::Thread()
 {
     memset(mData, 0x0, sizeof(Thread));
+}
+
+static void _SetThreadPriority(pthread_t threadHandle, ThreadPriority prio)
+{
+    sched_param param {};
+    int policy;
+    
+    pthread_getschedparam(threadHandle, &policy, &param);
+    if (policy != SCHED_OTHER)
+        policy = SCHED_OTHER;
+    
+    int prioMax = sched_get_priority_max(policy);
+    int prioMin = sched_get_priority_min(policy);
+    int prioNormal = prioMin + (prioMax - prioMin) / 2;
+
+    #if PLATFORM_APPLE
+        int policyIdle = policy;
+        int prioIdle = prioMin;
+        prioMin = prioMin + (prioNormal - prioMin)/2;
+    #else
+        int policyIdle = SCHED_IDLE;
+        int prioIdle = 0;
+    #endif
+    
+    switch (prio) {
+    case ThreadPriority::Normal:    param.sched_priority = prioNormal; break;
+    case ThreadPriority::Idle:      policy = policyIdle; param.sched_priority = prioIdle; break;
+    case ThreadPriority::Realtime:  policy = SCHED_RR; param.sched_priority = prioMax; break;
+    case ThreadPriority::High:      param.sched_priority = prioNormal + (prioMax - prioNormal)/2; break;
+    case ThreadPriority::Low:       param.sched_priority = prioMin; break;
+    }
+
+    [[maybe_unused]] int r = pthread_setschedparam(threadHandle, policy, &param);
+    ASSERT_ALWAYS(r != -1, "pthread_setschedparam failed: %d", errno);
 }
 
 bool Thread::Start(const ThreadDesc& desc)
@@ -17418,8 +17882,8 @@ bool Thread::Start(const ThreadDesc& desc)
     thrd->sem.Initialize();
     thrd->entryFn = desc.entryFn;
     thrd->userData = desc.userData;
-    thrd->stackSize = Max<uint64>(static_cast<uint64>(desc.stackSize), 64*kKB);
-    strCopy(thrd->name, sizeof(thrd->name), desc.name ? desc.name : "");
+    thrd->stackSize = Max<uint64>(static_cast<uint64>(desc.stackSize), 64*SIZE_KB);
+    Str::Copy(thrd->name, sizeof(thrd->name), desc.name ? desc.name : "");
 
     pthread_attr_t attr;
     [[maybe_unused]] int r = pthread_attr_init(&attr);
@@ -17432,17 +17896,20 @@ bool Thread::Start(const ThreadDesc& desc)
         ASSERT_MSG(r == 0, "pthread_attr_setdetachstate failed");
     }
 
-    r = pthread_create(&thrd->handle, &attr, threadStubFn, thrd);
+    r = pthread_create(&thrd->handle, &attr, _ThreadStubFn, thrd);
     if (r != 0) {
         ASSERT_ALWAYS(r == 0, "pthread_create failed");
         thrd->sem.Release();
         return false;
-    }    
+    }
+    
+    if (desc.priority != ThreadPriority::Normal)
+        _SetThreadPriority(thrd->handle, desc.priority);
 
     thrd->sem.Wait();
     thrd->init = true;
 
-    _private::sysCountersAddThread(thrd->stackSize);
+    _private::CountersAddThread(thrd->stackSize);
     return true;
 }
 
@@ -17463,7 +17930,7 @@ int Thread::Stop()
 
     thrd->sem.Release();
 
-    _private::sysCountersRemoveThread(thrd->stackSize);
+    _private::CountersRemoveThread(thrd->stackSize);
 
     memset(mData, 0x0, sizeof(Thread));        
     return cast.i;
@@ -17472,45 +17939,15 @@ int Thread::Stop()
 bool Thread::IsRunning()
 {
     ThreadImpl* thrd = reinterpret_cast<ThreadImpl*>(mData);
-    return atomicLoad32Explicit(&thrd->running, AtomicMemoryOrder::Acquire) == 1;
-}
-
-static void threadSetPriority(pthread_t threadHandle, ThreadPriority prio)
-{
-    sched_param param {};
-
-    int policy = SCHED_OTHER;
-    int prioMax = sched_get_priority_max(SCHED_RR);
-    int prioMin = sched_get_priority_min(SCHED_RR);
-    int prioNormal = prioMin + (prioMax - prioMin) / 2;
-
-    #if PLATFORM_APPLE
-        int policyIdle = SCHED_RR;
-        int prioIdle = prioMin;
-        prioMin = prioMin + (prioNormal - prioMin)/2;
-    #else
-        int policyIdle = SCHED_IDLE;
-        int prioIdle = 0;
-    #endif
-    
-    switch (prio) {
-    case ThreadPriority::Normal:    policy = SCHED_RR; param.sched_priority = prioNormal; break;
-    case ThreadPriority::Idle:      policy = policyIdle; param.sched_priority = prioIdle; break;
-    case ThreadPriority::Realtime:  policy = SCHED_RR; param.sched_priority = prioMax; break;
-    case ThreadPriority::High:      policy = SCHED_RR; param.sched_priority = prioNormal + (prioMax - prioNormal)/2; break;
-    case ThreadPriority::Low:       policy = SCHED_RR; param.sched_priority = prioMin; break;
-    }
-
-    [[maybe_unused]] int r = pthread_setschedparam(threadHandle, policy, &param);
-    ASSERT_ALWAYS(r != -1, "pthread_setschedparam failed: %d", errno);
+    return Atomic::LoadExplicit(&thrd->running, AtomicMemoryOrder::Acquire) == 1;
 }
 
 void Thread::SetPriority(ThreadPriority prio)
 {
-    threadSetPriority(reinterpret_cast<ThreadImpl*>(mData)->handle, prio);
+    _SetThreadPriority(reinterpret_cast<ThreadImpl*>(mData)->handle, prio);
 }
 
-void threadSetCurrentThreadName(const char* name)
+void Thread::SetCurrentThreadName(const char* name)
 {
     #if PLATFORM_APPLE
         pthread_setname_np(name);
@@ -17523,7 +17960,7 @@ void threadSetCurrentThreadName(const char* name)
     #endif
 }
 
-void threadGetCurrentThreadName(char* nameOut, [[maybe_unused]] uint32 nameSize)
+void Thread::GetCurrentThreadName(char* nameOut, [[maybe_unused]] uint32 nameSize)
 {
     ASSERT(nameSize > 16);
     
@@ -17535,12 +17972,12 @@ void threadGetCurrentThreadName(char* nameOut, [[maybe_unused]] uint32 nameSize)
     
 }
 
-void threadYield()
+void Thread::SwitchContext()
 {
     sched_yield();
 }
 
-uint32 threadGetCurrentId()
+uint32 Thread::GetCurrentId()
 {
     #if PLATFORM_LINUX
         return static_cast<uint32>((pid_t)syscall(SYS_gettid));
@@ -17553,21 +17990,21 @@ uint32 threadGetCurrentId()
     #endif
 }
 
-void threadSleep(uint32 msecs)
+void Thread::Sleep(uint32 msecs)
 {
     struct timespec req = { (time_t)msecs / 1000, (long)((msecs % 1000) * 1000000) };
     struct timespec rem = { 0, 0 };
     nanosleep(&req, &rem);
 }
 
-void threadSetCurrentThreadPriority(ThreadPriority prio)
+void Thread::SetCurrentThreadPriority(ThreadPriority prio)
 {
-    threadSetPriority(pthread_self(), prio);
+    _SetThreadPriority(pthread_self(), prio);
 }
 
 struct MutexImpl
 {
-    alignas(CACHE_LINE_SIZE) atomicUint32 spinlock;
+    alignas(CACHE_LINE_SIZE) AtomicUint32 spinlock;
     pthread_mutex_t handle;
     uint32 spinCount;
 };
@@ -17588,7 +18025,7 @@ void Mutex::Initialize(uint32 spinCount)
     r = pthread_mutex_init(&_m->handle, &attr);
     ASSERT_ALWAYS(r == 0, "pthread_mutex_init failed");
 
-    _private::sysCountersAddMutex();
+    _private::CountersAddMutex();
 }
 
 void Mutex::Release()
@@ -17597,7 +18034,7 @@ void Mutex::Release()
 
     pthread_mutex_destroy(&_m->handle);
 
-    _private::sysCountersRemoveMutex();
+    _private::CountersRemoveMutex();
 }
 
 void Mutex::Enter()
@@ -17605,9 +18042,9 @@ void Mutex::Enter()
     MutexImpl* _m = reinterpret_cast<MutexImpl*>(mData);
 
     for (uint32 i = 0, c = _m->spinCount; i < c; i++) {
-        if (atomicExchange32Explicit(&_m->spinlock, 1, AtomicMemoryOrder::Acquire) == 0)
+        if (Atomic::ExchangeExplicit(&_m->spinlock, 1, AtomicMemoryOrder::Acquire) == 0)
             return;
-        sysPauseCpu();
+        OS::PauseCPU();
     }
     
     pthread_mutex_lock(&_m->handle);
@@ -17618,14 +18055,14 @@ void Mutex::Exit()
     MutexImpl* _m = reinterpret_cast<MutexImpl*>(mData);
 
     pthread_mutex_unlock(&_m->handle);
-    atomicStore32Explicit(&_m->spinlock, 0, AtomicMemoryOrder::Release);
+    Atomic::StoreExplicit(&_m->spinlock, 0, AtomicMemoryOrder::Release);
 }
 
 bool Mutex::TryEnter()
 {
     MutexImpl* _m = reinterpret_cast<MutexImpl*>(mData);
 
-    if (atomicExchange32Explicit(&_m->spinlock, 1, AtomicMemoryOrder::Acquire) == 0)
+    if (Atomic::ExchangeExplicit(&_m->spinlock, 1, AtomicMemoryOrder::Acquire) == 0)
         return true;
     return pthread_mutex_trylock(&_m->handle) == 0;
 }
@@ -17698,7 +18135,7 @@ void Semaphore::Initialize()
     [[maybe_unused]] int r = sem_init(&sem->sem, 0, 0);
     ASSERT_MSG(r == 0, "Initialize semaphore failed");
 
-    _private::sysCountersAddSemaphore();
+    _private::CountersAddSemaphore();
 }
 
 void Semaphore::Release()
@@ -17706,7 +18143,7 @@ void Semaphore::Release()
     SemaphoreImpl* sem = reinterpret_cast<SemaphoreImpl*>(mData);
     sem_destroy(&sem->sem);
 
-    _private::sysCountersRemoveSemaphore();
+    _private::CountersRemoveSemaphore();
 }
 
 void Semaphore::Post(uint32 count)
@@ -17761,7 +18198,7 @@ void Signal::Initialize()
     [[maybe_unused]] int r2 = pthread_cond_init(&sig->cond, NULL);
     ASSERT_MSG(r2 == 0, "pthread_cond_init failed");
 
-    _private::sysCountersAddSignal();
+    _private::CountersAddSignal();
 }
 
 void Signal::Release()
@@ -17771,7 +18208,7 @@ void Signal::Release()
     pthread_cond_destroy(&sig->cond);
     pthread_mutex_destroy(&sig->mutex);
 
-    _private::sysCountersRemoveSignal();
+    _private::CountersRemoveSignal();
 }
 
 void Signal::Raise()
@@ -17863,23 +18300,23 @@ bool Signal::WaitOnCondition(bool(*condFn)(int value, int reference), int refere
     return !timedOut;
 }
 
-void Signal::Decrement()
+void Signal::Decrement(uint32 count)
 {
     SignalImpl* sig = reinterpret_cast<SignalImpl*>(mData);
 
     [[maybe_unused]] int r = pthread_mutex_lock(&sig->mutex);
     ASSERT(r == 0);
-    --sig->value;
+    sig->value -= int(count);
     pthread_mutex_unlock(&sig->mutex);
 }
 
-void Signal::Increment()
+void Signal::Increment(uint32 count)
 {
     SignalImpl* sig = reinterpret_cast<SignalImpl*>(mData);
 
     [[maybe_unused]] int r = pthread_mutex_lock(&sig->mutex);
     ASSERT(r == 0);
-    ++sig->value;
+    sig->value += int(count);
     pthread_mutex_unlock(&sig->mutex);
 }
 
@@ -17902,7 +18339,7 @@ struct TimerState
 };
 static TimerState gTimer;
 
-void _private::timerInitialize() 
+void Timer::Initialize() 
 {
     gTimer.init = true;
     struct timespec ts;
@@ -17910,20 +18347,20 @@ void _private::timerInitialize()
     gTimer.start = (uint64)ts.tv_sec*1000000000 + (uint64)ts.tv_nsec;
 }
 
-uint64 timerGetTicks() 
+uint64 Timer::GetTicks() 
 {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return ((uint64)ts.tv_sec*1000000000 + (uint64)ts.tv_nsec) - gTimer.start;
 }
-#endif
+#endif // !PLATFORM_APPLE
 
-DLLHandle sysLoadDLL(const char* filepath, char** pErrorMsg)
+OSDLL OS::LoadDLL(const char* filepath, char** pErrorMsg)
 {
-    DLLHandle dll = dlopen(filepath, RTLD_LOCAL | RTLD_LAZY);
+    OSDLL dll = dlopen(filepath, RTLD_LOCAL | RTLD_LAZY);
     if (dll == nullptr && pErrorMsg) {
         static char errMsg[64];
-        strPrintFmt(errMsg, sizeof(errMsg), dlerror());
+        Str::PrintFmt(errMsg, sizeof(errMsg), dlerror());
         *pErrorMsg = errMsg;
     }
     else {
@@ -17933,48 +18370,48 @@ DLLHandle sysLoadDLL(const char* filepath, char** pErrorMsg)
     return dll;
 }
 
-void sysUnloadDLL(DLLHandle dll)
+void OS::UnloadDLL(OSDLL dll)
 {
     if (dll)
         dlclose(dll);
 }
 
-void* sysSymbolAddress(DLLHandle dll, const char* symbolName)
+void* OS::GetSymbolAddress(OSDLL dll, const char* symbolName)
 {
     return dlsym(dll, symbolName);
 }
 
-size_t sysGetPageSize()
+size_t OS::GetPageSize()
 {
     return static_cast<size_t>(sysconf(_SC_PAGESIZE));
 }
 
-bool sysSetEnvVar(const char* name, const char* value)
+bool OS::SetEnvVar(const char* name, const char* value)
 {
     return value != nullptr ? setenv(name, value, 1) == 0 : unsetenv(name) == 0;
 }
 
-bool sysGetEnvVar(const char* name, char* outValue, uint32 valueSize)
+bool OS::GetEnvVar(const char* name, char* outValue, uint32 valueSize)
 {
     char* value = getenv(name);
     if (!value)
         return false;
-    strCopy(outValue, valueSize, value);
+    Str::Copy(outValue, valueSize, value);
     return true;
 }
 
-char* pathAbsolute(const char* path, char* dst, size_t dstSize)
+char* OS::GetAbsolutePath(const char* path, char* dst, size_t dstSize)
 {
-    char absPath[kMaxPath];
+    char absPath[PATH_CHARS_MAX];
     if (realpath(path, absPath) != NULL) {
-        strCopy(dst, (uint32)dstSize, absPath);
+        Str::Copy(dst, (uint32)dstSize, absPath);
     } else {
         dst[0] = '\0';
     }
     return dst;
 }
 
-PathInfo pathStat(const char* path)
+PathInfo OS::GetPathInfo(const char* path)
 {
     struct stat st;
     int result = stat(path, &st);
@@ -17999,55 +18436,60 @@ PathInfo pathStat(const char* path)
     };
 }
 
-bool pathCreateDir(const char* path)
+bool OS::CreateDir(const char* path)
 {
     return mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == 0;
 }
 
-bool pathMove(const char* src, const char* dest)
+bool OS::MovePath(const char* src, const char* dest)
 {
     return rename(src, dest) == 0;
 }
 
-bool pathMakeTemp(char* dst, size_t dstSize, const char* namePrefix, const char* dir)
+bool OS::DeleteFilePath(const char* path)
+{
+    return remove(path) == 0;
+}
+
+bool OS::MakeTempPath(char* dst, size_t dstSize, const char* namePrefix, const char* dir)
 {
     if (dir == nullptr)
         dir = "/tmp";
-    pathJoin(dst, dstSize, dir, namePrefix);
-    strConcat(dst, uint32(dstSize), "XXXXXX");
+    PathUtils::Join(dst, dstSize, dir, namePrefix);
+    Str::Concat(dst, uint32(dstSize), "XXXXXX");
     mkstemp(dst);
     return dst[0] ? true : false;
 }
 
 struct MemVirtualStatsAtomic 
 {
-    atomicUint64 commitedBytes;
-    atomicUint64 reservedBytes;
+    AtomicUint64 commitedBytes;
+    AtomicUint64 reservedBytes;
 };
 
 static MemVirtualStatsAtomic gVMStats;
 
-void* memVirtualReserve(size_t size, MemVirtualFlags flags)
+void* Mem::VirtualReserve(size_t size, MemVirtualFlags flags)
 {
     void* ptr = mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (!ptr) {
-        MEMORY_FAIL();
+        MEM_FAIL();
     }
 
-    atomicFetchAdd64(&gVMStats.reservedBytes, size);
+    Atomic::FetchAdd(&gVMStats.reservedBytes, size);
     return ptr;
 }
 
-void* memVirtualCommit(void* ptr, size_t size)
+void* Mem::VirtualCommit(void* ptr, size_t size)
 {
     int r = mprotect(ptr, size, PROT_READ | PROT_WRITE);
     ASSERT(r == 0);
     
-    size_t pageSize = sysGetPageSize();
+    size_t pageSize = OS::GetPageSize();
     r = madvise(ptr, size, MADV_WILLNEED);
     if (r != 0) {
         if (errno == ENOMEM) {
-            MEMORY_FAIL();
+            MEM_FAIL();
         }
         ASSERT(0);
         return nullptr;
@@ -18059,25 +18501,25 @@ void* memVirtualCommit(void* ptr, size_t size)
         dummyCounter += *(uintptr*)(buff + off);
     }    
 
-    atomicFetchAdd64(&gVMStats.commitedBytes, size);
+    Atomic::FetchAdd(&gVMStats.commitedBytes, size);
     return ptr;
 }
 
-void memVirtualDecommit(void* ptr, size_t size)
+void Mem::VirtualDecommit(void* ptr, size_t size)
 {
     [[maybe_unused]] int r = madvise(ptr, size, MADV_DONTNEED);
     ASSERT(r == 0);
-    atomicFetchSub64(&gVMStats.commitedBytes, size);
+    Atomic::FetchSub(&gVMStats.commitedBytes, size);
 }
 
-void memVirtualRelease(void* ptr, size_t size)
+void Mem::VirtualRelease(void* ptr, size_t size)
 {
     [[maybe_unused]] int r = munmap(ptr, size);
     ASSERT(r == 0);
-    atomicFetchSub64(&gVMStats.reservedBytes, size);
+    Atomic::FetchSub(&gVMStats.reservedBytes, size);
 }
 
-MemVirtualStats memVirtualGetStats()
+MemVirtualStats Mem::VirtualGetStats()
 {
     return MemVirtualStats {
         .commitedBytes = gVMStats.commitedBytes,
@@ -18085,22 +18527,17 @@ MemVirtualStats memVirtualGetStats()
     };
 }
 
-#if !PLATFORM_ANDROID
+#if PLATFORM_APPLE || PLATFORM_LINUX
 struct UUIDImpl
 {
     uuid_t uuid;
 };
-#else
-struct UUIDImpl
-{
-    guid_t uuid;
-};
+static_assert(sizeof(UUIDImpl) <= sizeof(UniqueID), "UUID size mismatch");
 #endif
-static_assert(sizeof(UUIDImpl) <= sizeof(SysUUID), "UUID size mismatch");
 
-bool uuidGenerate(SysUUID* uuid)
+bool uuidGenerate(UniqueID* uuid)
 {
-#if !PLATFORM_ANDROID
+#if PLATFORM_APPLE || PLATFORM_LINUX
     UUIDImpl* u = reinterpret_cast<UUIDImpl*>(uuid);
     uuid_generate_random(u->uuid);
     return true;
@@ -18111,9 +18548,9 @@ bool uuidGenerate(SysUUID* uuid)
 #endif
 }
 
-bool uuidToString(const SysUUID& uuid, char* str, uint32 size)
+bool uuidToString(const UniqueID& uuid, char* str, uint32 size)
 {
-#if !PLATFORM_ANDROID
+#if PLATFORM_APPLE || PLATFORM_LINUX
     ASSERT(size >= 36);
     UNUSED(size);
     
@@ -18129,9 +18566,9 @@ bool uuidToString(const SysUUID& uuid, char* str, uint32 size)
 #endif
 }
 
-bool uuidFromString(SysUUID* uuid, const char* str)
+bool uuidFromString(UniqueID* uuid, const char* str)
 {
-#if !PLATFORM_ANDROID
+#if PLATFORM_APPLE || PLATFORM_LINUX
     UUIDImpl* u = reinterpret_cast<UUIDImpl*>(uuid);
 
     if (uuid_parse(str, u->uuid) < 0)
@@ -18145,7 +18582,7 @@ bool uuidFromString(SysUUID* uuid, const char* str)
 #endif
 }
 
-bool SysUUID::operator==(const SysUUID& uuid) const
+bool UniqueID::operator==(const UniqueID& uuid) const
 {
     return memcmp(&uuid, this, sizeof(UUIDImpl)) == 0;
 }
@@ -18245,7 +18682,7 @@ size_t File::Read(void* dst, size_t size)
     if ((f->flags & FileOpenFlags::NoCache) == FileOpenFlags::NoCache) {
         static size_t pagesz = 0;
         if (pagesz == 0)
-            pagesz = sysGetPageSize();
+            pagesz = OS::GetPageSize();
         ASSERT_ALWAYS((uintptr_t)dst % pagesz == 0, "buffers must be aligned with NoCache flag");
     }
     ssize_t r = read(f->id, dst, size);
@@ -18306,7 +18743,7 @@ bool File::IsOpen() const
 
 namespace _private
 {
-    static SocketErrorCode socketTranslatePlatformErrorCode()
+    static SocketErrorCode::Enum socketTranslatePlatformErrorCode()
     {
         switch (errno) {
         case EADDRINUSE:        return SocketErrorCode::AddressInUse;
@@ -18357,7 +18794,7 @@ SocketTCP SocketTCP::CreateListener()
     sock.mSock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock.mSock == SOCKET_INVALID) {
         sock.mErrCode = _private::socketTranslatePlatformErrorCode();
-        logError("SocketTCP: Opening the socket failed");
+        LOG_ERROR("SocketTCP: Opening the socket failed");
         return sock;
     }
     return sock;    
@@ -18374,11 +18811,11 @@ bool SocketTCP::Listen(uint16 port, uint32 maxConnections)
 
     if (bind(mSock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         mErrCode = _private::socketTranslatePlatformErrorCode();
-        logError("SocketTCP: failed binding the socket to port: %d", port);
+        LOG_ERROR("SocketTCP: failed binding the socket to port: %d", port);
         return false;
     }
 
-    logVerbose("SocketTCP: Listening on port '%d' for incoming connections ...", port);
+    LOG_VERBOSE("SocketTCP: Listening on port '%d' for incoming connections ...", port);
     int _maxConnections = maxConnections > INT32_MAX ? INT32_MAX : static_cast<int>(maxConnections);
     bool success = listen(mSock, _maxConnections) >= 0;
     
@@ -18401,7 +18838,7 @@ SocketTCP SocketTCP::Accept(char* clientUrl, uint32 clientUrlSize)
     newSock.mSock = accept(mSock, (struct sockaddr*)&addr, &addrlen);
     if (mLive && newSock.mSock == SOCKET_INVALID) {
         newSock.mErrCode = _private::socketTranslatePlatformErrorCode();
-        logError("SocketTCP: failed to accept the new socket");
+        LOG_ERROR("SocketTCP: failed to accept the new socket");
         return newSock;
     }
 
@@ -18410,7 +18847,7 @@ SocketTCP SocketTCP::Accept(char* clientUrl, uint32 clientUrlSize)
         inet_ntop(AF_INET, &addr.sin_addr, ip, sizeof(ip));
         uint16 port = htons(addr.sin_port);
         
-        strPrintFmt(clientUrl, clientUrlSize, "%s:%d", ip, port);
+        Str::PrintFmt(clientUrl, clientUrlSize, "%s:%d", ip, port);
     }
 
     newSock.mLive = true;
@@ -18423,8 +18860,8 @@ SocketTCP SocketTCP::Connect(const char* url)
 
     char address[256];
     char port[16];
-    if (!_private::socketParseUrl(url, address, sizeof(address), port, sizeof(port))) {
-        logError("SocketTCP: failed parsing the url: %s", url);
+    if (!ParseUrl(url, address, sizeof(address), port, sizeof(port))) {
+        LOG_ERROR("SocketTCP: failed parsing the url: %s", url);
         return sock;
     }
 
@@ -18437,21 +18874,21 @@ SocketTCP SocketTCP::Connect(const char* url)
 
     struct addrinfo* addri = nullptr;
     if (getaddrinfo(address, port, &hints, &addri) != 0) {
-        logError("SocketTCP: failed to resolve url: %s", url);
+        LOG_ERROR("SocketTCP: failed to resolve url: %s", url);
         return sock;
     }
 
     sock.mSock = socket(addri->ai_family, addri->ai_socktype, addri->ai_protocol);
     if (sock.mSock == SOCKET_INVALID) {
         freeaddrinfo(addri);
-        logError("SocketTCP: failed to create socket");
+        LOG_ERROR("SocketTCP: failed to create socket");
         return sock;
     }
 
     if (connect(sock.mSock, addri->ai_addr, (int)addri->ai_addrlen) == -1) {
         freeaddrinfo(addri);
         sock.mErrCode = _private::socketTranslatePlatformErrorCode();
-        logError("SocketTCP: failed to connect to url: %s", url);
+        LOG_ERROR("SocketTCP: failed to connect to url: %s", url);
         sock.Close();
         return sock;
     }
@@ -18478,7 +18915,7 @@ uint32 SocketTCP::Write(const void* src, uint32 size)
             if (mErrCode == SocketErrorCode::SocketShutdown ||
                 mErrCode == SocketErrorCode::NotConnected)
             {
-                logDebug("SocketTCP: socket connection closed forcefully by the peer");
+                LOG_DEBUG("SocketTCP: socket connection closed forcefully by the peer");
                 mLive = false;
             }
             return UINT32_MAX;
@@ -18502,7 +18939,7 @@ uint32 SocketTCP::Read(void* dst, uint32 dstSize)
         if (mErrCode == SocketErrorCode::SocketShutdown ||
             mErrCode == SocketErrorCode::NotConnected)
         {
-            logDebug("SocketTCP: socket connection closed forcefully by the peer");
+            LOG_DEBUG("SocketTCP: socket connection closed forcefully by the peer");
             mLive = false;
         }
         return UINT32_MAX;
@@ -18514,6 +18951,186 @@ uint32 SocketTCP::Read(void* dst, uint32 dstSize)
 bool SocketTCP::IsValid() const
 {
     return mSock != SOCKET_INVALID;
+}
+
+
+struct AsyncFilePosix
+{
+    AsyncFile f;
+    MemAllocator* alloc;
+    AsyncFileCallback readFn;
+    int fd;
+    AtomicUint32 done;
+};
+
+struct AsyncContext
+{
+    Mutex mutex;
+    Thread* threads;
+    Array<AsyncFilePosix*> queue;
+    uint32 queueIndex;
+    uint32 numThreads;
+    Semaphore sem;
+    AtomicUint32 quit;
+};
+
+static AsyncContext gAsyncCtx;
+
+namespace Async
+{
+    static int _IOThreadCallback(void* userData)
+    {
+        while (!Atomic::Load(&gAsyncCtx.quit)) {
+            gAsyncCtx.sem.Wait();
+            
+            AsyncFilePosix* file = nullptr;
+            {
+                MutexScope lock(gAsyncCtx.mutex);
+                if (gAsyncCtx.queue.IsEmpty())
+                    continue;
+                uint32 index = gAsyncCtx.queueIndex++;
+                file = gAsyncCtx.queue[index];
+                gAsyncCtx.queue.RemoveAndSwap(index);
+                if (gAsyncCtx.queueIndex >= gAsyncCtx.queue.Count())
+                    gAsyncCtx.queueIndex = 0;
+            }
+            
+            ASSERT(file->fd != -1);
+            pollfd p {};
+            p.fd = file->fd;
+            p.events = POLLIN;
+            [[maybe_unused]] int r = poll(&p, 1, -1);
+            ASSERT(r != -1);
+            ssize_t bytesRead = read(file->fd, file->f.data, file->f.size);
+            ASSERT(bytesRead <= UINT32_MAX);
+            
+            bool hadError = bytesRead != file->f.size;
+            Atomic::StoreExplicit(&file->done, hadError ? 1 : -1, AtomicMemoryOrder::Release);
+            file->readFn(&file->f, hadError);
+        }
+        
+        return 0;
+    }
+} // Async
+
+bool Async::Initialize()
+{
+    SysInfo info {};
+    OS::GetSysInfo(&info);
+    ASSERT(info.coreCount);
+    
+    gAsyncCtx.mutex.Initialize();
+    gAsyncCtx.sem.Initialize();
+    
+    gAsyncCtx.threads = NEW_ARRAY(Mem::GetDefaultAlloc(), Thread, info.coreCount);
+    gAsyncCtx.numThreads = info.coreCount;
+
+    for (uint32 i = 0; i < gAsyncCtx.numThreads; i++) {
+        String<32> name = String<32>::Format("IO_%u", i+1);
+        ThreadDesc tdesc {
+            .entryFn = Async::_IOThreadCallback,
+            .name = name.CStr(),
+            .stackSize = 512*SIZE_KB
+        };
+        
+        gAsyncCtx.threads[i].Start(tdesc);
+    }
+
+    LOG_INFO("(init) Initialized %u Async IO Threads", gAsyncCtx.numThreads);
+
+    return true;
+}
+
+void Async::Release()
+{
+    Atomic::Store(&gAsyncCtx.quit, 1);
+    gAsyncCtx.sem.Post(gAsyncCtx.numThreads);
+    for (uint32 i = 0; i < gAsyncCtx.numThreads; i++)
+        gAsyncCtx.threads[i].Stop();
+    Mem::Free(gAsyncCtx.threads);
+    gAsyncCtx.sem.Release();
+    gAsyncCtx.mutex.Release();
+}
+
+AsyncFile* Async::ReadFile(const char* filepath, const AsyncFileRequest& request)
+{
+    int fd = open(filepath, O_RDONLY|O_NONBLOCK, 0);
+    if (fd == -1)
+        return nullptr;
+    
+    uint64 fileSize = request.sizeHint;
+    uint64 fileModificationTime = 0;
+    
+    if (!fileSize) {
+        PathInfo info = OS::GetPathInfo(filepath);
+        if (info.type != PathType::File) {
+            close(fd);
+            return nullptr;
+        }
+        
+        fileSize = info.size;
+        fileModificationTime = info.lastModified;
+    }
+    
+    MemSingleShotMalloc<AsyncFilePosix> mallocator;
+    uint8* data;
+    uint8* userData = nullptr;
+    if (request.userDataAllocateSize)
+        mallocator.AddExternalPointerField<uint8>(&userData, request.userDataAllocateSize);
+    mallocator.AddExternalPointerField<uint8>(&data, fileSize);
+    
+    AsyncFilePosix* file = mallocator.Malloc(request.alloc);
+    memset(file, 0x0, sizeof(*file));
+    
+    file->f.filepath = filepath;
+    file->f.data = data;
+    file->f.size = uint32(fileSize);
+    file->f.lastModifiedTime = fileModificationTime;
+    if (request.userData) {
+        if (request.userDataAllocateSize) {
+            memcpy(userData, request.userData, request.userDataAllocateSize);
+            file->f.userData = userData;
+        }
+        else {
+            file->f.userData = request.userData;
+        }
+    }
+
+    file->fd = fd;
+    file->alloc = request.alloc;
+    file->readFn = request.readFn;
+    
+    {
+        MutexScope lock(gAsyncCtx.mutex);
+        gAsyncCtx.queue.Push(file);
+        gAsyncCtx.sem.Post();
+    }
+
+    return &file->f;
+}
+
+void Async::Close(AsyncFile* file)
+{
+    AsyncFilePosix* fm = (AsyncFilePosix*)file;
+    if (fm->fd)
+        close(fm->fd);
+    MemSingleShotMalloc<AsyncFilePosix>::Free(fm, fm->alloc);
+}
+
+bool Wait(AsyncFile* file)
+{
+    ASSERT_MSG(0, "Wait not implemented for generic impl");
+    return false;
+}
+
+bool IsFinished(AsyncFile* file, bool* outError)
+{
+    ASSERT(file);
+    AsyncFilePosix* f = (AsyncFilePosix*)file;
+    uint32 r = Atomic::LoadExplicit(&f->done, AtomicMemoryOrder::Acquire);
+    if (outError)
+        *outError = (r == -1);
+    return r != 0;
 }
 
 #endif // PLATFORM_POSIX
@@ -20119,32 +20736,32 @@ PRAGMA_DIAGNOSTIC_POP()
 
 
 static thread_local JNIEnv* gJniEnv = nullptr;
-static atomicUint32 gJniAttachedThreadCount;
+static AtomicUint32 gJniAttachedThreadCount;
 
 #if CONFIG_ENABLE_ASSERT
 static constexpr uint32 kJniMaxAttachedThreadCount = 5;
 #endif
 
-void sysGetSysInfo(SysInfo* info)
+void OS::GetSysInfo(SysInfo* info)
 {
     info->coreCount = android_getCpuCount();
-    info->pageSize = sysGetPageSize();
+    info->pageSize = OS::GetPageSize();
 
     switch (android_getCpuFamily()) {
-    case ANDROID_CPU_FAMILY_ARM:        info->cpuFamily = SysCpuFamily::ARM;    break;
-    case ANDROID_CPU_FAMILY_ARM64:      info->cpuFamily = SysCpuFamily::ARM64;  break;
+    case ANDROID_CPU_FAMILY_ARM:        info->cpuFamily = SysInfo::CpuFamily::ARM;    break;
+    case ANDROID_CPU_FAMILY_ARM64:      info->cpuFamily = SysInfo::CpuFamily::ARM64;  break;
     case ANDROID_CPU_FAMILY_X86:        
-    case ANDROID_CPU_FAMILY_X86_64:     info->cpuFamily = SysCpuFamily::x86_64; break;
+    case ANDROID_CPU_FAMILY_X86_64:     info->cpuFamily = SysInfo::CpuFamily::x86_64; break;
     default:                            
-        ASSERT_MSG(0, "Hardware not supported"); info->cpuFamily = SysCpuFamily::Unknown; break;
+        ASSERT_MSG(0, "Hardware not supported"); info->cpuFamily = SysInfo::CpuFamily::Unknown; break;
     }
 
     uint64 features  = android_getCpuFeatures();
-    if (info->cpuFamily == SysCpuFamily::ARM || info->cpuFamily == SysCpuFamily::ARM64) {
+    if (info->cpuFamily == SysInfo::CpuFamily::ARM || info->cpuFamily == SysInfo::CpuFamily::ARM64) {
         if (features & ANDROID_CPU_ARM_FEATURE_NEON)
             info->cpuCapsNeon = true;
     }
-    else if (info->cpuFamily == SysCpuFamily::x86_64) {
+    else if (info->cpuFamily == SysInfo::CpuFamily::x86_64) {
         if (features & ANDROID_CPU_X86_FEATURE_SSSE3)
             info->cpuCapsSSE3 = true;
         if (features & ANDROID_CPU_X86_FEATURE_SSE4_1)
@@ -20174,24 +20791,24 @@ void sysGetSysInfo(SysInfo* info)
             char* text;
             data.Detach((void**)&text, &numChars);
             
-            const char* memTotalLine = strFindStr(text, "MemTotal:");
+            const char* memTotalLine = Str::FindStr(text, "MemTotal:");
             if (memTotalLine) {
                memTotalLine += 9;
                char memText[32];
                uint32 memTextSize = 0;
 
-               while (strIsWhitespace(*memTotalLine))
+               while (Str::IsWhitespace(*memTotalLine))
                    memTotalLine++;
                
-               while (strIsNumber(*memTotalLine)) {
+               while (Str::IsNumber(*memTotalLine)) {
                    memText[memTextSize++] = *memTotalLine;
                    memTotalLine++;
                }
                memText[memTextSize] = '\0';
-               info->physicalMemorySize = strToUint64(memText)*kKB;
+               info->physicalMemorySize = Str::ToUint64(memText)*SIZE_KB;
             }
 
-            memFree(text);
+            Mem::Free(text);
         }
     }
 
@@ -20211,59 +20828,59 @@ void sysGetSysInfo(SysInfo* info)
 
             char* text;
             data.Detach((void**)&text, &numChars);
-            strTrim(text, numChars, text, '\n');
+            Str::Trim(text, numChars, text, '\n');
             
-            const char* lastNewline = strFindCharRev(text, '\n');
+            const char* lastNewline = Str::FindCharRev(text, '\n');
             if (lastNewline) {
                 const char* lastLine = lastNewline + 1;
-                if (strIsEqualCount(lastLine, "Hardware", 8)) {
-                    const char* colon = strFindChar(lastLine, ':');
+                if (Str::IsEqualCount(lastLine, "Hardware", 8)) {
+                    const char* colon = Str::FindChar(lastLine, ':');
                     if (colon) {
-                        strCopy(info->cpuModel, sizeof(info->cpuModel), colon + 1);
-                        strTrim(info->cpuModel, sizeof(info->cpuModel), info->cpuModel, ' ');
+                        Str::Copy(info->cpuModel, sizeof(info->cpuModel), colon + 1);
+                        Str::Trim(info->cpuModel, sizeof(info->cpuModel), info->cpuModel, ' ');
                     }
                 }
             }
 
-            memFree(text);
+            Mem::Free(text);
 
         }
     }
 }
 
-char* pathGetMyPath(char*, size_t)
+char* OS::GetMyPath(char*, size_t)
 {
     ASSERT_MSG(0, "Exe path is not implemented on android");
     return nullptr;
 }
 
-void pathSetCurrentDir(const char*)
+void OS::SetCurrentDir(const char*)
 {
     ASSERT_MSG(0, "SetCurrentDir is not implemented on android");
 }
 
-char* pathGetCurrentDir(char*, size_t)
+char* OS::GetCurrentDir(char*, size_t)
 {
     ASSERT_MSG(0, "GetCurrentDir is not implemented on android");
     return nullptr;
 }
 
-void sysAndroidPrintToLog(SysAndroidLogType logType, const char* tag, const char* text)
+void OS::AndroidPrintToLog(OSAndroidLogType logType, const char* tag, const char* text)
 {
-    static_assert(SysAndroidLogType::Unknown == static_cast<SysAndroidLogType>(ANDROID_LOG_UNKNOWN));
-    static_assert(SysAndroidLogType::Default == static_cast<SysAndroidLogType>(ANDROID_LOG_DEFAULT));
-    static_assert(SysAndroidLogType::Verbose == static_cast<SysAndroidLogType>(ANDROID_LOG_VERBOSE));
-    static_assert(SysAndroidLogType::Debug == static_cast<SysAndroidLogType>(ANDROID_LOG_DEBUG));
-    static_assert(SysAndroidLogType::Info == static_cast<SysAndroidLogType>(ANDROID_LOG_INFO));
-    static_assert(SysAndroidLogType::Warn == static_cast<SysAndroidLogType>(ANDROID_LOG_WARN));
-    static_assert(SysAndroidLogType::Error == static_cast<SysAndroidLogType>(ANDROID_LOG_ERROR));
-    static_assert(SysAndroidLogType::Fatal == static_cast<SysAndroidLogType>(ANDROID_LOG_FATAL));
-    static_assert(SysAndroidLogType::Silent == static_cast<SysAndroidLogType>(ANDROID_LOG_SILENT));
+    static_assert(OSAndroidLogType::Unknown == static_cast<OSAndroidLogType>(ANDROID_LOG_UNKNOWN));
+    static_assert(OSAndroidLogType::Default == static_cast<OSAndroidLogType>(ANDROID_LOG_DEFAULT));
+    static_assert(OSAndroidLogType::Verbose == static_cast<OSAndroidLogType>(ANDROID_LOG_VERBOSE));
+    static_assert(OSAndroidLogType::Debug == static_cast<OSAndroidLogType>(ANDROID_LOG_DEBUG));
+    static_assert(OSAndroidLogType::Info == static_cast<OSAndroidLogType>(ANDROID_LOG_INFO));
+    static_assert(OSAndroidLogType::Warn == static_cast<OSAndroidLogType>(ANDROID_LOG_WARN));
+    static_assert(OSAndroidLogType::Error == static_cast<OSAndroidLogType>(ANDROID_LOG_ERROR));
+    static_assert(OSAndroidLogType::Fatal == static_cast<OSAndroidLogType>(ANDROID_LOG_FATAL));
+    static_assert(OSAndroidLogType::Silent == static_cast<OSAndroidLogType>(ANDROID_LOG_SILENT));
 
     __android_log_write(static_cast<int>(logType), tag, text);
 }
 
-JNIEnv* sysAndroidAcquireJniEnv(ANativeActivity* activity)
+JNIEnv* OS::AndroidAcquireJniEnv(ANativeActivity* activity)
 {
     if (gJniEnv)
         return gJniEnv;
@@ -20271,27 +20888,27 @@ JNIEnv* sysAndroidAcquireJniEnv(ANativeActivity* activity)
 
     [[maybe_unused]] jint ret = activity->vm->AttachCurrentThread(&gJniEnv, nullptr);	// required to call JNIEnv functions on this thread
     ASSERT(ret == JNI_OK);
-    [[maybe_unused]] uint32 activeThreadCount = atomicFetchAdd32(&gJniAttachedThreadCount, 1);
+    [[maybe_unused]] uint32 activeThreadCount = Atomic::FetchAdd(&gJniAttachedThreadCount, 1);
     ASSERT_MSG(activeThreadCount <= kJniMaxAttachedThreadCount, "Too many AcquireJniEnv in several threads");
     return gJniEnv;
 }
 
-void sysAndroidReleaseJniEnv(ANativeActivity* activity)
+void OS::AndroidReleaseJniEnv(ANativeActivity* activity)
 {
     ASSERT(activity);
     activity->vm->DetachCurrentThread();		// jni cleanup
-    atomicFetchSub32(&gJniAttachedThreadCount, 1);
+    Atomic::FetchSub(&gJniAttachedThreadCount, 1);
 }
 
-JNIEnv* sysAndroidGetJniEnv()
+JNIEnv* OS::AndroidGetJniEnv()
 {
     ASSERT_MSG(gJniEnv != nullptr, "JNI not attached. Call sysAndroidAcquireJniEnv/sysAndroidReleaseJniEnv on the calling thread");
     return gJniEnv;
 }
 
-bool sysIsDebuggerPresent()
+bool OS::IsDebuggerPresent()
 {
-    JNIEnv* jniEnv = sysAndroidGetJniEnv();
+    JNIEnv* jniEnv = OS::AndroidGetJniEnv();
     jclass clz = jniEnv->FindClass("android/os/Debug");
     ASSERT(clz);
     jmethodID funcId = jniEnv->GetStaticMethodID(clz, "isDebuggerConnected", "()Z");
@@ -20302,9 +20919,9 @@ bool sysIsDebuggerPresent()
     return isConnected;
 }
 
-Path sysAndroidGetCacheDirectory(ANativeActivity* activity)
+Path OS::AndroidGetCacheDirectory(ANativeActivity* activity)
 {
-    JNIEnv* jniEnv = sysAndroidGetJniEnv();
+    JNIEnv* jniEnv = OS::AndroidGetJniEnv();
 
     jobject context = activity->clazz;
     jclass contextClass = jniEnv->GetObjectClass(context);
@@ -20372,7 +20989,7 @@ void Semaphore::Initialize()
     sem->handle = dispatch_semaphore_create(0);
     ASSERT_MSG(sem->handle != NULL, "dispatch_semaphore_create failed");
 
-    _private::sysCountersAddSemaphore();
+    _private::CountersAddSemaphore();
 }
 
 void Semaphore::Release()
@@ -20381,7 +20998,7 @@ void Semaphore::Release()
     if (sem->handle) {
         sem->handle = NULL;
 
-        _private::sysCountersRemoveSemaphore();
+        _private::CountersRemoveSemaphore();
     }
 }
 
@@ -20401,45 +21018,48 @@ bool Semaphore::Wait(uint32 msecs)
     return !dispatch_semaphore_wait(sem->handle, dt);
 }
 
-static inline int64_t timerInt64MulDiv(int64_t value, int64_t numer, int64_t denom)
+namespace Timer
 {
-    int64_t q = value / denom;
-    int64_t r = value % denom;
-    return q * numer + r * numer / denom;
-}
+    FORCE_INLINE int64_t _Int64MulDiv(int64_t value, int64_t numer, int64_t denom)
+    {
+        int64_t q = value / denom;
+        int64_t r = value % denom;
+        return q * numer + r * numer / denom;
+    }
+} // Timer
 
-void _private::timerInitialize() 
+void Timer::Initialize() 
 {
     gTimer.init = true;
     mach_timebase_info(&gTimer.timebase);
     gTimer.start = mach_absolute_time();
 }
 
-uint64 timerGetTicks() 
+uint64 Timer::GetTicks() 
 {
-    ASSERT_MSG(gTimer.init, "Timer not initialized. call timerInit()");
+    ASSERT_MSG(gTimer.init, "Timer not initialized. call Timer::Initialize()");
     const uint64 machNow = mach_absolute_time() - gTimer.start;
-    return timerInt64MulDiv(machNow, gTimer.timebase.numer, gTimer.timebase.denom);
+    return _Int64MulDiv(machNow, gTimer.timebase.numer, gTimer.timebase.denom);
 }
 
-char* pathGetMyPath(char* dst, size_t dstSize)
+char* OS::GetMyPath(char* dst, size_t dstSize)
 {
     uint32 size32 = (uint32)dstSize;
     _NSGetExecutablePath(dst, (uint32_t*)&size32);
     return dst;
 }
 
-char* pathGetCurrentDir(char* dst, size_t dstSize)
+char* OS::GetCurrentDir(char* dst, size_t dstSize)
 {
     return getcwd(dst, dstSize);
 }
 
-void pathSetCurrentDir(const char* path)
+void OS::SetCurrentDir(const char* path)
 {
     chdir(path);
 }
 
-void sysGetSysInfo(SysInfo* info)
+void OS::GetSysInfo(SysInfo* info)
 {
     memset(info, 0x0, sizeof(*info));
     
@@ -20457,11 +21077,11 @@ void sysGetSysInfo(SysInfo* info)
             info->physicalMemorySize = physMem;
     }
         
-    info->pageSize = sysGetPageSize();
+    info->pageSize = OS::GetPageSize();
     
 }
 
-SysProcess::SysProcess() :
+OSProcess::OSProcess() :
     mExitCode(-1),
     mTermSignalCode(0)
 {
@@ -20470,7 +21090,7 @@ SysProcess::SysProcess() :
     mStdErrPipeRead = IntToPtr<int>(-1);
 }
 
-SysProcess::~SysProcess()
+OSProcess::~OSProcess()
 {
     int stdoutPipeRead = PtrToInt<int32>(mStdOutPipeRead);
     int stderrPipeRead = PtrToInt<int32>(mStdErrPipeRead);
@@ -20487,7 +21107,7 @@ SysProcess::~SysProcess()
     }
 }
 
-bool SysProcess::Run(const char* cmdline, SysProcessFlags flags, const char* cwd)
+bool OSProcess::Run(const char* cmdline, OSProcessFlags flags, const char* cwd)
 {
     int stdoutPipes[2] = {-1, -1};
     int stderrPipes[2] = {-1, -1};
@@ -20497,7 +21117,7 @@ bool SysProcess::Run(const char* cmdline, SysProcessFlags flags, const char* cwd
     [[maybe_unused]] int r = posix_spawn_file_actions_init(&fileActions);
     ASSERT_MSG(r == 0, "posix_spawn_file_actions_init failed");
 
-    if ((flags & SysProcessFlags::CaptureOutput) == SysProcessFlags::CaptureOutput) {
+    if ((flags & OSProcessFlags::CaptureOutput) == OSProcessFlags::CaptureOutput) {
         r = pipe(stdoutPipes);
         ASSERT_MSG(r == 0, "Creating pipes failed");
 
@@ -20527,14 +21147,14 @@ bool SysProcess::Run(const char* cmdline, SysProcessFlags flags, const char* cwd
     MemTempAllocator tmpAlloc;
     Array<char*> argsArr(&tmpAlloc);
 
-    char* cmdlineCopy = memAllocCopy<char>(cmdline, strLen(cmdline)+1, &tmpAlloc);
-    char* str = const_cast<char*>(strSkipWhitespace(cmdlineCopy));
+    char* cmdlineCopy = Mem::AllocCopy<char>(cmdline, Str::Len(cmdline)+1, &tmpAlloc);
+    char* str = const_cast<char*>(Str::SkipWhitespace(cmdlineCopy));
     while (*str) {
         char* start = str;
         while (*(++str)) {
-            if (strIsWhitespace(*str)) {
+            if (Str::IsWhitespace(*str)) {
                 *str = 0;
-                str = const_cast<char*>(strSkipWhitespace(str+1));
+                str = const_cast<char*>(Str::SkipWhitespace(str+1));
                 break;
             }
         }
@@ -20551,7 +21171,7 @@ bool SysProcess::Run(const char* cmdline, SysProcessFlags flags, const char* cwd
     }
     
     if (posix_spawn(&pid, argsArr[0], &fileActions, nullptr, args, nullptr) != 0) {
-        logError("Running process failed: %s", cmdline);
+        LOG_ERROR("Running process failed: %s", cmdline);
         posix_spawn_file_actions_destroy(&fileActions);
         if (stdoutPipes[0] != -1)
             close(stdoutPipes[0]);
@@ -20560,7 +21180,7 @@ bool SysProcess::Run(const char* cmdline, SysProcessFlags flags, const char* cwd
         return false;
     }
     
-    if ((flags & SysProcessFlags::CaptureOutput) == SysProcessFlags::CaptureOutput) {
+    if ((flags & OSProcessFlags::CaptureOutput) == OSProcessFlags::CaptureOutput) {
         close(stdoutPipes[1]);
         close(stderrPipes[1]);
         mStdOutPipeRead = IntToPtr<int>(stdoutPipes[0]);
@@ -20572,7 +21192,7 @@ bool SysProcess::Run(const char* cmdline, SysProcessFlags flags, const char* cwd
     return true;
 }
 
-void SysProcess::Wait() const
+void OSProcess::Wait() const
 {
     pid_t pid = PtrToInt<int32>(mProcess);
     ASSERT(pid != -1);
@@ -20580,13 +21200,13 @@ void SysProcess::Wait() const
     [[maybe_unused]] int r = waitpid(pid, &status, 0);
     ASSERT(r == pid);
     if (WIFEXITED(status))
-        const_cast<SysProcess*>(this)->mExitCode = WEXITSTATUS(status);
+        const_cast<OSProcess*>(this)->mExitCode = WEXITSTATUS(status);
     else if (WIFSIGNALED(status))
-        const_cast<SysProcess*>(this)->mTermSignalCode = WTERMSIG(status);
-    const_cast<SysProcess*>(this)->mProcess = IntToPtr<int32>(-1);
+        const_cast<OSProcess*>(this)->mTermSignalCode = WTERMSIG(status);
+    const_cast<OSProcess*>(this)->mProcess = IntToPtr<int32>(-1);
 }
 
-bool SysProcess::IsRunning() const
+bool OSProcess::IsRunning() const
 {
     pid_t pid = PtrToInt<int32>(mProcess);
     ASSERT(pid != -1);
@@ -20594,12 +21214,12 @@ bool SysProcess::IsRunning() const
     return waitpid(pid, &status, WNOHANG) == 0;
 }
 
-int SysProcess::GetExitCode() const
+int OSProcess::GetExitCode() const
 {
     return mExitCode;
 }
 
-uint32 SysProcess::ReadStdOut(void* data, uint32 size) const
+uint32 OSProcess::ReadStdOut(void* data, uint32 size) const
 {
     int pipeId = PtrToInt<int>(mStdOutPipeRead);
     ASSERT(pipeId != -1);
@@ -20607,7 +21227,7 @@ uint32 SysProcess::ReadStdOut(void* data, uint32 size) const
     return r > 0 ? (uint32)r : 0;
 }
 
-uint32 SysProcess::ReadStdErr(void* data, uint32 size) const
+uint32 OSProcess::ReadStdErr(void* data, uint32 size) const
 {
     int pipeId = PtrToInt<int>(mStdErrPipeRead);
     ASSERT(pipeId != -1);
@@ -20615,14 +21235,14 @@ uint32 SysProcess::ReadStdErr(void* data, uint32 size) const
     return r > 0 ? (uint32)r : 0;
 }
 
-void SysProcess::Abort()
+void OSProcess::Abort()
 {
     pid_t pid = PtrToInt<int32>(mProcess);
     if (pid)
         kill(pid, 1);
 }
 
-bool sysIsDebuggerPresent()
+bool OS::IsDebuggerPresent()
 {
     int mib[4];
     struct kinfo_proc info;
@@ -20641,17 +21261,12 @@ bool sysIsDebuggerPresent()
     return (info.kp_proc.p_flag & P_TRACED) != 0;
 }
 
-void sysApplePrintToLog(const char* text)
-{
-    puts(text);
-}
-
-char* pathGetHomeDir(char* dst, size_t dstSize)
+char* OS::GetHomeDir(char* dst, size_t dstSize)
 {
     #if PLATFORM_OSX
         const char* homeDir = getenv("HOME");
         ASSERT(homeDir);
-        strCopy(dst, (uint32)dstSize, homeDir);
+        Str::Copy(dst, (uint32)dstSize, homeDir);
         return dst;
     #else
         ASSERT(0, "Not implemented in iOS");
@@ -20659,21 +21274,278 @@ char* pathGetHomeDir(char* dst, size_t dstSize)
     #endif
 }
 
-char* pathGetCacheDir(char* dst, size_t dstSize, const char* appName)
+char* OS::GetCacheDir(char* dst, size_t dstSize, const char* appName)
 {
     #if PLATFORM_OSX
         const char* homeDir = getenv("HOME");
         ASSERT(homeDir);
-        strCopy(dst, (uint32)dstSize, homeDir);
-        strConcat(dst, (uint32)dstSize, "/Library/Application Support/");
-        strConcat(dst, (uint32)dstSize, appName);
+        Str::Copy(dst, (uint32)dstSize, homeDir);
+        Str::Concat(dst, (uint32)dstSize, "/Library/Application Support/");
+        Str::Concat(dst, (uint32)dstSize, appName);
         return dst;
     #else
         ASSERT(0, "Not implemented");
         return nullptr;
     #endif
 }
+
+#define USE_AIO 0
+#define USE_LIBDISPATCH 0
+#if USE_AIO
+#include <aio.h>
+#include <errno.h>
+
+struct AsyncContext
+{
+};
+
+struct AsyncFileMac
+{
+    aiocb cb;
+    AsyncFile f;
+    MemAllocator* alloc;
+    int fd;
+    AsyncFileCallback readFn;
+};
+
+static AsyncContext gAsyncCtx;
+
+bool Async::Initialize()
+{
+    return true;
+}
+
+void Async::Release()
+{
+}
+
+namespace Async
+{
+    static void _AIOCompletionHandler(sigval val)
+    {
+        AsyncFileMac* file = (AsyncFileMac*)val.sival_ptr;
+        ASSERT(file->readFn);
+        file->readFn(&file->f, aio_error(&file->cb) != 0);
+    }
+
+    static inline AsyncFileMac* _GetInternalFilePtr(AsyncFile* f)
+    {
+        return (AsyncFileMac*)((uint8*)f - offsetof(AsyncFileMac, f));
+    }
+}
+
+AsyncFile* Async::ReadFile(const char* filepath, const AsyncFileRequest& request)
+{
+    int fd = open(filepath, O_RDONLY, 0);
+    if (fd == -1)
+        return nullptr;
+    
+    uint64 fileSize = request.sizeHint;
+    uint64 fileModificationTime = 0;
+    
+    if (!fileSize) {
+        PathInfo info = OS::GetPathInfo(filepath);
+        if (info.type != PathType::File) {
+            close(fd);
+            return nullptr;
+        }
+        
+        fileSize = info.size;
+        fileModificationTime = info.lastModified;
+    }
+    
+    MemSingleShotMalloc<AsyncFileMac> mallocator;
+    uint8* data;
+    uint8* userData = nullptr;
+    if (request.userDataAllocateSize)
+        mallocator.AddExternalPointerField<uint8>(&userData, request.userDataAllocateSize);
+    mallocator.AddExternalPointerField<uint8>(&data, fileSize);
+    
+    AsyncFileMac* file = mallocator.Malloc(request.alloc);
+    memset(file, 0x0, sizeof(*file));
+    
+    file->cb.aio_fildes = fd;
+    file->cb.aio_buf = data;
+    file->cb.aio_nbytes = fileSize;
+    file->cb.aio_offset = 0;
+    file->cb.aio_sigevent.sigev_notify = SIGEV_THREAD;
+    file->cb.aio_sigevent.sigev_notify_function = Async::_AIOCompletionHandler;
+    file->cb.aio_sigevent.sigev_value.sival_ptr = &file;
+    
+    file->f.filepath = filepath;
+    file->f.data = data;
+    file->f.size = uint32(fileSize);
+    file->f.lastModifiedTime = fileModificationTime;
+    if (request.userData) {
+        if (request.userDataAllocateSize) {
+            memcpy(userData, request.userData, request.userDataAllocateSize);
+            file->f.userData = userData;
+        }
+        else {
+            file->f.userData = request.userData;
+        }
+    }
+
+    file->fd = fd;
+    file->alloc = request.alloc;
+    file->readFn = request.readFn;
+
+    if (aio_read(&file->cb) == -1) {
+        LOG_ERROR("AIO failed reading file (Code: %u)", errno);
+        close(fd);
+        MemSingleShotMalloc<AsyncFileMac>::Free(file, request.alloc);
+        return nullptr;
+        if (aio_error(&file->cb) != EINPROGRESS) {
+        }
+    }
+
+    return &file->f;
+}
+
+void Async::Close(AsyncFile* file)
+{
+    AsyncFileMac* fm = _GetInternalFilePtr(file);
+    if (fm->fd)
+        close(fm->fd);
+    MemSingleShotMalloc<AsyncFileMac>::Free(fm, fm->alloc);
+}
+
+bool Async::Wait(AsyncFile* file)
+{
+    ASSERT_MSG(0, "Not implemented");
+    return false;
+}
+
+bool Async::IsFinished(AsyncFile* file, bool* outError)
+{
+    ASSERT_MSG(0, "Not implemented");
+    return false;
+}
+
+#elif USE_LIBDISPATCH
+struct AsyncContext
+{
+    dispatch_queue_t queue;
+};
+
+struct AsyncFileMac
+{
+    AsyncFile f;
+    MemAllocator* alloc;
+    dispatch_io_t io;
+    AsyncFileCallback readFn;
+    AtomicUint32 done;
+};
+
+bool Async::Initialize()
+{
+    gAsyncCtx.queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+    if (!gAsyncCtx.queue)
+        return false;
+    
+    return true;
+}
+
+void Async::Release()
+{
+}
+
+AsyncFile* Async::ReadFile(const char* filepath, const AsyncFileRequest& request)
+{
+    PathInfo info = OS::GetPathInfo(filepath);
+    if (info.type != PathType::File)
+        return nullptr;
+    
+    dispatch_io_t io = dispatch_io_create_with_path(DISPATCH_IO_STREAM, filepath, O_RDONLY, 0, gAsyncCtx.queue, ^(int error) {
+        ASSERT_MSG(error == 0, "Unexpected open file: %s (error: %u)", filepath, error);
+    });
+    
+    ASSERT(io);
+    ASSERT(request.readFn);
+
+    uint64 fileSize = request.sizeHint;
+    if (!fileSize)
+        fileSize = info.size;
+    
+    ASSERT_MSG(fileSize < UINT32_MAX, "Large file sizes are not supported by win32 overlapped API");
+    ASSERT_MSG(!request.userDataAllocateSize || (request.userData && request.userDataAllocateSize),
+               "`userDataAllocatedSize` should be accompanied with a valid `userData` pointer");
+    
+    MemSingleShotMalloc<AsyncFileMac> mallocator;
+    uint8* data;
+    uint8* userData = nullptr;
+    if (request.userDataAllocateSize)
+        mallocator.AddExternalPointerField<uint8>(&userData, request.userDataAllocateSize);
+    mallocator.AddExternalPointerField<uint8>(&data, fileSize);
+    
+    AsyncFileMac* file = mallocator.Malloc(request.alloc);
+    memset(file, 0x0, sizeof(*file));
+    file->f.filepath = filepath;
+    file->f.data = data;
+    file->f.size = uint32(fileSize);
+    file->f.lastModifiedTime = info.lastModified;
+    if (request.userData) {
+        if (request.userDataAllocateSize) {
+            memcpy(userData, request.userData, request.userDataAllocateSize);
+            file->f.userData = userData;
+        }
+        else {
+            file->f.userData = request.userData;
+        }
+    }
+
+    file->io = io;
+    file->alloc = request.alloc;
+    file->readFn = request.readFn;
+    
+    dispatch_io_read(io, 0, fileSize, gAsyncCtx.queue, ^(bool done, dispatch_data_t data, int error) {
+        if (done) {
+            if (error == 0) {
+                const void* buffer;
+                size_t size;
+                dispatch_data_t newData = dispatch_data_create_map(data, &buffer, &size);
+                ASSERT(buffer);
+                memcpy(file->f.data, buffer, size);
+                dispatch_release(newData);
+            }
+            
+            file->readFn(&file->f, error == 0);
+            dispatch_release(data);
+            
+            Atomic::StoreExplicit(&file->done, 1, AtomicMemoryOrder::Release);
+        }
+    });
+
+    return &file->f;
+}
+
+void Async::Close(AsyncFile* file)
+{
+    ASSERT(file);
+    AsyncFileMac* f = (AsyncFileMac*)file;
+    if (f->io)
+        dispatch_release(f->io);
+    if (f->alloc)
+        Mem::Free(f, f->alloc);
+}
+
+bool Async::Wait(AsyncFile* file)
+{
+    ASSERT_MSG(0, "Not implemented");
+    return false;
+}
+
+bool Async::IsFinished(AsyncFile* file, bool* outError)
+{
+    ASSERT(file);
+    AsyncFileMac* f = (AsyncFileMac*)file;
+    return Atomic::LoadExplicit(&f->done, AtomicMemoryOrder::Acquire);
+}
+#endif
+
 #endif // PLATFORM_APPLE
+
+
 
     #else
         #error "Not implemented"
@@ -20709,25 +21581,28 @@ char* pathGetCacheDir(char* dst, size_t dstSize, const char* appName)
 
 struct SysCounters
 {
-    atomicUint32 numThreads;
-    atomicUint32 numMutexes;
-    atomicUint32 numSemaphores;
-    atomicUint32 numSignals;
-    atomicUint64 threadStackSize;
+    AtomicUint32 numThreads;
+    AtomicUint32 numMutexes;
+    AtomicUint32 numSemaphores;
+    AtomicUint32 numSignals;
+    AtomicUint64 threadStackSize;
 };
 
 static SysCounters gSysCounters;
 
 struct TimerInitializer
 {
-    TimerInitializer() { _private::timerInitialize(); }
+    TimerInitializer()
+    {
+        Timer::Initialize();
+    }
 };
 
 static TimerInitializer gTimerInit;
 
-char* pathToUnix(const char *path, char *dst, size_t dstSize)
+char* PathUtils::ToUnix(const char *path, char *dst, size_t dstSize)
 {
-    size_t len = strLen(path);
+    size_t len = Str::Len(path);
     len = Min<size_t>(len, dstSize - 1);
 
     for (int i = 0; i < len; i++) {
@@ -20740,9 +21615,9 @@ char* pathToUnix(const char *path, char *dst, size_t dstSize)
     return dst;
 }
 
-char* pathToWin(const char *path, char *dst, size_t dstSize)
+char* PathUtils::ToWin(const char *path, char *dst, size_t dstSize)
 {
-    size_t len = strLen(path);
+    size_t len = Str::Len(path);
     len = Min<size_t>(len, dstSize - 1);
 
     for (int i = 0; i < len; i++) {
@@ -20755,11 +21630,11 @@ char* pathToWin(const char *path, char *dst, size_t dstSize)
     return dst;
 }
 
-char* pathFileExtension(const char *path, char *dst, size_t dstSize)
+char* PathUtils::GetFileExtension(const char *path, char *dst, size_t dstSize)
 {
     ASSERT(dstSize > 0);
 
-    int len = strLen(path);
+    int len = Str::Len(path);
     if (len > 0) {
         const char *start = strrchr(path, '/');
         #if PLATFORM_WINDOWS
@@ -20772,7 +21647,7 @@ char* pathFileExtension(const char *path, char *dst, size_t dstSize)
         for (const char *e = start; e < end; ++e) {
             if (*e != '.')
                 continue;
-            strCopy(dst, (uint32)dstSize, e);
+            Str::Copy(dst, (uint32)dstSize, e);
             return dst;
         }
     }
@@ -20781,7 +21656,7 @@ char* pathFileExtension(const char *path, char *dst, size_t dstSize)
     return dst;
 }
 
-char* pathFileNameAndExt(const char *path, char *dst, size_t dstSize)
+char* PathUtils::GetFilenameAndExtension(const char *path, char *dst, size_t dstSize)
 {
     const char *r = strrchr(path, '/');
     #if PLATFORM_WINDOWS
@@ -20789,15 +21664,15 @@ char* pathFileNameAndExt(const char *path, char *dst, size_t dstSize)
         r = strrchr(path, '\\');
     #endif
     if (r) {
-        strCopy(dst, (uint32)dstSize, r + 1);
+        Str::Copy(dst, (uint32)dstSize, r + 1);
     }
     else if (dst != path) {
-        strCopy(dst, (uint32)dstSize, path);
+        Str::Copy(dst, (uint32)dstSize, path);
     }
     return dst;
 }
 
-char* pathFileName(const char* path, char* dst, size_t dstSize)
+char* PathUtils::GetFilename(const char* path, char* dst, size_t dstSize)
 {
     const char *r = strrchr(path, '/');
     #if PLATFORM_WINDOWS
@@ -20805,10 +21680,10 @@ char* pathFileName(const char* path, char* dst, size_t dstSize)
         r = strrchr(path, '\\');
     #endif
     if (r) {
-        strCopy(dst, (uint32)dstSize, r + 1);
+        Str::Copy(dst, (uint32)dstSize, r + 1);
     }
     else if (dst != path) {
-        strCopy(dst, (uint32)dstSize, path);
+        Str::Copy(dst, (uint32)dstSize, path);
     }
 
     char* dot = strrchr(dst, '.');
@@ -20818,7 +21693,7 @@ char* pathFileName(const char* path, char* dst, size_t dstSize)
     return dst;
 }
 
-char* pathDirectory(const char *path, char *dst, size_t dstSize)
+char* PathUtils::GetDirectory(const char *path, char *dst, size_t dstSize)
 {
     const char *r = strrchr(path, '/');
     #if PLATFORM_WINDOWS
@@ -20831,7 +21706,7 @@ char* pathDirectory(const char *path, char *dst, size_t dstSize)
             dst[o] = '\0';
         }
         else {
-            strCopyCount(dst, (uint32)dstSize, path, o);
+            Str::CopyCount(dst, (uint32)dstSize, path, o);
         }
 
         #if PLATFORM_WINDOWS
@@ -20843,33 +21718,36 @@ char* pathDirectory(const char *path, char *dst, size_t dstSize)
     return dst;
 }
 
-static char* pathJoin(char *dst, size_t dstSize, const char *sep, const char *pathA, const char *pathB)
+namespace PathUtils
 {
-    ASSERT(dst != pathB);
-    int len = strLen(pathA);
-    if (dst != pathA) {
-        if (len > 0 && pathA[len - 1] == sep[0]) {
-            strCopy(dst, (uint32)dstSize, pathA);
+    static char* Join(char *dst, size_t dstSize, const char *sep, const char *pathA, const char *pathB)
+    {
+        ASSERT(dst != pathB);
+        int len = Str::Len(pathA);
+        if (dst != pathA) {
+            if (len > 0 && pathA[len - 1] == sep[0]) {
+                Str::Copy(dst, (uint32)dstSize, pathA);
+            }
+            else if (len > 0) {
+                Str::Copy(dst, (uint32)dstSize, pathA);
+                Str::Concat(dst, (uint32)dstSize, sep);
+            }
+            else {
+                dst[0] = '\0';
+            }
         }
-        else if (len > 0) {
-            strCopy(dst, (uint32)dstSize, pathA);
-            strConcat(dst, (uint32)dstSize, sep);
+        else if (len > 0 && pathA[len - 1] != sep[0]) {
+            Str::Concat(dst, (uint32)dstSize, sep);
         }
-        else {
-            dst[0] = '\0';
-        }
-    }
-    else if (len > 0 && pathA[len - 1] != sep[0]) {
-        strConcat(dst, (uint32)dstSize, sep);
-    }
 
-    if (pathB[0] == sep[0])
+        if (pathB[0] == sep[0])
         ++pathB;
-    strConcat(dst, (uint32)dstSize, pathB);
-    return dst;
+        Str::Concat(dst, (uint32)dstSize, pathB);
+        return dst;
+    }
 }
 
-char* pathJoin(char *dst, size_t dstSize, const char *pathA, const char *pathB)
+char* PathUtils::Join(char *dst, size_t dstSize, const char *pathA, const char *pathB)
 {
     #if PLATFORM_WINDOWS
     const char *kSep = "\\";
@@ -20877,27 +21755,27 @@ char* pathJoin(char *dst, size_t dstSize, const char *pathA, const char *pathB)
     const char *kSep = "/";
     #endif
 
-    return pathJoin(dst, dstSize, kSep, pathA, pathB);
+    return PathUtils::Join(dst, dstSize, kSep, pathA, pathB);
 }
 
-char* pathJoinUnixStyle(char *dst, size_t dstSize, const char *pathA, const char *pathB)
+char* PathUtils::JoinUnixStyle(char *dst, size_t dstSize, const char *pathA, const char *pathB)
 {
-    return pathJoin(dst, dstSize, "/", pathA, pathB);
+    return PathUtils::Join(dst, dstSize, "/", pathA, pathB);
 }
 
-uint64 timerLapTime(uint64* lastTime)
+uint64 Timer::LapTime(uint64* lastTime)
 {
     ASSERT(lastTime);
     uint64 dt = 0;
-    uint64 now = timerGetTicks();
+    uint64 now = Timer::GetTicks();
     if (*lastTime != 0) 
-        dt = timerDiff(now, *lastTime);
+        dt = Timer::Diff(now, *lastTime);
     *lastTime = now;
     return dt;
 }
 
-void sysGenerateCmdLineFromArgcArgv(int argc, const char* argv[], char** outString, uint32* outStringLen, 
-                                    Allocator* alloc, const char* prefixCmd)
+void OS::GenerateCmdLineFromArgcArgv(int argc, const char* argv[], char** outString, uint32* outStringLen, 
+                                    MemAllocator* alloc, const char* prefixCmd)
 {
     ASSERT(outString);
     ASSERT(outStringLen);
@@ -20906,12 +21784,12 @@ void sysGenerateCmdLineFromArgcArgv(int argc, const char* argv[], char** outStri
     blob.SetGrowPolicy(Blob::GrowPolicy::Linear, 256);
 
     if (prefixCmd) {
-        blob.Write(prefixCmd, strLen(prefixCmd));
+        blob.Write(prefixCmd, Str::Len(prefixCmd));
         blob.Write<char>(32);
     }
 
     for (int i = 0; i < argc; i++) {
-        blob.Write(argv[i], strLen(argv[i]));
+        blob.Write(argv[i], Str::Len(argv[i]));
         if (i != argc - 1)
             blob.Write<char>(32);
     }
@@ -20922,7 +21800,7 @@ void sysGenerateCmdLineFromArgcArgv(int argc, const char* argv[], char** outStri
     *outStringLen = static_cast<uint32>(len);
 }
 
-void sysPauseCpu()
+void OS::PauseCPU()
 {
 #if CPU_X86
     _mm_pause();
@@ -20933,7 +21811,7 @@ void sysPauseCpu()
 #endif
 }
 
-uint64 sysGetCpuClock()
+uint64 OS::GetCPUClock()
 {
 #if PLATFORM_APPLE  // TODO: maybe we can get rid of this and use the asm one
     return mach_absolute_time();
@@ -20952,15 +21830,15 @@ uint64 sysGetCpuClock()
 #endif
 }
 
-bool _private::socketParseUrl(const char* url, char* address, size_t addressSize, char* port, size_t portSize, const char** pResource)
+bool SocketTCP::ParseUrl(const char* url, char* address, size_t addressSize, char* port, size_t portSize, const char** pResource)
 {
-    uint32 urlLen = strLen(url);
+    uint32 urlLen = Str::Len(url);
     
-    if (const char* addressBegin = strFindStr(url, "://"); addressBegin)
+    if (const char* addressBegin = Str::FindStr(url, "://"); addressBegin)
         url = addressBegin + 2;
     
-    char const* addressEnd = strFindChar(url, ':');
-    if (!addressEnd) addressEnd = strFindChar(url, '/');
+    char const* addressEnd = Str::FindChar(url, ':');
+    if (!addressEnd) addressEnd = Str::FindChar(url, '/');
     if (!addressEnd) addressEnd = url + urlLen;
         
     uint32 addressLen = PtrToInt<uint32>((void*)(addressEnd - url));
@@ -20972,9 +21850,9 @@ bool _private::socketParseUrl(const char* url, char* address, size_t addressSize
     char const* portEnd = addressEnd;
     if (*addressEnd == ':') {
         ++addressEnd;
-        portEnd = strFindChar(addressEnd, '/');
+        portEnd = Str::FindChar(addressEnd, '/');
         if (!portEnd) 
-            portEnd = addressEnd + strLen(addressEnd);
+            portEnd = addressEnd + Str::Len(addressEnd);
         uint32 portLen = PtrToInt<uint32>((void*)(portEnd - addressEnd));
         if (portLen >= portSize) 
             return false;
@@ -20990,49 +21868,49 @@ bool _private::socketParseUrl(const char* url, char* address, size_t addressSize
     return true;    
 }
 
-void _private::sysCountersAddThread(size_t stackSize)
+void _private::CountersAddThread(size_t stackSize)
 {
-    atomicFetchAdd32Explicit(&gSysCounters.numThreads, 1, AtomicMemoryOrder::Relaxed);
-    atomicFetchAdd64Explicit(&gSysCounters.threadStackSize, stackSize, AtomicMemoryOrder::Relaxed);
+    Atomic::FetchAddExplicit(&gSysCounters.numThreads, 1, AtomicMemoryOrder::Relaxed);
+    Atomic::FetchAddExplicit(&gSysCounters.threadStackSize, stackSize, AtomicMemoryOrder::Relaxed);
 }
 
-void _private::sysCountersRemoveThread(size_t stackSize)
+void _private::CountersRemoveThread(size_t stackSize)
 {
-    atomicFetchSub32Explicit(&gSysCounters.numThreads, 1, AtomicMemoryOrder::Relaxed);
-    atomicFetchSub64Explicit(&gSysCounters.threadStackSize, stackSize, AtomicMemoryOrder::Relaxed);
+    Atomic::FetchSubExplicit(&gSysCounters.numThreads, 1, AtomicMemoryOrder::Relaxed);
+    Atomic::FetchSubExplicit(&gSysCounters.threadStackSize, stackSize, AtomicMemoryOrder::Relaxed);
 }
 
-void _private::sysCountersAddMutex()
+void _private::CountersAddMutex()
 {
-    atomicFetchAdd32Explicit(&gSysCounters.numMutexes, 1, AtomicMemoryOrder::Relaxed);
+    Atomic::FetchAddExplicit(&gSysCounters.numMutexes, 1, AtomicMemoryOrder::Relaxed);
 }
 
-void _private::sysCountersRemoveMutex()
+void _private::CountersRemoveMutex()
 {
-    atomicFetchSub32Explicit(&gSysCounters.numMutexes, 1, AtomicMemoryOrder::Relaxed);
+    Atomic::FetchSubExplicit(&gSysCounters.numMutexes, 1, AtomicMemoryOrder::Relaxed);
 }
 
-void _private::sysCountersAddSignal()
+void _private::CountersAddSignal()
 {
-    atomicFetchAdd32Explicit(&gSysCounters.numSignals, 1, AtomicMemoryOrder::Relaxed);
+    Atomic::FetchAddExplicit(&gSysCounters.numSignals, 1, AtomicMemoryOrder::Relaxed);
 }
 
-void _private::sysCountersRemoveSignal()
+void _private::CountersRemoveSignal()
 {
-    atomicFetchSub32Explicit(&gSysCounters.numSignals, 1, AtomicMemoryOrder::Relaxed);
+    Atomic::FetchSubExplicit(&gSysCounters.numSignals, 1, AtomicMemoryOrder::Relaxed);
 }
 
-void _private::sysCountersAddSemaphore()
+void _private::CountersAddSemaphore()
 {
-    atomicFetchAdd32Explicit(&gSysCounters.numSemaphores, 1, AtomicMemoryOrder::Relaxed);
+    Atomic::FetchAddExplicit(&gSysCounters.numSemaphores, 1, AtomicMemoryOrder::Relaxed);
 }
 
-void _private::sysCountersRemoveSemaphore()
+void _private::CountersRemoveSemaphore()
 {
-    atomicFetchSub32Explicit(&gSysCounters.numSemaphores, 1, AtomicMemoryOrder::Relaxed);
+    Atomic::FetchSubExplicit(&gSysCounters.numSemaphores, 1, AtomicMemoryOrder::Relaxed);
 }
 
-SysPrimitiveStats sysGetPrimitiveStats()
+SysPrimitiveStats GetSystemPrimitiveStats()
 {
     return SysPrimitiveStats {
         .numMutexes = gSysCounters.numMutexes,
@@ -21046,33 +21924,33 @@ SysPrimitiveStats sysGetPrimitiveStats()
 
 void SpinLockMutex::Enter()
 {
-    while (atomicExchange32Explicit(&mLocked, 1, AtomicMemoryOrder::Acquire) == 1) {
+    while (Atomic::ExchangeExplicit(&mLocked, 1, AtomicMemoryOrder::Acquire) == 1) {
         uint32 spinCount = 1;
         do {
             if (spinCount++ & 1023)
-                sysPauseCpu();
+                OS::PauseCPU();
             else
-                threadYield();
-        } while (atomicLoad32Explicit(&mLocked, AtomicMemoryOrder::Relaxed));
+                Thread::SwitchContext();
+        } while (Atomic::LoadExplicit(&mLocked, AtomicMemoryOrder::Relaxed));
     }
 }
 
 void SpinLockMutex::Exit()
 {
-    atomicStore32Explicit(&mLocked, 0, AtomicMemoryOrder::Release);
+    Atomic::StoreExplicit(&mLocked, 0, AtomicMemoryOrder::Release);
 }
 
 bool SpinLockMutex::TryEnter()
 {
-    return atomicLoad32Explicit(&mLocked, AtomicMemoryOrder::Relaxed) == 0 &&
-           atomicExchange32Explicit(&mLocked, 1, AtomicMemoryOrder::Acquire) == 0;
+    return Atomic::LoadExplicit(&mLocked, AtomicMemoryOrder::Relaxed) == 0 &&
+           Atomic::ExchangeExplicit(&mLocked, 1, AtomicMemoryOrder::Acquire) == 0;
 }
 
 
 
 #ifdef TRACY_ENABLE
 
-#define TRACY_DBGHELP_LOCK debugDbgHelp
+#define TRACY_DBGHELP_LOCK DebugDbgHelp
 PRAGMA_DIAGNOSTIC_PUSH()
 PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4530)   // C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
 PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wsometimes-uninitialized")
@@ -21086,7 +21964,7 @@ PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-variable")
     #define OLD_PLATFORM_WINDOWS PLATFORM_WINDOWS
     #undef PLATFORM_WINDOWS
 #endif
-#define TRACY_UNWIND(_stackframes, _depth) debugCaptureStacktrace(_stackframes, _depth, 2)
+#define TRACY_UNWIND(_stackframes, _depth) Debug::CaptureStacktrace(_stackframes, _depth, 2)
 #define TRACY_VK_USE_SYMBOL_TABLE
 #include "External/tracy/TracyClient.cpp"
 PRAGMA_DIAGNOSTIC_POP()
@@ -21106,13 +21984,13 @@ PRAGMA_DIAGNOSTIC_POP()
 static TracyZoneEnterCallback gZoneEnterCallback;
 static TracyZoneExitCallback gZoneExitCallback;
 
-void tracySetZoneCallbacks(TracyZoneEnterCallback zoneEnterCallback, TracyZoneExitCallback zoneExitCallback)
+void Tracy::SetZoneCallbacks(TracyZoneEnterCallback zoneEnterCallback, TracyZoneExitCallback zoneExitCallback)
 {
     gZoneEnterCallback = zoneEnterCallback;
     gZoneExitCallback = zoneExitCallback;
 }
 
-bool tracyRunZoneExitCallback(TracyCZoneCtx* ctx)
+bool Tracy::RunZoneExitCallback(TracyCZoneCtx* ctx)
 {
     if (gZoneExitCallback)
         return gZoneExitCallback(ctx);
@@ -21120,14 +21998,14 @@ bool tracyRunZoneExitCallback(TracyCZoneCtx* ctx)
         return false;
 }
 
-void tracyRunZoneEnterCallback(TracyCZoneCtx* ctx, const ___tracy_source_location_data* sourceLoc)
+void Tracy::RunZoneEnterCallback(TracyCZoneCtx* ctx, const ___tracy_source_location_data* sourceLoc)
 {
     if (gZoneEnterCallback)
         gZoneEnterCallback(ctx, sourceLoc);
 }
 
 
-void _private::___tracy_emit_gpu_calibrate_serial(const struct ___tracy_gpu_calibrate_data data)
+void Tracy::_private::___tracy_emit_gpu_calibrate_serial(const struct ___tracy_gpu_calibrate_data data)
 {
     auto item = tracy::Profiler::QueueSerial();
     tracy::MemWrite(&item->hdr.type, tracy::QueueType::GpuCalibration);
@@ -21138,12 +22016,12 @@ void _private::___tracy_emit_gpu_calibrate_serial(const struct ___tracy_gpu_cali
     tracy::Profiler::QueueSerialFinish();
 }
 
-int64 _private::__tracy_get_time(void)
+int64 Tracy::_private::__tracy_get_time(void)
 {
     return tracy::Profiler::GetTime();
 }
 
-uint64 _private::__tracy_alloc_source_loc(uint32 line, const char* source, const char* function, const char* name)
+uint64 Tracy::_private::__tracy_alloc_source_loc(uint32 line, const char* source, const char* function, const char* name)
 {
     return tracy::Profiler::AllocSourceLocation(line, source, function, name, name ? strlen(name): 0);
 }

@@ -2,7 +2,7 @@
 
 #define CONFIG_IMGUI_SETTINGS_FILENAME "imgui.ini"
 
-struct Settings
+struct AppSettings
 {
     uint16 windowX = 0;
     uint16 windowY = 0;
@@ -14,7 +14,7 @@ bool Initialize();
 void Release();
 void Update();
 
-Settings& GetSettings();
+AppSettings& GetSettings();
 void SetWindowPos(uint16 x, uint16 y);
 void SetWindowRect(uint16 x, uint16 y, uint16 width, uint16 height);
 void SetWindowTitle(const char* title);
@@ -39,5 +39,5 @@ bool InitializeCommon();
 void ReleaseCommon();
 void UpdateCommon();
 
-Recti GetWindowDesktopRect();
+RectInt GetWindowDesktopRect();
 

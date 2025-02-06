@@ -15,51 +15,22 @@ if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ../bin)
 endif()
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}")
-include(Utils)
-
-set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded$<$<CONFIG:Debug>:DebugDLL>)
-
-add_definitions(-D__STDC_LIMIT_MACROS)
-add_definitions(-D__STDC_FORMAT_MACROS)
-add_definitions(-D__STDC_CONSTANT_MACROS)
-if(WIN32)
-    add_definitions(-D_ITERATOR_DEBUG_LEVEL=0)
-    add_definitions(-D_SECURE_SCL=0)
-    add_definitions(-D_HAS_EXCEPTIONS=0)
-    add_definitions(-D_CRT_SECURE_NO_WARNINGS=0)
-endif()
-
-# Common C++ flags
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_C_STANDARD 11)
 
+# Remove harmful flags and set basic global flags
 if (MSVC)
-    utils_remove_compile_options(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" "/EHsc /GR")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /GR-")
+    set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded$<$<CONFIG:Debug>:DebugDLL>)
+
+    string(REPLACE "/EHsc" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    string(REPLACE "/GR" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+
     if (MSVC_MULTITHREADED_COMPILE AND NOT CMAKE_MAKE_PROGRAM MATCHES "ninja.exe")
         add_compile_options(/MP)    # multiprocessor compilation
     endif()
-
-    if (${MSVC_VERSION} GREATER_EQUAL 1928)
-        message(STATUS "MSVC compiler supports C17 standard")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /std:c17")
-    endif()
-
-    utils_remove_compile_options(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}" "/Ob0")
-    utils_remove_compile_options(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}" "/Ob0")
-	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Ob1")
-	set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /Ob1")
 else()
-    if (NOT WIN32)
-        add_compile_options(-fPIC)
-    endif()
-    add_compile_options(-Wno-deprecated-declarations)
-    add_compile_options("$<$<CONFIG:Debug>:-D_DEBUG>")
-    add_compile_options("$<$<CONFIG:Release>:-DNDEBUG>")
-
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu11")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions")
-    utils_remove_compile_options(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" "-fexceptions -frtti")
+    string(REPLACE "-fexceptions" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    string(REPLACE "-frtti" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
     if (CMAKE_C_COMPILER_ID MATCHES "GNU")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-format-truncation")
@@ -104,13 +75,28 @@ if (WIN32)
 endif()
 
 add_executable(${APPNAME} ${SOURCE_FILES})
+
 if (WIN32)
     set_target_properties(${APPNAME} PROPERTIES WIN32_EXECUTABLE TRUE)
+    target_link_libraries(${APPNAME} "d3d11.lib" "freetype.lib")
+
+    # warning LNK4099: PDB '' was not found with 'freetype.lib'
+    # warning: static libs conflict
+    target_link_options(${APPNAME} PRIVATE /ignore:4099 /NODEFAULTLIB:LIBCMT /DEBUG:FULL)
+
+    target_compile_options(${APPNAME} PRIVATE /Zi /GR-)
+
+    target_compile_definitions(${APPNAME} PRIVATE -D_ITERATOR_DEBUG_LEVEL=0 -D_SECURE_SCL=0 -D_HAS_EXCEPTIONS=0 -D_CRT_SECURE_NO_WARNINGS=0)
+else()
+    target_compile_definitions(${APPNAME} PRIVATE "$<$<CONFIG:Debug>:-D_DEBUG>")
+    target_compile_definitions(${APPNAME} PRIVATE "$<$<CONFIG:Release>:-DNDEBUG>")
+
+    target_compile_options(${APPNAME} PRIVATE -fno-rtti -fno-exceptions -Wno-deprecated-declarations -fPIC)
 endif()
-target_link_options(${APPNAME} PUBLIC /DEBUG:FULL)
+
+target_compile_definitions(${APPNAME} PRIVATE -D__STDC_LIMIT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_CONSTANT_MACROS)
+
 target_precompile_headers(${APPNAME} PRIVATE ../code/Core.h)
 target_include_directories(${APPNAME} PRIVATE ../code/ImGui/freetype)
 target_link_directories(${APPNAME} PRIVATE ../code/ImGui/freetype)
-target_compile_definitions(${APPNAME} PRIVATE COMPILE_DEFINITIONS -DCONFIG_APP_NAME="${APPNAME}")
-target_link_libraries(${APPNAME} "d3d11.lib" "freetype.lib")
-target_link_options(${APPNAME} PRIVATE /ignore:4099)   # warning LNK4099: PDB '' was not found with 'freetype.lib'
+target_compile_definitions(${APPNAME} PRIVATE -DCONFIG_APP_NAME="${APPNAME}")

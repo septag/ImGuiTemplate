@@ -16,7 +16,7 @@ struct TextContent
     TextContent* mRedirectContent = nullptr;
     uint32 mResetFlag = 0;
 
-    bool Initialize(size_t reserveSize = kMB*256, size_t pageSize = kKB*512);
+    bool Initialize(size_t reserveSize = SIZE_KB*256, size_t pageSize = SIZE_KB*512);
     void Release();
     void WriteData(const void* src, size_t size);
     template <typename _T> void WriteData(const _T& v) { WriteData(&v, sizeof(v)); }

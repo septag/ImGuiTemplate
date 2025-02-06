@@ -107,7 +107,7 @@ static void SetImGuiTheme()
 static Path GetImGuiSettingsFilepath()
 {
     Path myDir;
-    pathGetMyPath(myDir.Ptr(), myDir.Capacity());
+    OS::GetMyPath(myDir.Ptr(), myDir.Capacity());
     myDir = myDir.GetDirectory();
     ASSERT(myDir.IsDir());
     return Path::Join(myDir, CONFIG_IMGUI_SETTINGS_FILENAME);
@@ -116,8 +116,8 @@ static Path GetImGuiSettingsFilepath()
 bool ImGui::MyInitialize()
 {
     ImGui::SetAllocatorFunctions(
-        [](size_t size, void*)->void* { return memAlloc(size); },
-        [](void* ptr, void*) { memFree(ptr); });
+        [](size_t size, void*)->void* { return Mem::Alloc(size); },
+        [](void* ptr, void*) { Mem::Free(ptr); });
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -171,7 +171,7 @@ bool ImGui::LoadFonts(float dpiScale)
 {
     #if PLATFORM_WINDOWS
         Path fontsDir;
-        pathWin32GetFolder(SysWin32Folder::Fonts, fontsDir.Ptr(), sizeof(fontsDir));
+        OS::Win32GetFolder(OSWin32Folder::Fonts, fontsDir.Ptr(), sizeof(fontsDir));
         Path defaultFontPath = Path::Join(fontsDir, "Verdana.ttf");
         Path defaultMonoFontPath = Path::Join(fontsDir, "consola.ttf");
         float fontSize = 15.0f;

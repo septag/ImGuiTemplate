@@ -19,7 +19,7 @@ void Update()
     // TODO: implement
 
     if (ImGui::Begin("Hello")) {
-        ImGui::TextUnformatted("Hello World");
+        ImGui::Text("Fps: %.1f", 1.0f/ImGui::GetIO().DeltaTime);
     }
     ImGui::End();
 }

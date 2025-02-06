@@ -125,7 +125,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
     ASSERT_ALWAYS(r, "InitializeCommon() failed");
 
     wchar_t appNameW[512];
-    strUt8ToWide(CONFIG_APP_NAME, appNameW, sizeof(appNameW));
+    Str::Utf8ToWide(CONFIG_APP_NAME, appNameW, sizeof(appNameW));
     // Create application window
     ImGui_ImplWin32_EnableDpiAwareness();
 
@@ -133,15 +133,15 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
     WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), appIcon, nullptr, nullptr, nullptr, appNameW, nullptr };
     RegisterClassExW(&wc);
 
-    const Settings& settings = GetSettings();
-    Recti displayRect = GetWindowDesktopRect();
-    Recti myRect(settings.windowX, settings.windowY, settings.windowX + settings.windowWidth, settings.windowY + settings.windowHeight);
-    if (!rectiTest(myRect, displayRect))
+    const AppSettings& settings = GetSettings();
+    RectInt displayRect = GetWindowDesktopRect();
+    RectInt myRect(settings.windowX, settings.windowY, settings.windowX + settings.windowWidth, settings.windowY + settings.windowHeight);
+    if (!RectInt::Test(myRect, displayRect))
         SetWindowPos(0, 0);
 
     HWND hwnd = CreateWindowW(wc.lpszClassName, appNameW, WS_OVERLAPPEDWINDOW, 
                               settings.windowX, settings.windowY, 
-                              Clamp<uint16>(settings.windowWidth, 500, rectiWidth(displayRect)), Clamp<uint16>(settings.windowHeight, 500, rectiHeight(displayRect)), 
+                              Clamp<uint16>(settings.windowWidth, 500, displayRect.Width()), Clamp<uint16>(settings.windowHeight, 500, displayRect.Height()), 
                               nullptr, nullptr, wc.hInstance, nullptr);
 
     // Show the window
@@ -158,7 +158,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 
     if (!ImGui::MyInitialize()) {
         CleanupDeviceD3D();
-        logError("ImGui initialization failed");
+        LOG_ERROR("ImGui initialization failed");
         return -1;
     }
     ImGui::LoadFonts(ImGui_ImplWin32_GetDpiScaleForHwnd(hwnd));
@@ -233,7 +233,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
         }
 
         gGfx.swapchain->Present(gWindow.isFocused ? 0 : 2, 0); // Present with vsync
-        memTempReset(1.0f/io.Framerate, false);
+        MemTempAllocator::Reset();
     }
 
     ImGui::MyRelease();
@@ -350,7 +350,7 @@ bool SetClipboardString(const char* text)
 {
     ASSERT(text);
 
-    uint32 textLen = strLen(text);
+    uint32 textLen = Str::Len(text);
     wchar_t* wcharBuff = 0;
     const size_t wcharBuffSize = (textLen + 1) * sizeof(wchar_t);
     HANDLE object = GlobalAlloc(GMEM_MOVEABLE, wcharBuffSize);
@@ -361,7 +361,7 @@ bool SetClipboardString(const char* text)
     if (!wcharBuff)
         goto error;
 
-    if (!strUt8ToWide(text, wcharBuff, wcharBuffSize))
+    if (!Str::Utf8ToWide(text, wcharBuff, wcharBuffSize))
         goto error;
 
     GlobalUnlock(wcharBuff);
@@ -402,7 +402,7 @@ bool GetClipboardString(char* textOut, uint32 textSize)
         return false;
     }
     
-    strWideToUtf8(wcharBuff, textOut, textSize);
+    Str::WideToUtf8(wcharBuff, textOut, textSize);
     GlobalUnlock(object);
     CloseClipboard();
     
@@ -414,14 +414,14 @@ void ToggleIdleWait(bool wait)
     gWindow.disableIdleWait = !wait;
 }
 
-Recti GetWindowDesktopRect()
+RectInt GetWindowDesktopRect()
 {
     HMONITOR hmon = MonitorFromWindow(gWindow.hwnd, MONITOR_DEFAULTTONEAREST);
     MONITORINFO mi = { sizeof(MONITORINFO) };
     if (GetMonitorInfoA(hmon, &mi))
-        return Recti(mi.rcWork.left, mi.rcWork.top, mi.rcWork.right, mi.rcWork.bottom);
+        return RectInt(mi.rcWork.left, mi.rcWork.top, mi.rcWork.right, mi.rcWork.bottom);
     else
-        return RECTI_EMPTY;
+        return RECTINT_EMPTY;
 }
 
 void* GetGraphicsDevice()

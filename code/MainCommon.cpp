@@ -14,10 +14,10 @@ struct ShortcutItem
     void* user;
 };
 
-static Settings gSettings;
+static AppSettings gSettings;
 static Array<ShortcutItem> gShortcuts;
 
-struct SettingsImpl : SettingsCustomCallbacks
+struct AppSettingsImpl : SettingsCustomCallbacks
 {
     inline static const char* kCats[] = {
         "Layout"
@@ -37,20 +37,20 @@ struct SettingsImpl : SettingsCustomCallbacks
         ASSERT(categoryId < uint32(Category::Count));
         switch (Category(categoryId)) {
         case Category::Layout:
-            if (strIsEqualNoCase(key, "WindowWidth")) {
-                gSettings.windowWidth = uint16(strToInt(value));
+            if (Str::IsEqualNoCase(key, "WindowWidth")) {
+                gSettings.windowWidth = uint16(Str::ToInt(value));
                 return true;
             }
-            else if (strIsEqualNoCase(key, "WindowHeight")) {
-                gSettings.windowHeight = uint16(strToInt(value));
+            else if (Str::IsEqualNoCase(key, "WindowHeight")) {
+                gSettings.windowHeight = uint16(Str::ToInt(value));
                 return true;
             }
-            else if (strIsEqualNoCase(key, "WindowX")) {
-                gSettings.windowX = uint16(strToInt(value));
+            else if (Str::IsEqualNoCase(key, "WindowX")) {
+                gSettings.windowX = uint16(Str::ToInt(value));
                 return true;
             }
-            else if (strIsEqualNoCase(key, "WindowY")) {
-                gSettings.windowY = uint16(strToInt(value));
+            else if (Str::IsEqualNoCase(key, "WindowY")) {
+                gSettings.windowY = uint16(Str::ToInt(value));
                 return true;
             }
         default:
@@ -62,7 +62,7 @@ struct SettingsImpl : SettingsCustomCallbacks
     void SaveCategory(uint32 categoryId, Array<SettingsKeyValue>& items) override
     {
         char num[32];
-        auto ToStr = [&num](int n)->const char* { strPrintFmt(num, sizeof(num), "%d", n); return num; };
+        auto ToStr = [&num](int n)->const char* { Str::PrintFmt(num, sizeof(num), "%d", n); return num; };
 
         ASSERT(categoryId < uint32(Category::Count));
         switch (Category(categoryId)) {
@@ -81,7 +81,7 @@ struct SettingsImpl : SettingsCustomCallbacks
 static Path GetSettingsFilePath()
 {
     Path myDir;
-    pathGetMyPath(myDir.Ptr(), myDir.Capacity());
+    OS::GetMyPath(myDir.Ptr(), myDir.Capacity());
     myDir = myDir.GetDirectory();
     ASSERT(myDir.IsDir());
     return Path::Join(myDir, CONFIG_APP_NAME ".ini");
@@ -96,18 +96,18 @@ static void LogToMessageBoxCallback(const LogEntry& entry, void*)
 
 bool InitializeCommon()
 {
-    static SettingsImpl settingsImpl;
+    static AppSettingsImpl settingsImpl;
 
-    logRegisterCallback(LogToMessageBoxCallback, nullptr);
+    Log::RegisterCallback(LogToMessageBoxCallback, nullptr);
 
-    settingsAddCustomCallbacks(&settingsImpl);
-    settingsInitializeFromINI(GetSettingsFilePath().CStr());
+    Settings::AddCustomCallbacks(&settingsImpl);
+    Settings::InitializeFromINI(GetSettingsFilePath().CStr());
 
-    logSetSettings(LogLevel::Debug, false, false);
-    jobsInitialize({});
+    Log::SetSettings(LogLevel::Debug, false, false);
+    Jobs::Initialize({});
 
     if (!InitializeLogView())
-        logError("Could not initialize log view");
+        LOG_ERROR("Could not initialize log view");
     
     return true;
 }
@@ -115,13 +115,13 @@ bool InitializeCommon()
 void ReleaseCommon()
 {
     ReleaseLogView();
-    settingsSaveToINI(GetSettingsFilePath().CStr());
+    Settings::SaveToINI(GetSettingsFilePath().CStr());
 
-    jobsRelease();
-    settingsRelease();
+    Jobs::Release();
+    Settings::Release();
 }
 
-Settings& GetSettings()
+AppSettings& GetSettings()
 {
     return gSettings;
 }
@@ -169,7 +169,7 @@ void UpdateCommon()
 // "SHIFT+CTRL+K"
 static ShortcutItem ParseShortcutKeys(const char* shortcut)
 {
-    shortcut = strSkipWhitespace(shortcut);
+    shortcut = Str::SkipWhitespace(shortcut);
 
     ShortcutItem item {};
     uint32 numKeys = 0;
@@ -177,31 +177,31 @@ static ShortcutItem ParseShortcutKeys(const char* shortcut)
     char keystr[32];
 
     auto ParseSingleKey = [&item, &numKeys](const char* keystr) {
-        uint32 len = strLen(keystr);
+        uint32 len = Str::Len(keystr);
 
         bool isFn = 
             (len == 2 || len == 3) && 
-            strToUpper(keystr[0]) == 'F' && 
-            ((len == 2 && strIsNumber(keystr[1])) || (len == 3 && strIsNumber(keystr[1]) && strIsNumber(keystr[2])));
+            Str::ToUpper(keystr[0]) == 'F' && 
+            ((len == 2 && Str::IsNumber(keystr[1])) || (len == 3 && Str::IsNumber(keystr[1]) && Str::IsNumber(keystr[2])));
         if (isFn && numKeys < 2) {
             char numstr[3] = {keystr[1], keystr[2], 0};
-            int fnum = strToInt(numstr) - 1;
+            int fnum = Str::ToInt(numstr) - 1;
             if (fnum >= 0 && fnum < 12)
                 item.keys[numKeys++] = ImGuiKey(ImGuiKey_F1 + fnum);
         }
         else if (len > 1) {
             char modstr[32];
-            strToUpper(modstr, sizeof(modstr), keystr);
-            if (strIsEqual(modstr, "ALT"))
+            Str::ToUpper(modstr, sizeof(modstr), keystr);
+            if (Str::IsEqual(modstr, "ALT"))
                 item.modKeys |= ImGuiKey_ModAlt;
-            else if (strIsEqual(modstr, "CTRL"))
+            else if (Str::IsEqual(modstr, "CTRL"))
                 item.modKeys |= ImGuiKey_ModCtrl;
-            else if (strIsEqual(modstr, "SHIFT"))
+            else if (Str::IsEqual(modstr, "SHIFT"))
                 item.modKeys |= ImGuiKey_ModShift;
         } 
         else if (len == 1 && numKeys < 2) {
             if (keystr[0] > 32) {
-                switch (strToUpper(keystr[0])) {
+                switch (Str::ToUpper(keystr[0])) {
                 case '0': item.keys[numKeys++] = ImGuiKey_0; break;
                 case '1': item.keys[numKeys++] = ImGuiKey_1; break;
                 case '2': item.keys[numKeys++] = ImGuiKey_2; break;
@@ -257,18 +257,18 @@ static ShortcutItem ParseShortcutKeys(const char* shortcut)
 
 
     while (shortcut[0]) {
-        plus = strFindChar(shortcut, '+');
+        plus = Str::FindChar(shortcut, '+');
         if (!plus)
             break;
 
-        strCopyCount(keystr, sizeof(keystr), shortcut, PtrToInt<uint32>((void*)(plus - shortcut)));
+        Str::CopyCount(keystr, sizeof(keystr), shortcut, PtrToInt<uint32>((void*)(plus - shortcut)));
         ParseSingleKey(keystr);
-        shortcut = strSkipWhitespace(plus + 1);
+        shortcut = Str::SkipWhitespace(plus + 1);
     }
 
     // read the last one
     if (shortcut[0]) {
-        strCopy(keystr, sizeof(keystr), shortcut);
+        Str::Copy(keystr, sizeof(keystr), shortcut);
         ParseSingleKey(keystr);
     }
 
@@ -282,15 +282,15 @@ bool RegisterShortcut(const char* shortcut, ShortcutCallback shortcutFn, void* u
 
     // strip whitespace and search for duplicates
     char name[32];
-    if (strLen(shortcut) >= sizeof(name)) {
+    if (Str::Len(shortcut) >= sizeof(name)) {
         ASSERT(0);
         return false;
     }
 
-    strRemoveWhitespace(name, sizeof(name), shortcut);
-    strToUpper(name, sizeof(name), name);
+    Str::RemoveWhitespace(name, sizeof(name), shortcut);
+    Str::ToUpper(name, sizeof(name), name);
     for (const ShortcutItem& item : gShortcuts) {
-        if (strIsEqual(name, item.name)) {
+        if (Str::IsEqual(name, item.name)) {
             ASSERT_MSG(0, "Shortcut already registered '%s'", shortcut);
             return false;
         }
@@ -298,7 +298,7 @@ bool RegisterShortcut(const char* shortcut, ShortcutCallback shortcutFn, void* u
 
     ShortcutItem item = ParseShortcutKeys(name);
     if (item.keys[0]) {
-        strCopy(item.name, sizeof(item.name), name);
+        Str::Copy(item.name, sizeof(item.name), name);
         item.callback = shortcutFn;
         item.user = userData;
         gShortcuts.Push(item);
@@ -312,11 +312,11 @@ bool RegisterShortcut(const char* shortcut, ShortcutCallback shortcutFn, void* u
 void UnregisterShortcut(const char* shortcut)
 {
     char name[32];
-    strRemoveWhitespace(name, sizeof(name), shortcut);
-    strToUpper(name, sizeof(name), name);
+    Str::RemoveWhitespace(name, sizeof(name), shortcut);
+    Str::ToUpper(name, sizeof(name), name);
     for (uint32 i = 0; i < gShortcuts.Count(); i++) {
         const ShortcutItem& item = gShortcuts[i];
-        if (strIsEqual(name, item.name)) {
+        if (Str::IsEqual(name, item.name)) {
             gShortcuts.RemoveAndSwap(i);
             return;
         }

@@ -17,13 +17,13 @@ static void CommonLogCallback(const LogEntry& entry, void* userData)
 
     switch(entry.type) {
     case LogLevel::Error:
-        contents->WriteData("Error: ", strLen("Error: "));
+        contents->WriteData("Error: ", Str::Len("Error: "));
         break;
     case LogLevel::Warning:
-        contents->WriteData("Warning: ", strLen("Warning: "));
+        contents->WriteData("Warning: ", Str::Len("Warning: "));
         break;
     case LogLevel::Debug:
-        contents->WriteData("[DBG]: ", strLen("[DBG]: "));
+        contents->WriteData("[DBG]: ", Str::Len("[DBG]: "));
         break;
     default:
         break;
@@ -38,19 +38,19 @@ static void CommonLogCallback(const LogEntry& entry, void* userData)
 
 bool InitializeLogView()
 {
-    if (!gLogContents.Initialize(64*kKB, 64*kKB)) {
+    if (!gLogContents.Initialize(64*SIZE_KB, 64*SIZE_KB)) {
         gLogIsOpen = false;
         return false;
     }
 
-    logRegisterCallback(CommonLogCallback, &gLogContents);
+    Log::RegisterCallback(CommonLogCallback, &gLogContents);
 
     return true;
 }
 
 void ReleaseLogView()
 {
-    logUnregisterCallback(CommonLogCallback);
+    Log::UnregisterCallback(CommonLogCallback);
     gLogContents.Release();
 }
 
@@ -74,7 +74,7 @@ bool TextContent::Initialize(size_t reserveSize, size_t pageSize)
 {
     mAlloc.Initialize(reserveSize, pageSize);
     mBlob.SetAllocator(&mAlloc);
-    mBlob.SetGrowPolicy(Blob::GrowPolicy::Linear, 32*kKB);
+    mBlob.SetGrowPolicy(Blob::GrowPolicy::Linear, 32*SIZE_KB);
     return true;
 }
 
@@ -131,19 +131,19 @@ void TextContent::Reset()
     mBlob.ResetRead();
     mBlob.SetSize(0);
     mLastLinePtr = nullptr;
-    atomicExchange32Explicit(&mResetFlag, 1, AtomicMemoryOrder::Release);
+    Atomic::ExchangeExplicit(&mResetFlag, 1, AtomicMemoryOrder::Release);
 }
 
 GuiTextView::~GuiTextView()
 {
     mLines.Free();
-    memFree(mEditableText);
+    Mem::Free(mEditableText);
 }
 
 void GuiTextView::Reset()
 {
     mLines.Clear();
-    memFree(mEditableText);
+    Mem::Free(mEditableText);
     mEditableText = nullptr;
     mLastUpdateLineCount = 0;
     mLastUpdateContentWidth = 0;
@@ -156,7 +156,7 @@ void GuiTextView::Render(TextContent* content, const char* windowId, bool* pOpen
 {
     auto CreateEditable = [this](const char* str, int lineIndex, uint32 lineNo) {
         if (mEditableText) {
-            memFree(mEditableText);
+            Mem::Free(mEditableText);
             mEditableText = nullptr;
         }
 
@@ -173,14 +173,14 @@ void GuiTextView::Render(TextContent* content, const char* windowId, bool* pOpen
             const GuiTextView::Line& line = mLines[i];
             if (line.lineNo == lineNo) {
                 uint32 textSize = line.text.end - line.text.begin;
-                mEditableText = memReallocTyped<char>(mEditableText, totalTextSize + textSize + 1);
+                mEditableText = Mem::ReallocTyped<char>(mEditableText, totalTextSize + textSize + 1);
                 memcpy(mEditableText + totalTextSize, str + line.text.begin, textSize);
                 mEditableText[totalTextSize + textSize] = '\n';
                 totalTextSize += (textSize + 1);
                 ++mEditableLineCount;
             }
             else {
-                mEditableText = memReallocTyped<char>(mEditableText, totalTextSize + 1);
+                mEditableText = Mem::ReallocTyped<char>(mEditableText, totalTextSize + 1);
                 if (totalTextSize) {
                     if (mEditableText[totalTextSize-1] == '\n')
                     mEditableText[totalTextSize-1] = 0;
@@ -198,7 +198,7 @@ void GuiTextView::Render(TextContent* content, const char* windowId, bool* pOpen
     if (ImGui::Begin(windowId, pOpen, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
         bool updated = false;
         float contentWidth = ImGui::GetContentRegionAvail().x;        
-        bool widgetResized = mathAbs(contentWidth - mLastUpdateContentWidth) >= 1.0f;
+        bool widgetResized = M::Abs(contentWidth - mLastUpdateContentWidth) >= 1.0f;
         bool contentChanged = mLastUpdateLineCount != content->mLines.Count();
         if ((widgetResized || contentChanged) && content->mLock.TryEnter()) 
         {
@@ -211,8 +211,8 @@ void GuiTextView::Render(TextContent* content, const char* windowId, bool* pOpen
             content->mLines.CopyTo(&tempContentLines);
             content->mLock.Exit();
             
-            atomicUint32 kOne = 1;
-            if (atomicCompareExchange32Weak(&content->mResetFlag, &kOne, 0) || widgetResized) {
+            AtomicUint32 kOne = 1;
+            if (Atomic::CompareExchange_Weak(&content->mResetFlag, &kOne, 0) || widgetResized) {
                 mLines.Clear();
                 startIndex = 0;
             }
@@ -229,7 +229,7 @@ void GuiTextView::Render(TextContent* content, const char* windowId, bool* pOpen
                 while (true) {
                     const char* wrapped = font->CalcWordWrapPositionA(fontScale, strPtr + beginPos, strPtr + line.end, contentWidth);
                     uint32 wrappedPos = (uint32)uintptr_t(wrapped - strPtr);
-                    mLines.Push(GuiTextView::Line {
+                    mLines.Push({
                         .lineNo = lineNo,
                         .text = {beginPos, wrappedPos}
                     });
@@ -261,7 +261,7 @@ void GuiTextView::Render(TextContent* content, const char* windowId, bool* pOpen
         while (clipper.Step()) {
             for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
                 const GuiTextView::Line& line = mLines[i];
-                strPrintFmt(id, sizeof(id), "##Line_%d", i);
+                Str::PrintFmt(id, sizeof(id), "##Line_%d", i);
 
                 if (mEditableLine != line.lineNo) {
                     if (ImGui::Selectable(id, line.lineNo == selectedLine || line.lineNo == selectedLine2, ImGuiSelectableFlags_AllowDoubleClick)) {
