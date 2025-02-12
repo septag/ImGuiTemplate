@@ -1,26 +1,26 @@
 // This header file is auto-generated
 // Inlined files:
-//	debug.h
 //	mathscalar.h
-//	system.h
 //	log.h
-//	stringutil.h
-//	atomic.h
-//	iniparser.h
-//	blitsort.h
-//	blobs.h
-//	pools.h
+//	system.h
 //	config.h
-//	c89atomic.h
-//	settings.h
-//	allocators.h
-//	arrays.h
-//	base.h
-//	jobs.h
-//	hash.h
-//	mathall.h
 //	mathtypes.h
+//	c89atomic.h
+//	blitsort.h
+//	atomic.h
+//	settings.h
+//	hash.h
+//	arrays.h
+//	jobs.h
+//	iniparser.h
+//	base.h
+//	mathall.h
+//	stringutil.h
+//	pools.h
+//	allocators.h
 //	jsonparser.h
+//	debug.h
+//	blobs.h
 
 #pragma once
 
@@ -366,7 +366,7 @@
 #endif    // COMPILER_
 
 #define PLATFORM_POSIX (0 || PLATFORM_ANDROID || PLATFORM_IOS || PLATFORM_LINUX || PLATFORM_NX || PLATFORM_OSX)
-#define PLATFORM_DESKTOP (0 || PLATFORM_WINDOWS || PLATFORM_LINUX || PLATFORM_OSX)
+#define PLATFORM_PC (0 || PLATFORM_WINDOWS || PLATFORM_LINUX || PLATFORM_OSX)
 #define PLATFORM_MOBILE (0 || PLATFORM_ANDROID || PLATFORM_IOS)
 
 #if CONFIG_TOOLMODE && !PLATFORM_WINDOWS
@@ -8140,7 +8140,7 @@ struct Float4
     static Float4 Sub(Float4 _a, Float4 _b);
 };
 
-struct Color 
+struct Color4u 
 {
     union {
         struct 
@@ -8154,14 +8154,14 @@ struct Color
         unsigned int n;
     };
 
-    Color() = default;
+    Color4u() = default;
 
-    explicit constexpr Color(uint8 _r, uint8 _g, uint8 _b, uint8 _a = 255)
+    explicit constexpr Color4u(uint8 _r, uint8 _g, uint8 _b, uint8 _a = 255)
         : r(_r), g(_g), b(_b), a(_a)
     {
     }
 
-    explicit constexpr Color(float _r, float _g, float _b, float _a) :
+    explicit constexpr Color4u(float _r, float _g, float _b, float _a) :
         r((uint8)(_r * 255.0f)),
         g((uint8)(_g * 255.0f)),
         b((uint8)(_b * 255.0f)),
@@ -8169,10 +8169,10 @@ struct Color
     {
     }
 
-    explicit constexpr Color(const float* f) : Color(f[0], f[1], f[2], f[3]) {}
-    constexpr Color(uint32 _n) : n(_n) {}
+    explicit constexpr Color4u(const float* f) : Color4u(f[0], f[1], f[2], f[3]) {}
+    constexpr Color4u(uint32 _n) : n(_n) {}
 
-    Color& operator=(uint32 _n) 
+    Color4u& operator=(uint32 _n) 
     {
         n = _n;
         return *this;
@@ -8180,8 +8180,8 @@ struct Color
 
     static float ValueToLinear(float _a);
     static float ValueToGamma(float _a);
-    static Float4 ToFloat4(Color c);
-    static Color  Blend(Color _a, Color _b, float _t);
+    static Float4 ToFloat4(Color4u c);
+    static Color4u  Blend(Color4u _a, Color4u _b, float _t);
     static Float4 ToFloat4SRGB(Float4 cf);
     static Float4 ToFloat4Linear(Float4 c);
     static Float3 RGBtoHSV(Float3 rgb);
@@ -8671,13 +8671,13 @@ inline constexpr Quat QUAT_INDENT {0, 0, 0, 1.0f};
 
 inline constexpr Transform3D TRANSFORM3D_IDENT { FLOAT3_ZERO, MAT3_IDENT };
 
-inline constexpr Color COLOR_WHITE  { uint8(255), uint8(255), uint8(255), uint8(255) };
-inline constexpr Color COLOR_BLACK  { uint8(0), uint8(0), uint8(0), uint8(255) };
-inline constexpr Color COLOR_RED    { uint8(255), uint8(0), uint8(0), uint8(255) };
-inline constexpr Color COLOR_YELLOW { uint8(255), uint8(255), uint8(0), uint8(255) };
-inline constexpr Color COLOR_GREEN  { uint8(0), uint8(255), uint8(0), uint8(255) };
-inline constexpr Color COLOR_BLUE   { uint8(0), uint8(0), uint8(255), uint8(255) };
-inline constexpr Color COLOR_PURPLE { uint8(255), uint8(0), uint8(255), uint8(255) };
+inline constexpr Color4u COLOR4U_WHITE  { uint8(255), uint8(255), uint8(255), uint8(255) };
+inline constexpr Color4u COLOR4U_BLACK  { uint8(0), uint8(0), uint8(0), uint8(255) };
+inline constexpr Color4u COLOR4U_RED    { uint8(255), uint8(0), uint8(0), uint8(255) };
+inline constexpr Color4u COLOR4U_YELLOW { uint8(255), uint8(255), uint8(0), uint8(255) };
+inline constexpr Color4u COLOR4U_GREEN  { uint8(0), uint8(255), uint8(0), uint8(255) };
+inline constexpr Color4u COLOR4U_BLUE   { uint8(0), uint8(0), uint8(255), uint8(255) };
+inline constexpr Color4u COLOR4U_PURPLE { uint8(255), uint8(0), uint8(255), uint8(255) };
 
 inline constexpr Rect RECT_EMPTY { M_FLOAT32_MAX, M_FLOAT32_MAX, -M_FLOAT32_MAX, -M_FLOAT32_MAX };
 inline constexpr RectInt RECTINT_EMPTY { INT32_MAX, INT32_MAX, INT32_MIN, INT32_MIN };
@@ -9070,7 +9070,7 @@ namespace M
     FORCE_INLINE bool IsFIN64(double _f);
     FORCE_INLINE bool IsINF(float _f);
     FORCE_INLINE bool IsINF64(double _f);
-    FORCE_INLINE float IsRound(float _f);
+    FORCE_INLINE float Round(float _f);
     FORCE_INLINE float Ceil(float _f);
     FORCE_INLINE float Lerp(float _a, float _b, float _t);
     FORCE_INLINE float SmoothLerp(float _a, float _b, float _dt, float h);
@@ -9230,7 +9230,7 @@ FORCE_INLINE bool M::IsINF64(fl64 _f)
     return tmp == UINT64_C(0x7ff0000000000000);
 }
 
-FORCE_INLINE float M::IsRound(float _f)
+FORCE_INLINE float M::Round(float _f)
 {
     return M::Floor(_f + 0.5f);
 }
@@ -9933,7 +9933,7 @@ FORCE_INLINE Float4 Float4::Sub(Float4 _a, Float4 _b)
     return Float4(_a.x - _b.x, _a.y - _b.y, _a.z - _b.z, _a.w - _b.w);
 }
 
-FORCE_INLINE float Color::ValueToLinear(float _a)
+FORCE_INLINE float Color4u::ValueToLinear(float _a)
 {
     const float lo = _a / 12.92f;
     const float hi = M::Pow((_a + 0.055f) / 1.055f, 2.4f);
@@ -9941,7 +9941,7 @@ FORCE_INLINE float Color::ValueToLinear(float _a)
     return result;
 }
 
-FORCE_INLINE float Color::ValueToGamma(float _a)
+FORCE_INLINE float Color4u::ValueToGamma(float _a)
 {
     const float lo = _a * 12.92f;
     const float hi = M::Pow(M::Abs(_a), 1.0f / 2.4f) * 1.055f - 0.055f;
@@ -9949,7 +9949,7 @@ FORCE_INLINE float Color::ValueToGamma(float _a)
     return result;
 }
 
-FORCE_INLINE Float4 Color::ToFloat4(Color c)
+FORCE_INLINE Float4 Color4u::ToFloat4(Color4u c)
 {
     float rcp = 1.0f / 255.0f;
     return Float4((float)c.r * rcp, (float)c.g * rcp, (float)c.b * rcp, (float)c.a * rcp);
@@ -10573,14 +10573,14 @@ namespace M
     FORCE_INLINE Float4 Float4Add(Float4 _a, Float4 _b) { return Float4::Add(_a, _b); }
     FORCE_INLINE Float4 Float4Sub(Float4 _a, Float4 _b) { return Float4::Sub(_a, _b); }
 
-    FORCE_INLINE float ColorValueToLinear(float _a) { return Color::ValueToLinear(_a); }
-    FORCE_INLINE float ColorValueToGamma(float _a) { return Color::ValueToGamma(_a); }
-    FORCE_INLINE Float4 ColorToFloat4(Color c) { return Color::ToFloat4(c); }
-    FORCE_INLINE Color  ColorBlend(Color _a, Color _b, float _t) { return Color::Blend(_a, _b, _t); }
-    FORCE_INLINE Float4 ColorToFloat4SRGB(Float4 cf) { return Color::ToFloat4SRGB(cf); }
-    FORCE_INLINE Float4 ColorToFloat4Linear(Float4 c) { return Color::ToFloat4Linear(c); }
-    FORCE_INLINE Float3 ColorRGBtoHSV(Float3 rgb) { return Color::RGBtoHSV(rgb); }
-    FORCE_INLINE Float3 ColorHSVtoRGB(Float3 hsv) { return Color::HSVtoRGB(hsv); }
+    FORCE_INLINE float ColorValueToLinear(float _a) { return Color4u::ValueToLinear(_a); }
+    FORCE_INLINE float ColorValueToGamma(float _a) { return Color4u::ValueToGamma(_a); }
+    FORCE_INLINE Float4 ColorToFloat4(Color4u c) { return Color4u::ToFloat4(c); }
+    FORCE_INLINE Color4u  ColorBlend(Color4u _a, Color4u _b, float _t) { return Color4u::Blend(_a, _b, _t); }
+    FORCE_INLINE Float4 ColorToFloat4SRGB(Float4 cf) { return Color4u::ToFloat4SRGB(cf); }
+    FORCE_INLINE Float4 ColorToFloat4Linear(Float4 c) { return Color4u::ToFloat4Linear(c); }
+    FORCE_INLINE Float3 ColorRGBtoHSV(Float3 rgb) { return Color4u::RGBtoHSV(rgb); }
+    FORCE_INLINE Float3 ColorHSVtoRGB(Float3 hsv) { return Color4u::HSVtoRGB(hsv); }
 
     FORCE_INLINE Int2 Int2Add(Int2 _a, Int2 _b) { return Int2::Add(_a, _b); }
     FORCE_INLINE Int2 Int2Sub(Int2 _a, Int2 _b) { return Int2::Sub(_a, _b); }
@@ -11771,7 +11771,7 @@ namespace OS
     API bool DeleteFilePath(const char* path);
 }
 
-#if PLATFORM_DESKTOP
+#if PLATFORM_PC
 enum class OSProcessFlags : uint32
 {
     None = 0,
@@ -11808,7 +11808,7 @@ private:
 #endif
 };
 
-#endif // PLATFORM_DESKTOP
+#endif // PLATFORM_PC
 
 #if PLATFORM_WINDOWS
 
@@ -11865,8 +11865,8 @@ namespace OS
                                                          const char* operation = nullptr,
                                                          void** pInstance = nullptr);
     API char* Win32GetFolder(OSWin32Folder folder, char* dst, size_t dstSize);
+    API void Win32EnableProgramConsoleCoding();
 }
-
 
 #elif PLATFORM_ANDROID
 struct _JNIEnv;

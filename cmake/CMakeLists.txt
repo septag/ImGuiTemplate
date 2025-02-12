@@ -7,7 +7,7 @@ endif()
 
 project(${APPNAME})
 
-if (MSVC)
+if (CMAKE_GENERATOR MATCHES "Visual Studio" OR CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     option(MSVC_MULTITHREADED_COMPILE "Multi-threaded compilation in MSVC." ON)
 endif()
 
