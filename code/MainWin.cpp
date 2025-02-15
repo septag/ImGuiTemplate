@@ -16,6 +16,11 @@
 #include <d3d11.h>
 #undef COM_NO_WINDOWS_H
 
+#if USE_LIVEPP
+#include <LPP_API_x64_CPP.h>
+#include <LPP_API_Options.h>
+#endif
+
 struct GraphicsContext
 {
     ID3D11Device* device;
@@ -121,6 +126,15 @@ static void BeginDraw(ImVec4 clearColor)
 // Main code
 int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
+    #if USE_LIVEPP
+    lpp::LppSynchronizedAgent lppAgent = lpp::LppCreateSynchronizedAgentANSI(nullptr, STRINGIZE(LIVEPP_PATH));
+    lppAgent.EnableModuleANSI(lpp::LppGetCurrentModulePathANSI(), lpp::LPP_MODULES_OPTION_NONE, nullptr, nullptr);
+    if (!lpp::LppIsValidSynchronizedAgent(&lppAgent)) {
+        ASSERT_MSG(0, "LivePP initialization failed. Make sure cwd is the root directory of the project");
+        return 1;
+    }
+    #endif
+
     [[maybe_unused]] bool r = InitializeCommon();
     ASSERT_ALWAYS(r, "InitializeCommon() failed");
 
@@ -199,6 +213,13 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
         if (done)
             break;
 
+        #if USE_LIVEPP
+        if (lppAgent.WantsReload(lpp::LPP_RELOAD_OPTION_SYNCHRONIZE_WITH_RELOAD))
+            lppAgent.Reload(lpp::LPP_RELOAD_BEHAVIOUR_WAIT_UNTIL_CHANGES_ARE_APPLIED);
+        if (lppAgent.WantsRestart())
+            lppAgent.Restart(lpp::LPP_RESTART_BEHAVIOUR_INSTANT_TERMINATION, 0u, nullptr);
+        #endif // USE_LIVEPP
+
         // Handle window resize (we don't resize directly in the WM_SIZE handler)
         if (gWindow.resizeWidth != 0 && gWindow.resizeHeight != 0)
         {
@@ -248,6 +269,11 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 
     DestroyWindow(hwnd);
     UnregisterClassW(wc.lpszClassName, wc.hInstance);
+
+#if USE_LIVEPP
+    lppAgent.DisableModuleANSI(lpp::LppGetCurrentModulePathANSI(), lpp::LPP_MODULES_OPTION_NONE, nullptr, nullptr);
+    lpp::LppDestroySynchronizedAgent(&lppAgent);
+#endif 
 
     return 0;
 }

@@ -11,6 +11,14 @@ if (CMAKE_GENERATOR MATCHES "Visual Studio" OR CMAKE_CXX_COMPILER_ID STREQUAL "M
     option(MSVC_MULTITHREADED_COMPILE "Multi-threaded compilation in MSVC." ON)
 endif()
 
+option(USE_LIVEPP "Use LivePP for windows debug builds. Requires LIVEPP_PATH" OFF)
+if (USE_LIVEPP)
+    set(LIVEPP_PATH "" CACHE PATH "Path to the root directory of LivePP")
+    if (NOT EXISTS ${LIVEPP_PATH})
+        message(FATAL_ERROR "LivePP path does not exist: ${LIVEPP_PATH}")
+    endif()
+endif()
+
 if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ../bin)
 endif()
@@ -87,6 +95,20 @@ if (WIN32)
     target_compile_options(${APPNAME} PRIVATE /Zi /GR-)
 
     target_compile_definitions(${APPNAME} PRIVATE -D_ITERATOR_DEBUG_LEVEL=0 -D_SECURE_SCL=0 -D_HAS_EXCEPTIONS=0 -D_CRT_SECURE_NO_WARNINGS=0)
+
+    if (USE_LIVEPP)
+        target_include_directories(${APPNAME} PRIVATE ${LIVEPP_PATH}/API/x64)
+        target_compile_definitions(${APPNAME} PRIVATE LIVEPP_PATH=${LIVEPP_PATH})
+        target_compile_definitions(${APPNAME} PRIVATE USE_LIVEPP=1)
+    else()
+        target_compile_definitions(${APPNAME} PRIVATE USE_LIVEPP=0)
+    endif()
+
+    # LivePP
+    # CL: Enable Minimal Rebuild (/Gm-), Function level linking (/Gy), Optimize Global Data (/Gw)
+    # Link: NoReferences (/OPT:NOREF), Disable COMDAT Folding (/OPT:NOICF), Full Debug info (Already added), CreateHotpackableImage (/FUNCTIONPADMIN)
+    target_compile_options(${APPNAME} PUBLIC /Gm- /Gy /Gw)
+    target_link_options(${APPNAME} PUBLIC /OPT:NOREF /OPT:NOICF /FUNCTIONPADMIN) 
 else()
     target_compile_definitions(${APPNAME} PRIVATE "$<$<CONFIG:Debug>:-D_DEBUG>")
     target_compile_definitions(${APPNAME} PRIVATE "$<$<CONFIG:Release>:-DNDEBUG>")
@@ -100,3 +122,5 @@ target_precompile_headers(${APPNAME} PRIVATE ../code/Core.h)
 target_include_directories(${APPNAME} PRIVATE ../code/ImGui/freetype)
 target_link_directories(${APPNAME} PRIVATE ../code/ImGui/freetype)
 target_compile_definitions(${APPNAME} PRIVATE -DCONFIG_APP_NAME="${APPNAME}")
+
+
