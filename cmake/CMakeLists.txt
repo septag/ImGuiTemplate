@@ -113,7 +113,7 @@ else()
     target_compile_definitions(${APPNAME} PRIVATE "$<$<CONFIG:Debug>:-D_DEBUG>")
     target_compile_definitions(${APPNAME} PRIVATE "$<$<CONFIG:Release>:-DNDEBUG>")
 
-    target_compile_options(${APPNAME} PRIVATE -fno-rtti -fno-exceptions -Wno-deprecated-declarations -fPIC)
+    target_compile_options(${APPNAME} PRIVATE -fno-rtti -fno-exceptions -Wno-deprecated-declarations)
 endif()
 
 target_compile_definitions(${APPNAME} PRIVATE -D__STDC_LIMIT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_CONSTANT_MACROS)

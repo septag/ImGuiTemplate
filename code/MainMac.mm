@@ -2,6 +2,10 @@
 // If you are new to Dear ImGui, read documentation from the docs/ folder + read the top of imgui.cpp.
 // Read online: https://github.com/ocornut/imgui/tree/master/docs
 
+#include "Core.h"
+
+#if PLATFORM_APPLE
+
 #import <Foundation/Foundation.h>
 #import <Cocoa/Cocoa.h>
 
@@ -14,9 +18,6 @@
 #include "ImGui/ImGuiAll.h"
 
 #include "Main.h"
-
-#include "Core/Allocators.h"
-#include "Core/Log.h"
 
 id <MTLDevice> gMetalDevice;
 
@@ -252,3 +253,5 @@ int main(int argc, const char * argv[])
 {
     return NSApplicationMain(argc, argv);
 }
+
+#endif // PLATFORM_APPLE

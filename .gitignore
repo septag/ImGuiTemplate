@@ -28,6 +28,7 @@
 *.pdb
 
 # Intermediate folders and files
+.build
 build*
 bin
 .vs

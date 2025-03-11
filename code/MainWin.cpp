@@ -1,5 +1,7 @@
 #include "Core.h"
 
+#if PLATFORM_WINDOWS
+
 #include "Main.h"
 
 #include "ImGui/imgui.h"
@@ -462,3 +464,5 @@ void SetWindowTitle(const char* title)
     else
         SetWindowTextA(gWindow.hwnd, CONFIG_APP_NAME);
 }
+
+#endif // PLATFORM_WINDOWS
