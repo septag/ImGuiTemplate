@@ -5,11 +5,20 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug LLDB",
+            "program": "${workspaceFolder}/bin/Test",
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+
+        {
             "name": "Debug Windows",
             "type": "cppvsdbg",
             "request": "launch",
             "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}/.build/Ninja/TestBasicGfx.exe",
+            "program": "${workspaceFolder}/.build/Ninja/Test.exe",
             "args": [],
             "environment": [],
             "stopAtEntry": false,

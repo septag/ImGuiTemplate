@@ -14,7 +14,7 @@ fi
 
 pushd Ninja > /dev/null
 
-cmake ../../cmake -GNinja -DCMAKE_EXPORT_COMPILE_COMMANDS=1 "$@"
+cmake ../../cmake -GNinja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -DCMAKE_BUILD_TYPE="Debug" -DAPPNAME="$@"
 
 popd > /dev/null
 popd > /dev/null

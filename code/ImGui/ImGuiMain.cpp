@@ -16,10 +16,6 @@ struct ImGuiContextExtra
 
 static ImGuiContextExtra gImGuiExtra;
 
-#if PLATFORM_OSX
-static constexpr const char* kOsxFontsDir = "/System/Library/Fonts";
-#endif
-
 static void SetImGuiTheme()
 {
     ImGuiStyle& style = ImGui::GetStyle();
@@ -177,11 +173,17 @@ bool ImGui::LoadFonts(float dpiScale)
         float fontSize = 15.0f;
         float monoFontSize = 14.0f;
     #elif PLATFORM_OSX
-        Path fontsDir(kOsxFontsDir);
+        Path fontsDir("/System/Library/Fonts");
         Path defaultFontPath = Path::Join(fontsDir, "Geneva.ttf");
         Path defaultMonoFontPath = Path::Join(fontsDir, "SFNSMono.ttf");
         float fontSize = 15.0f;
         float monoFontSize = 15.0f;
+    #elif PLATFORM_LINUX
+        Path fontsDir("/usr/share/fonts/truetype/freefont");
+        Path defaultFontPath = Path::Join(fontsDir, "FreeSans.ttf");
+        Path defaultMonoFontPath = Path::Join(fontsDir, "FreeMono.ttf");
+        float fontSize = 15.0f;
+        float monoFontSize = 14.0f;
     #else
         #error "Not implemented"
     #endif
@@ -236,15 +238,13 @@ void ImGui::BeginFrame()
     if (!viewport)
         return;
 
-    ImGuiID id = ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
+    ImGuiID id = ImGui::DockSpaceOverViewport(viewport->ID);
     
     static bool firstTime = true;
     if (firstTime) {
 
         ImGui::DockBuilderRemoveNode(id);
         ImGui::DockBuilderAddNode(id, ImGuiDockNodeFlags_PassthruCentralNode);
-
-        const ImGuiViewport* viewport = ImGui::GetMainViewport();
 
         ImGui::DockBuilderSetNodeSize(id, viewport->WorkSize);
         ImGui::DockBuilderSetNodePos(id, viewport->WorkPos);

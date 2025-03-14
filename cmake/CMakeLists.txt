@@ -20,7 +20,7 @@ if (USE_LIVEPP)
 endif()
 
 if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ../bin)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ../../bin)
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
@@ -40,9 +40,18 @@ else()
     string(REPLACE "-fexceptions" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
     string(REPLACE "-frtti" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
+    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+        add_compile_definitions(_DEBUG)
+    endif()
+
     if (CMAKE_C_COMPILER_ID MATCHES "GNU")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-format-truncation")
     endif()
+
+    if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        include_directories("/usr/lib/llvm-14/include/")        # This is hard coded, don't know how to fix this yet
+    endif()
+
 endif()
 
 # Source files
@@ -82,6 +91,18 @@ if (WIN32)
     set_source_files_properties(../code/External/osdialog/osdialog_win.c PROPERTIES APPEND_STRING PROPERTY COMPILE_FLAGS " /wd4244")
 endif()
 
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    list(APPEND SOURCE_FILES 
+        ../code/MainLinux.cpp 
+        ../code/ImGui/imgui_impl_opengl3.cpp
+        ../code/ImGui/imgui_impl_opengl3.h 
+        ../code/ImGui/imgui_impl_glfw.cpp
+        ../code/ImGui/imgui_impl_glfw.h
+        ../code/External/osdialog/osdialog_gtk3.c)
+
+    set_source_files_properties(../code/External/osdialog/osdialog_gtk3.c PROPERTIES SKIP_PRECOMPILE_HEADERS ON)        
+endif()
+
 add_executable(${APPNAME} ${SOURCE_FILES})
 
 if (WIN32)
@@ -110,10 +131,29 @@ if (WIN32)
     target_compile_options(${APPNAME} PUBLIC /Gm- /Gy /Gw)
     target_link_options(${APPNAME} PUBLIC /OPT:NOREF /OPT:NOICF /FUNCTIONPADMIN) 
 else()
-    target_compile_definitions(${APPNAME} PRIVATE "$<$<CONFIG:Debug>:-D_DEBUG>")
-    target_compile_definitions(${APPNAME} PRIVATE "$<$<CONFIG:Release>:-DNDEBUG>")
-
     target_compile_options(${APPNAME} PRIVATE -fno-rtti -fno-exceptions -Wno-deprecated-declarations)
+
+    if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(FreeType REQUIRED freetype2)
+        pkg_check_modules(GLFW REQUIRED glfw3)
+        pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
+
+        target_include_directories(${APPNAME} PRIVATE ${FreeType_INCLUDE_DIRS})
+        target_include_directories(${APPNAME} PRIVATE ${GLFW_INCLUDE_DIRS})
+        target_include_directories(${APPNAME} PRIVATE ${GTK3_INCLUDE_DIRS})
+
+        target_link_directories(${APPNAME} PRIVATE ${FreeType_LIBRARY_DIRS})
+        target_link_directories(${APPNAME} PRIVATE ${GLFW_LIBRARY_DIRS})
+        target_link_directories(${APPNAME} PRIVATE ${GTK3_LIBRARY_DIRS})
+
+        target_link_libraries(${APPNAME} PRIVATE ${FreeType_LIBRARIES})
+        target_link_libraries(${APPNAME} PRIVATE ${GLFW_LIBRARIES})
+        target_link_libraries(${APPNAME} PRIVATE ${GTK3_LIBRARIES})
+
+        target_link_libraries(${APPNAME} PRIVATE uuid m c++abi)
+    endif()
+
 endif()
 
 target_compile_definitions(${APPNAME} PRIVATE -D__STDC_LIMIT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_CONSTANT_MACROS)

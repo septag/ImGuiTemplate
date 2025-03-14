@@ -42,6 +42,7 @@
             "label": "Configure Linux",
             "type": "shell",
             "command": "${workspaceFolder}/cmake/ConfigureNinja.sh",
+            "args": ["Test"],
             "problemMatcher": ["$gcc"]
         }
     ]
