@@ -151,7 +151,7 @@ else()
         target_link_libraries(${APPNAME} PRIVATE ${GLFW_LIBRARIES})
         target_link_libraries(${APPNAME} PRIVATE ${GTK3_LIBRARIES})
 
-        target_link_libraries(${APPNAME} PRIVATE uuid m c++abi)
+        target_link_libraries(${APPNAME} PRIVATE uuid m c++abi GL)
     endif()
 
 endif()

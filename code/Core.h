@@ -1,27 +1,27 @@
 // This header file is auto-generated
 // Inlined files:
-//	c89atomic.h
-//	includewin.h
-//	mathscalar.h
-//	log.h
-//	iniparser.h
-//	jobs.h
-//	stringutil.h
-//	system.h
-//	pools.h
-//	mathall.h
-//	hash.h
-//	allocators.h
-//	config.h
-//	jsonparser.h
-//	mathtypes.h
-//	arrays.h
-//	settings.h
-//	blobs.h
 //	blitsort.h
-//	debug.h
+//	mathall.h
+//	stringutil.h
 //	atomic.h
+//	allocators.h
 //	base.h
+//	arrays.h
+//	mathscalar.h
+//	mathtypes.h
+//	hash.h
+//	includewin.h
+//	pools.h
+//	config.h
+//	blobs.h
+//	c89atomic.h
+//	debug.h
+//	jobs.h
+//	iniparser.h
+//	log.h
+//	jsonparser.h
+//	settings.h
+//	system.h
 
 #pragma once
 
@@ -10747,7 +10747,7 @@ struct alignas(CACHE_LINE_SIZE) SpinLockMutex
 
 private:
     uint32 mLocked = 0;
-    [[maybe_unused]] uint8 _padding[CACHE_LINE_SIZE - sizeof(uint32)];
+    uint8 _padding[CACHE_LINE_SIZE - sizeof(uint32)];
 };
 
 struct SpinLockMutexScope
