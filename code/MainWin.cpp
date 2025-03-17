@@ -198,10 +198,9 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
         // See the WndProc() function below for our to dispatch events to the Win32 backend.
         MSG msg;
 
-        // Block the program and go into idle mode if we are getting no window messages
-        if (!gWindow.disableIdleWait && GetMessage(&msg, nullptr, 0U, 0U)) {
-            ::TranslateMessage(&msg);
-            ::DispatchMessage(&msg);
+        if (!gWindow.disableIdleWait) {
+            constexpr uint32 MSG_WAIT_TIME = USE_LIVEPP ? 64 : INFINITE;
+            MsgWaitForMultipleObjects(0, nullptr, FALSE, MSG_WAIT_TIME, QS_ALLINPUT);
         }
 
         while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))

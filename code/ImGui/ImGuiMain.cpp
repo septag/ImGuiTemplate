@@ -167,9 +167,9 @@ bool ImGui::LoadFonts(float dpiScale)
     #if PLATFORM_WINDOWS
         Path fontsDir;
         OS::Win32GetFolder(OSWin32Folder::Fonts, fontsDir.Ptr(), sizeof(fontsDir));
-        Path defaultFontPath = Path::Join(fontsDir, "Verdana.ttf");
+        Path defaultFontPath = Path::Join(fontsDir, "segoeui.ttf");
         Path defaultMonoFontPath = Path::Join(fontsDir, "consola.ttf");
-        float fontSize = 15.0f;
+        float fontSize = 18.0f;
         float monoFontSize = 14.0f;
     #elif PLATFORM_OSX
         Path fontsDir("/System/Library/Fonts");
