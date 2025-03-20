@@ -6,7 +6,7 @@
 bool Initialize()
 {
     // TODO: implement
-     return false;
+    return true;
 }
 
 void Release()

@@ -166,9 +166,9 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
     gWindow.hwnd = hwnd;
 
     // Setup Platform/Renderer backends
-    if (!CreateDeviceD3D(hwnd))
-    {
+    if (!CreateDeviceD3D(hwnd)) {
         CleanupDeviceD3D();
+        LOG_ERROR("Create D3D11 device failed");
         return -1;
     }
 
@@ -182,7 +182,11 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(gGfx.device, gGfx.deviceContext);
 
-    Initialize();
+    if (!Initialize()) {
+        CleanupDeviceD3D();
+        LOG_ERROR("%s initialization failed", CONFIG_APP_NAME);
+        return -1;
+    }
 
     ImGuiIO& io = ImGui::GetIO();
 

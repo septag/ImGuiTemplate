@@ -13,7 +13,7 @@ if exist ..\%1 (
     exit /b 1
 )
 mkdir ..\%1 2>nul >nul
-robocopy . ..\%1 /e /xd .git /xd .build /xd build /xd bin /np /njh /njs
+robocopy . ..\%1 /e /xd .git /xd .build /xd build /xf CreateProject.bat /xd bin /np /njh /njs
 
 popd
 
@@ -31,4 +31,12 @@ pushd build\msvc
 cmake ..\..\cmake -DAPPNAME=%1
 popd
 
+rem Create configure.bat file
+echo ^@echo off > Configure.bat
+echo if not exist build mkdir build\msvc >> Configure.bat
+echo pushd build\msvc >> Configure.bat
+echo cmake ..\..\cmake -DAPPNAME=%1 >> Configure.bat
+echo popd >> Configure.bat
+
 echo Copy of template project created: %1 (build\msvc\%1.sln)
+echo Run/Edit Configure.bat for reconfiguring and adding extra options
