@@ -18,7 +18,7 @@
             },
         },
         {
-            "label": "Build Linux",
+            "label": "Build Linux/Mac",
             "type": "shell",
             "command": "ninja",
             "args": [],
@@ -39,7 +39,7 @@
             "command": "${workspaceFolder}/cmake/ConfigureNinja.bat"
         },
         {
-            "label": "Configure Linux",
+            "label": "Configure Linux/Mac",
             "type": "shell",
             "command": "${workspaceFolder}/cmake/ConfigureNinja.sh",
             "args": ["Test"],

@@ -15,7 +15,7 @@
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_impl_metal.h"
 #include "ImGui/imgui_impl_osx.h"
-#include "ImGui/ImGuiAll.h"
+#include "ImGui/ImGuiMain.h"
 
 #include "Main.h"
 
@@ -37,11 +37,12 @@ id <MTLDevice> gMetalDevice;
 @implementation AppViewController
 
 -(instancetype)initWithNibName:(nullable NSString *)nibNameOrNil bundle:(nullable NSBundle *)nibBundleOrNil
-{
+{    
     self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
-    
-    Initialize();
 
+    [[maybe_unused]] bool r = InitializeCommon();
+    ASSERT_ALWAYS(r, "InitializeCommon() failed");
+    
     _device = MTLCreateSystemDefaultDevice();
     _commandQueue = [_device newCommandQueue];
     
@@ -53,10 +54,10 @@ id <MTLDevice> gMetalDevice;
     
     gMetalDevice = _device;
 
-    imguiInitialize();
+    ImGui::MyInitialize();
 
     // CGFloat dpiScale = NSScreen.mainScreen.backingScaleFactor;
-    imguiLoadFonts(1.0f);
+    ImGui::LoadFonts(1.0f);
     
     // Setup Renderer backend
     ImGui_ImplMetal_Init(_device);
@@ -71,10 +72,10 @@ id <MTLDevice> gMetalDevice;
 
 -(void)loadView
 {
-    Settings& s = GetSettings();
+    AppSettings& s = GetSettings();
     self.view = [[MTKView alloc] initWithFrame:CGRectMake(0, 0,
-                                                          s.layout.windowWidth == 0 ? 1200 : s.layout.windowWidth,
-                                                          s.layout.windowHeight == 0 ? 720 : s.layout.windowHeight)];
+                                                          s.windowWidth == 0 ? 1200 : s.windowWidth,
+                                                          s.windowHeight == 0 ? 720 : s.windowHeight)];
 }
 
 -(void)viewDidLoad
@@ -85,8 +86,13 @@ id <MTLDevice> gMetalDevice;
     self.mtkView.delegate = self;
 
     ImGui_ImplOSX_Init(self.view);
-
+    
     [NSApp activateIgnoringOtherApps:YES];
+
+    if (!Initialize()) {
+        LOG_ERROR("%s initialization failed", CONFIG_APP_NAME);
+        exit(-1);
+    }
 }
 
 -(void)drawInMTKView:(MTKView*)view
@@ -112,10 +118,10 @@ id <MTLDevice> gMetalDevice;
         ImGui_ImplMetal_NewFrame(renderPassDescriptor);
         ImGui_ImplOSX_NewFrame(view);
         ImGui::NewFrame();
-        imguiBeginFrame();
+        ImGui::BeginFrame();
 
         // Our state (make them static = more or less global) as a convenience to keep the example terse.
-        static ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+        constexpr ImVec4 clearColor = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
         Update();
 
@@ -123,16 +129,13 @@ id <MTLDevice> gMetalDevice;
         ImGui::Render();
         ImDrawData* draw_data = ImGui::GetDrawData();
 
-        renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
+        renderPassDescriptor.colorAttachments[0].clearColor = 
+            MTLClearColorMake(clearColor.x * clearColor.w, clearColor.y * clearColor.w, clearColor.z * clearColor.w, clearColor.w);
         id <MTLRenderCommandEncoder> renderEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
         [renderEncoder pushDebugGroup:@"Dear ImGui rendering"];
         ImGui_ImplMetal_RenderDrawData(draw_data, commandBuffer, renderEncoder);
         [renderEncoder popDebugGroup];
         [renderEncoder endEncoding];
-
-        // Present
-        [commandBuffer presentDrawable:view.currentDrawable];
-        [commandBuffer commit];
 
         // Update and Render additional Platform Windows
         if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
@@ -140,8 +143,12 @@ id <MTLDevice> gMetalDevice;
             ImGui::UpdatePlatformWindows();
             ImGui::RenderPlatformWindowsDefault();
         }
-        
-        memTempReset(1.0f / io.Framerate);
+
+        // Present
+        [commandBuffer presentDrawable:view.currentDrawable];
+        [commandBuffer commit];
+
+        MemTempAllocator::Reset();
     }
 }
 
@@ -156,8 +163,8 @@ id <MTLDevice> gMetalDevice;
     if (frameSize.height < 500)
         frameSize.height = 500;
     
-    GetSettings().layout.windowWidth = uint16(frameSize.width);
-    GetSettings().layout.windowHeight = uint16(frameSize.height);
+    GetSettings().windowWidth = uint16(frameSize.width);
+    GetSettings().windowHeight = uint16(frameSize.height);
     
     return frameSize;
 }
@@ -174,13 +181,16 @@ id <MTLDevice> gMetalDevice;
 
 - (void)windowWillClose:(NSNotification *)notification
 {
-    imguiSaveState();
+    ImGui::SaveState();
     
     ImGui_ImplMetal_Shutdown();
     ImGui_ImplOSX_Shutdown();
-    imguiRelease();
-    
+
+    ImGui::MyRelease();    
     Release();
+    ReleaseCommon();
+
+    ImGui::DestroyContext();
 }
 @end
 
@@ -211,7 +221,6 @@ id <MTLDevice> gMetalDevice;
         [self.window center];
         [self.window makeKeyAndOrderFront:self];
     }
-    return self;
 }
 
 @end
@@ -251,7 +260,15 @@ bool GetClipboardString(char* textOut, uint32 textSize)
 
 int main(int argc, const char * argv[])
 {
-    return NSApplicationMain(argc, argv);
+    @autoreleasepool {
+        NSApplication *app = [NSApplication sharedApplication];
+        [app setActivationPolicy:NSApplicationActivationPolicyRegular];
+
+        AppDelegate *delegate = [[AppDelegate alloc] init];
+        app.delegate = delegate;
+
+        [app run];
+    }
 }
 
 #endif // PLATFORM_APPLE

@@ -10,7 +10,8 @@
             "name": "Debug LLDB",
             "program": "${workspaceFolder}/bin/Test",
             "args": [],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "Build Linux/Mac"
         },
 
         {

@@ -121,6 +121,13 @@ int main(int argc, const char * argv[])
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(GLSL_VERSION);
 
+    if (!Initialize()) {
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        LOG_ERROR("%s initialization failed", CONFIG_APP_NAME);
+        return -1;
+    }
+
     ImVec4 clearColor = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
     ImGuiIO& io = ImGui::GetIO();
     
@@ -164,12 +171,14 @@ int main(int argc, const char * argv[])
         }
 
         glfwSwapBuffers(window);
+        MemTempAllocator::Reset();
     }
 
     ImGui::SaveState();
     ImGui::MyRelease();
     Release();
     ReleaseCommon();
+    ImGui::DestroyContext();
 
     glfwDestroyWindow(window);
     glfwTerminate();
