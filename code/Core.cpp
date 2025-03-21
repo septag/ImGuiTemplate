@@ -1,1139 +1,46 @@
 // This source file is auto-generated
 // Inlined files:
-//	remedybg_driver.h
-//	tlsf.h
-//	systemandroid.cpp
-//	stringutil.cpp
-//	settings.cpp
-//	tracyuwp.hpp
-//	mathall.cpp
-//	cpu-features.h
-//	debugclang.cpp
 //	allocators.cpp
-//	ini.h
-//	tracyhelper.h
-//	minicoro.h
-//	jsonparser.cpp
-//	debug.cpp
-//	cpu-features.c
-//	systemlinux.cpp
-//	pools.cpp
-//	stringutilwin.cpp
-//	cj5.h
-//	tlsf.c
-//	iniparser.cpp
 //	base.cpp
-//	systemposix.cpp
-//	hash.cpp
-//	log.cpp
-//	tracyapi.h
-//	tracyc.h
-//	tracycallstack.h
-//	systemwin.cpp
-//	jobs.cpp
-//	system.cpp
-//	stb_sprintf.h
-//	systemmac.cpp
-//	sokol_args.h
+//	debug.cpp
+//	debugclang.cpp
 //	debugwin.cpp
+//	cj5.h
+//	cpu-features.c
+//	cpu-features.h
+//	ini.h
+//	minicoro.h
+//	remedybg_driver.h
+//	sokol_args.h
+//	stb_sprintf.h
+//	tlsf.c
+//	tlsf.h
+//	tracycallstack.h
+//	tracyapi.h
+//	tracyuwp.hpp
+//	tracyc.h
+//	hash.cpp
+//	includewin.h
+//	iniparser.cpp
+//	jobs.cpp
+//	jsonparser.cpp
+//	log.cpp
+//	mathall.cpp
+//	pools.cpp
+//	settings.cpp
+//	stringutil.cpp
+//	stringutilwin.cpp
+//	system.cpp
+//	systemandroid.cpp
+//	systemlinux.cpp
+//	systemmac.cpp
+//	systemposix.cpp
+//	systemwin.cpp
+//	tracyhelper.cpp
+//	tracyhelper.h
 
 #include "Core.h"
 #define BUILD_UNITY
-
-#include <stdarg.h> // va_list/va_start
-#include <stdio.h>  // puts
-
-
-#ifdef BUILD_UNITY
-    #if PLATFORM_WINDOWS
-//----------------------------------------------------------------------------------------------------------------------
-// DebugWin.cpp
-
-
-#if PLATFORM_WINDOWS
-
-//----------------------------------------------------------------------------------------------------------------------
-// External/remedybg/remedybg_driver.h
-
-/*
-
-RemedyBG driver for 0.3.9.1 and later.
-
-Note that the following documentation is preliminary and is subject to change.
-
-The RemedyBG driver on Windows uses named pipes for communication between
-processes. To enable this feature, RemedyBG can be invoked with the
-"--servername" argument, passing the base name used for the creation of the
-pipes. Without this argument, no named pipes will be created.
-
-There are two named pipes created when the "--servername basename" argument is
-given: one named ""\\.\pipe\basename", the debug control pipe, and another named
-"\\.\pipe\basename-events", the debug events pipe.
-
-The debug control pipe is a read-write pipe that should be setup in message mode
-and can be used to control the debugger, including things such as creating a
-session, adding a breakpoint, or deleting an expression from a watch window.
-
-The debug control pipe command pipe accepts a packed stream of data beginning
-with a 2 byte rdbg_Command. Depending on the command, one or more arguments to
-the command may be required. See the documentation for individual commands in
-the rdbg_Command enumeration below.
-
-All commands will first return a rdbg_CommandResult followed by zero or more
-additional values depending on the command.
-
-The debug events pipe is a secondary, read-only pipe that can be used to
-receive notifications of various events such as a breakpoint being hit. It, like
-the debug control pipe, will use a packed stream of data. The format of the data
-is documented in the rdbg_DebugEventKind enumeration below.
-
-Note that to aid in debugging, you can view the RemedyBG error log at
-`%APPDATA%\remedybg\app.log`.
-
-*/
-
-
-#include <stdint.h>
-
-#define RDBG_MAX_SERVERNAME_LEN 64
-
-typedef uint8_t rdbg_Bool;
-
-typedef uint32_t rdbg_Id;
-
-#pragma warning(push)
-#pragma warning(disable: 4200)
-#pragma pack(push, 1)
-struct rdbg_String
-{
-   uint16_t len;
-   uint8_t data[0];
-};
-#pragma pack(pop)
-#pragma warning(pop)
-
-enum rdbg_CommandResult
-{
-   RDBG_COMMAND_RESULT_UNKNOWN = 0,
-
-   RDBG_COMMAND_RESULT_OK = 1,
-
-   RDBG_COMMAND_RESULT_FAIL = 2,
-
-   RDBG_COMMAND_RESULT_ABORTED = 3,
-
-   RDBG_COMMAND_RESULT_INVALID_COMMAND = 4,
-
-   RDBG_COMMAND_RESULT_BUFFER_TOO_SMALL = 5,
-
-   RDBG_COMMAND_RESULT_FAILED_OPENING_FILE = 6,
-
-   RDBG_COMMAND_RESULT_FAILED_SAVING_SESSION = 7,
-
-   RDBG_COMMAND_RESULT_INVALID_ID = 8,
-
-   RDBG_COMMAND_RESULT_INVALID_TARGET_STATE = 9,
-
-   RDBG_COMMAND_RESULT_FAILED_NO_ACTIVE_CONFIG = 10,
-
-   RDBG_COMMAND_RESULT_INVALID_BREAKPOINT_KIND = 11,
-};
-
-enum rdbg_DebuggingTargetBehavior
-{
-   RDBG_IF_DEBUGGING_TARGET_STOP_DEBUGGING = 1,
-   RDBG_IF_DEBUGGING_TARGET_ABORT_COMMAND = 2
-};
-
-enum rdbg_ModifiedSessionBehavior
-{
-   RDBG_IF_SESSION_IS_MODIFIED_SAVE_AND_CONTINUE = 1,
-   RDBG_IF_SESSION_IS_MODIFIED_CONTINUE_WITHOUT_SAVING = 2,
-   RDBG_IF_SESSION_IS_MODIFIED_ABORT_COMMAND = 3,
-};
-
-enum rdbg_TargetState
-{
-   RDBG_TARGET_STATE_NONE = 1,
-   RDBG_TARGET_STATE_SUSPENDED = 2,
-   RDBG_TARGET_STATE_EXECUTING = 3,
-};
-
-enum rdbg_BreakpointKind
-{
-   RDBG_BREAKPOINT_KIND_FUNCTION_NAME = 1,
-   RDBG_BREAKPOINT_KIND_FILENAME_LINE = 2,
-   RDBG_BREAKPOINT_KIND_ADDRESS = 3,
-   RDBG_BREAKPOINT_KIND_PROCESSOR = 4,
-};
-
-enum rdbg_ProcessorBreakpointAccessKind
-{
-   RDBG_PROCESSOR_BREAKPOINT_ACCESS_KIND_WRITE = 1,
-   RDBG_PROCESSOR_BREAKPOINT_ACCESS_KIND_READ_WRITE = 2,
-   RDBG_PROCESSOR_BREAKPOINT_ACCESS_KIND_EXECUTE = 3,
-};
-
-enum rdbg_Command
-{
-   RDBG_COMMAND_BRING_DEBUGGER_TO_FOREGROUND = 50,
-
-   RDBG_COMMAND_SET_WINDOW_POS = 51,
-
-   RDBG_COMMAND_GET_WINDOW_POS = 52,
-   
-   RDBG_COMMAND_SET_BRING_TO_FOREGROUND_ON_SUSPENDED = 53,
-
-   RDBG_COMMAND_EXIT_DEBUGGER = 75,
-
-
-   RDBG_COMMAND_GET_IS_SESSION_MODIFIED = 100,
-
-   RDBG_COMMAND_GET_SESSION_FILENAME = 101,
-
-   RDBG_COMMAND_NEW_SESSION = 102,
-
-   RDBG_COMMAND_OPEN_SESSION = 103,
-
-   RDBG_COMMAND_SAVE_SESSION = 104,
-
-   RDBG_COMMAND_SAVE_AS_SESSION = 105,
-
-   RDBG_COMMAND_GET_SESSION_CONFIGS = 106,
-
-   RDBG_COMMAND_ADD_SESSION_CONFIG = 107,
-
-   RDBG_COMMAND_SET_ACTIVE_SESSION_CONFIG = 108,
-
-   RDBG_COMMAND_DELETE_SESSION_CONFIG = 109,
-
-   RDBG_COMMAND_DELETE_ALL_SESSION_CONFIGS = 110,
-
-
-   RDBG_COMMAND_GOTO_FILE_AT_LINE = 200,
-
-   RDBG_COMMAND_CLOSE_FILE = 201,
-
-   RDBG_COMMAND_CLOSE_ALL_FILES = 202,
-
-   RDBG_COMMAND_GET_CURRENT_FILE = 203,
-
-   RDBG_COMMAND_GET_OPEN_FILES = 204,
-
-
-   RDBG_COMMAND_GET_TARGET_STATE = 300,
-
-   RDBG_COMMAND_START_DEBUGGING = 301,
-
-   RDBG_COMMAND_STOP_DEBUGGING = 302,
-
-   RDBG_COMMAND_RESTART_DEBUGGING = 303,
-
-   RDBG_COMMAND_ATTACH_TO_PROCESS_BY_PID = 304,
-
-   RDBG_COMMAND_ATTACH_TO_PROCESS_BY_NAME = 305,
-
-   RDBG_COMMAND_DETACH_FROM_PROCESS = 306,
-
-   RDBG_COMMAND_STEP_INTO_BY_LINE = 307,
-
-   RDBG_COMMAND_STEP_INTO_BY_INSTRUCTION = 308,
-
-   RDBG_COMMAND_STEP_OVER_BY_LINE = 309,
-
-   RDBG_COMMAND_STEP_OVER_BY_INSTRUCTION = 310,
-
-   RDBG_COMMAND_STEP_OUT = 311,
-
-   RDBG_COMMAND_CONTINUE_EXECUTION = 312,
-
-   RDBG_COMMAND_RUN_TO_FILE_AT_LINE = 313,
-
-   RDBG_COMMAND_BREAK_EXECUTION = 314,
-
-
-   RDBG_COMMAND_GET_BREAKPOINTS = 600,
-
-   RDBG_COMMAND_GET_BREAKPOINT_LOCATIONS = 601,
-
-   RDBG_COMMAND_GET_FUNCTION_OVERLOADS = 602,
-
-   RDBG_COMMAND_ADD_BREAKPOINT_AT_FUNCTION = 603,
-
-   RDBG_COMMAND_ADD_BREAKPOINT_AT_FILENAME_LINE = 604,
-
-   RDBG_COMMAND_ADD_BREAKPOINT_AT_ADDRESS = 605,
-
-   RDBG_COMMAND_ADD_PROCESSOR_BREAKPOINT = 606,
-
-   RDBG_COMMAND_SET_BREAKPOINT_CONDITION = 607,
-
-   RDBG_COMMAND_UPDATE_BREAKPOINT_LINE = 608,
-
-   RDBG_COMMAND_ENABLE_BREAKPOINT = 609,
-
-   RDBG_COMMAND_DELETE_BREAKPOINT = 610,
-
-   RDBG_COMMAND_DELETE_ALL_BREAKPOINTS = 611,
-
-   RDBG_COMMAND_GET_BREAKPOINT = 612,
-
-
-   RDBG_COMMAND_GET_WATCHES = 700,
-
-   RDBG_COMMAND_ADD_WATCH = 701,
-
-   RDBG_COMMAND_UPDATE_WATCH_EXPRESSION = 702,
-
-   RDBG_COMMAND_UPDATE_WATCH_COMMENT = 703,
-
-   RDBG_COMMAND_DELETE_WATCH = 704,
-
-   RDBG_COMMAND_DELETE_ALL_WATCHES = 705,
-};
-
-enum rdbg_SourceLocChangedReason
-{
-   RDBG_SOURCE_LOC_CHANGED_REASON_UNSPECIFIED = 0,
-
-   RDBG_SOURCE_LOC_CHANGED_REASON_BY_COMMAND_LINE = 1,
-
-   RDBG_SOURCE_LOC_CHANGED_REASON_BY_DRIVER = 2,
-
-   RDBG_SOURCE_LOC_CHANGED_REASON_BREAKPOINT_SELECTED = 3,
-
-   RDBG_SOURCE_LOC_CHANGED_REASON_CURRENT_FRAME_CHANGED = 4,
-
-   RDBG_SOURCE_LOC_CHANGED_REASON_ACTIVE_THREAD_CHANGED = 5,
-
-   RDBG_SOURCE_LOC_CHANGED_REASON_BREAKPOINT_HIT = 6,
-   RDBG_SOURCE_LOC_CHANGED_REASON_EXCEPTION_HIT = 7,
-   RDBG_SOURCE_LOC_CHANGED_REASON_STEP_OVER = 8,
-   RDBG_SOURCE_LOC_CHANGED_REASON_STEP_IN = 9,
-   RDBG_SOURCE_LOC_CHANGED_REASON_STEP_OUT = 10,
-   RDBG_SOURCE_LOC_CHANGED_REASON_NON_USER_BREAKPOINT = 11,
-   RDBG_SOURCE_LOC_CHANGED_REASON_DEBUG_BREAK = 12,
-};
-
-enum rdbg_DebugEventKind
-{
-   RDBG_DEBUG_EVENT_KIND_EXIT_PROCESS = 100,
-
-   RDBG_DEBUG_EVENT_KIND_TARGET_STARTED = 101,
-
-   RDBG_DEBUG_EVENT_KIND_TARGET_ATTACHED = 102,
-
-   RDBG_DEBUG_EVENT_KIND_TARGET_DETACHED = 103,
-
-   RDBG_DEBUG_EVENT_KIND_TARGET_CONTINUED = 104,
-
-   RDBG_DEBUG_EVENT_KIND_SOURCE_LOCATION_CHANGED = 200,
-
-   RDBG_DEBUG_EVENT_KIND_BREAKPOINT_HIT = 600,
-
-   RDBG_DEBUG_EVENT_KIND_BREAKPOINT_RESOLVED = 601,
-
-   RDBG_DEBUG_EVENT_KIND_BREAKPOINT_ADDED = 602,
-
-   RDBG_DEBUG_EVENT_KIND_BREAKPOINT_MODIFIED = 603,
-
-   RDBG_DEBUG_EVENT_KIND_BREAKPOINT_REMOVED = 604,
-
-   RDBG_DEBUG_EVENT_KIND_OUTPUT_DEBUG_STRING = 800,
-};
-
-
-
-#pragma pack(push, 8)
-#include <DbgHelp.h>
-
-typedef struct _IMAGEHLP_MODULE64_V3
-{
-    DWORD SizeOfStruct;        // set to sizeof(IMAGEHLP_MODULE64)
-    DWORD64 BaseOfImage;       // base load address of module
-    DWORD ImageSize;           // virtual size of the loaded module
-    DWORD TimeDateStamp;       // date/time stamp from pe header
-    DWORD CheckSum;            // checksum from the pe header
-    DWORD NumSyms;             // number of symbols in the symbol table
-    SYM_TYPE SymType;          // type of symbols loaded
-    CHAR ModuleName[32];       // module name
-    CHAR ImageName[256];       // image name
-    CHAR LoadedImageName[256]; // symbol file name
-    CHAR LoadedPdbName[256];   // pdb file name
-    DWORD CVSig;               // Signature of the CV record in the debug directories
-    CHAR CVData[PATH_CHARS_MAX * 3]; // Contents of the CV record
-    DWORD PdbSig;              // Signature of PDB
-    GUID PdbSig70;             // Signature of PDB (VC 7 and up)
-    DWORD PdbAge;              // DBI age of pdb
-    BOOL PdbUnmatched;         // loaded an unmatched pdb
-    BOOL DbgUnmatched;         // loaded an unmatched dbg
-    BOOL LineNumbers;          // we have line number information
-    BOOL GlobalSymbols;        // we have internal symbol information
-    BOOL TypeInfo;             // we have type information
-    BOOL SourceIndexed; // pdb supports source server
-    BOOL Publics;       // contains public symbols
-} IMAGEHLP_MODULE64_V3, *PIMAGEHLP_MODULE64_V3;
-
-typedef struct _IMAGEHLP_MODULE64_V2
-{
-    DWORD SizeOfStruct;        // set to sizeof(IMAGEHLP_MODULE64)
-    DWORD64 BaseOfImage;       // base load address of module
-    DWORD ImageSize;           // virtual size of the loaded module
-    DWORD TimeDateStamp;       // date/time stamp from pe header
-    DWORD CheckSum;            // checksum from the pe header
-    DWORD NumSyms;             // number of symbols in the symbol table
-    SYM_TYPE SymType;          // type of symbols loaded
-    CHAR ModuleName[32];       // module name
-    CHAR ImageName[256];       // image name
-    CHAR LoadedImageName[256]; // symbol file name
-} IMAGEHLP_MODULE64_V2, *PIMAGEHLP_MODULE64_V2;
-#pragma pack(pop)
-
-using SymInitializeFn = BOOL(*)(IN HANDLE process, IN LPCSTR UserSearchPath, IN BOOL fInvadeProcess);
-using SymCleanupFn = BOOL(*)(IN HANDLE process);
-using SymGetSymFromAddr64Fn = BOOL(*)(IN HANDLE process, IN DWORD64 dwAddr, OUT PDWORD64 pdwDisplacement, OUT PIMAGEHLP_SYMBOL64 Symbol);
-using UnDecorateSymbolNameFn = DWORD(WINAPI*)(PCSTR DecoratedName, PSTR UnDecoratedName, DWORD UndecoratedLength, DWORD Flags);
-using SymGetLineFromAddr64Fn = BOOL(*)(IN HANDLE process, IN DWORD64 dwAddr, OUT PDWORD pdwDisplacement, OUT PIMAGEHLP_LINE64 line);  
-
-static SymInitializeFn _SymInitialize;
-static SymCleanupFn _SymCleanup;
-static SymGetSymFromAddr64Fn _SymGetSymFromAddr64;
-static UnDecorateSymbolNameFn _UnDecorateSymbolName;
-static SymGetLineFromAddr64Fn _SymGetLineFromAddr64;
-
-struct DebugStacktraceContext
-{
-    bool mInitialized;
-    HINSTANCE mDbgHelp;
-    HANDLE mProcess;
-    CRITICAL_SECTION mMutex;
-    
-    DebugStacktraceContext();
-    ~DebugStacktraceContext();
-};
-
-static DebugStacktraceContext gStacktrace;
-
-namespace Debug
-{
-    static bool InitializeStacktrace()
-    {
-        if (gStacktrace.mInitialized)
-        return true;
-        gStacktrace.mInitialized = true;
-
-        EnterCriticalSection(&gStacktrace.mMutex);
-        ASSERT(gStacktrace.mDbgHelp == nullptr);
-
-        gStacktrace.mDbgHelp = LoadLibraryA("dbghelp.dll");
-        if (!gStacktrace.mDbgHelp) {
-            Debug::Print("Could not load DbgHelp.dll");
-            gStacktrace.mInitialized = false;
-            return false;
-        }
-
-        _SymInitialize = (SymInitializeFn)GetProcAddress(gStacktrace.mDbgHelp, "SymInitialize");
-        _SymCleanup = (SymCleanupFn)GetProcAddress(gStacktrace.mDbgHelp, "SymCleanup");
-        _SymGetLineFromAddr64 = (SymGetLineFromAddr64Fn)GetProcAddress(gStacktrace.mDbgHelp, "SymGetLineFromAddr64");
-        _SymGetSymFromAddr64 = (SymGetSymFromAddr64Fn)GetProcAddress(gStacktrace.mDbgHelp, "SymGetSymFromAddr64");
-        _UnDecorateSymbolName = (UnDecorateSymbolNameFn)GetProcAddress(gStacktrace.mDbgHelp, "UnDecorateSymbolName");
-        ASSERT(_SymInitialize && _SymCleanup && _SymGetLineFromAddr64 && _SymGetSymFromAddr64 && _UnDecorateSymbolName);
-
-        gStacktrace.mProcess = GetCurrentProcess();
-
-        if (!_SymInitialize(gStacktrace.mProcess, NULL, TRUE)) {
-            LeaveCriticalSection(&gStacktrace.mMutex);
-            Debug::Print("DbgHelp: _SymInitialize failed");
-            gStacktrace.mInitialized = false;
-            return false;
-        }
-
-        ASSERT(_SymInitialize && _SymCleanup && _SymGetLineFromAddr64 && _SymGetSymFromAddr64 && _UnDecorateSymbolName);
-        LeaveCriticalSection(&gStacktrace.mMutex);
-
-        return true;
-    }
-};
-
-#ifdef TRACY_ENABLE
-void DebugDbgHelpInit()
-{
-    if (!gStacktrace.mInitialized) {
-        Debug::InitializeStacktrace();
-        ASSERT_MSG(gStacktrace.mInitialized, "Failed to initialize stacktrace capture");
-    }  
-}
-
-void DebugDbgHelpLock()
-{
-    EnterCriticalSection(&gStacktrace.mMutex);
-}
-
-void DebugDbgHelpUnlock()
-{
-    LeaveCriticalSection(&gStacktrace.mMutex);
-}
-#endif // if TRACY_ENABLE
-
-NO_INLINE uint16 Debug::CaptureStacktrace(void** stackframes, uint16 maxStackframes, uint16 framesToSkip, uint32* pHash)
-{
-    static_assert(sizeof(DWORD) == sizeof(uint32));
-
-    return (uint16)RtlCaptureStackBackTrace(framesToSkip, maxStackframes, stackframes, PDWORD(pHash));
-}
-
-void Debug::ResolveStacktrace(uint16 numStacktrace, void* const* stackframes, DebugStacktraceEntry* entries)
-{
-    if (!gStacktrace.mInitialized) {
-        Debug::InitializeStacktrace();
-        ASSERT_MSG(gStacktrace.mInitialized, "Failed to initialize stacktrace capture");
-    }  
-
-    IMAGEHLP_LINE64 line;
-    uint8* symbolBuffer[sizeof(IMAGEHLP_SYMBOL64) + PATH_CHARS_MAX];
-    IMAGEHLP_SYMBOL64* symbol = reinterpret_cast<IMAGEHLP_SYMBOL64*>(symbolBuffer);
-    memset(symbol, 0, sizeof(IMAGEHLP_SYMBOL64) + PATH_CHARS_MAX);
-    symbol->SizeOfStruct = sizeof(IMAGEHLP_SYMBOL64);
-    symbol->MaxNameLength = PATH_CHARS_MAX;
-
-    EnterCriticalSection(&gStacktrace.mMutex);
-    for (uint16 i = 0; i < numStacktrace; i++) {
-        DebugStacktraceEntry entry = {};
-        if (_SymGetSymFromAddr64(gStacktrace.mProcess, (DWORD64)stackframes[i], &entry.offsetFromSymbol, symbol)) {
-            Str::Copy(entry.name, sizeof(entry.name), symbol->Name);
-        } 
-        else {
-            DWORD gle = GetLastError();
-            if (gle != ERROR_INVALID_ADDRESS && gle != ERROR_MOD_NOT_FOUND) {
-                Debug::Print("_SymGetSymFromAddr64 failed");
-                break;
-            }
-            Str::Copy(entry.name, sizeof(entry.name), "[NA]");
-        }
-
-        if (_SymGetLineFromAddr64(gStacktrace.mProcess, (DWORD64)stackframes[i], (PDWORD)&(entry.offsetFromLine), &line)) {
-            entry.line = line.LineNumber;
-            Str::Copy(entry.filename, PATH_CHARS_MAX, line.FileName);
-        } 
-        else {
-            DWORD gle = GetLastError();
-            if (gle != ERROR_INVALID_ADDRESS && gle != ERROR_MOD_NOT_FOUND) {
-                Debug::Print("_SymGetLineFromAddr64 failed");
-                break;
-            }
-            Str::Copy(entry.filename, PATH_CHARS_MAX, "[NA]");
-        }
-
-        memcpy(&entries[i], &entry, sizeof(DebugStacktraceEntry));
-    }
-    LeaveCriticalSection(&gStacktrace.mMutex);
-}
-
-void Debug::StacktraceSaveStopPoint(void*)
-{
-}
-
-DebugStacktraceContext::DebugStacktraceContext() : mDbgHelp(nullptr), mProcess(nullptr)
-{
-    if constexpr (!CONFIG_FINAL_BUILD) {
-        InitializeCriticalSectionAndSpinCount(&mMutex, 32);
-        Debug::InitializeStacktrace();
-    }
-}
-
-DebugStacktraceContext::~DebugStacktraceContext()
-{
-    if (mInitialized) {
-        ASSERT(mDbgHelp);
-        ASSERT(_SymCleanup);
-
-        EnterCriticalSection(&mMutex);
-        _SymCleanup(mProcess);
-        FreeLibrary(mDbgHelp);
-        mDbgHelp = nullptr;
-        LeaveCriticalSection(&mMutex);
-
-        #if defined(TRACY_ENABLE)
-        DeleteCriticalSection(&mMutex);
-        #endif
-    }
-}
-
-
-static const char* RDBG_PIPE_NAME_PREFIX = "\\\\.\\pipe\\";
-static constexpr uint32 RDBG_BUFFER_SIZE = 8*SIZE_KB;
-
-struct RDBG_Context
-{
-    OSProcess remedybgProc;
-    HANDLE cmdPipe = INVALID_HANDLE_VALUE;
-};
-static RDBG_Context gRemedyBG;
-
-namespace RDBG
-{
-    static Blob SendCommand(const Blob& cmdBuffer, MemAllocator* outBufferAlloc)
-    {
-        ASSERT(gRemedyBG.cmdPipe != INVALID_HANDLE_VALUE);
-
-        uint8 tempBuffer[RDBG_BUFFER_SIZE];
-        DWORD bytesRead;
-        Blob outBuffer(outBufferAlloc);
-        outBuffer.SetGrowPolicy(Blob::GrowPolicy::Linear);
-
-        BOOL r = TransactNamedPipe(gRemedyBG.cmdPipe, const_cast<void*>(cmdBuffer.Data()), DWORD(cmdBuffer.Size()), tempBuffer, sizeof(tempBuffer), &bytesRead, nullptr);
-        if (r)
-            outBuffer.Write(tempBuffer, bytesRead);
-
-        while (!r && GetLastError() == ERROR_MORE_DATA) {
-            r = ReadFile(gRemedyBG.cmdPipe, tempBuffer, sizeof(tempBuffer), &bytesRead, nullptr);
-            if (r)
-                outBuffer.Write(tempBuffer, bytesRead);
-        }
-
-        if (!r) {
-            LOG_ERROR("Reading RemedyBG pipe failed");
-            RDBG::Release();
-            return outBuffer;
-        }
-
-        return outBuffer;
-    }
-
-    static inline rdbg_CommandResult GetResult(Blob& resultBuff)
-    {
-        uint16 res;
-        resultBuff.Read<uint16>(&res);
-        return rdbg_CommandResult(res);
-    }
-}
-
-bool RDBG::Initialize(const char* serverName, const char* remedybgPath)
-{
-    ASSERT(remedybgPath);
-    ASSERT_MSG(gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE, "RemedyBG is initialized before");
-
-    ASSERT_MSG(!OS::IsDebuggerPresent(), "Another debugger is already attached to this executable");
-    ASSERT_ALWAYS(Str::Len(serverName) <= RDBG_MAX_SERVERNAME_LEN, "ServerName is too long for RemedyBG sessions: %s", serverName);
-
-    Path remedybgCmdline(remedybgPath);
-    remedybgCmdline.Append(" --servername ");
-    remedybgCmdline.Append(serverName);
-    if (!gRemedyBG.remedybgProc.Run(remedybgCmdline.CStr(), OSProcessFlags::None)) {
-        LOG_ERROR("RemedyBG: Could not run RemedyBG instance '%s'", remedybgPath);
-        return false;
-    }
-    while (!gRemedyBG.remedybgProc.IsRunning())
-        Thread::Sleep(20);
-    Thread::Sleep(200);   // wait a little more so remedybg gets it's shit together
-
-    String<256> pipeName(RDBG_PIPE_NAME_PREFIX);
-    pipeName.Append(serverName);
-
-    gRemedyBG.cmdPipe = CreateFileA(pipeName.CStr(), GENERIC_READ|GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE) {
-        LOG_ERROR("RemedyBG: Creating command pipe failed");
-        return false;
-    }
-    
-    DWORD newMode = PIPE_READMODE_MESSAGE;
-    if (!SetNamedPipeHandleState(gRemedyBG.cmdPipe, &newMode, nullptr, nullptr)) {
-        LOG_ERROR("RemedyBG: SetNamedPipeHandleState failed");
-        return false;
-    }
-
-    if (RDBG::AttachToProcess(0)) {
-        LOG_DEBUG("RemedyBG launched and attached to the process");
-        return true;
-    }
-    else {
-        LOG_ERROR("Attaching RemedyBG debugger to the current process failed");
-        return false;
-    }
-}
-
-void RDBG::Release()
-{
-    if (gRemedyBG.cmdPipe != INVALID_HANDLE_VALUE) 
-        CloseHandle(gRemedyBG.cmdPipe);
-    gRemedyBG.cmdPipe = INVALID_HANDLE_VALUE;
-    if (gRemedyBG.remedybgProc.IsValid())
-        gRemedyBG.remedybgProc.Abort();
-}
-
-#define DEBUG_REMEDYBG_BEGINCOMMAND(_cmd)   \
-    MemTempAllocator tempAlloc; \
-    Blob cmdBuffer(&tempAlloc); \
-    cmdBuffer.SetGrowPolicy(Blob::GrowPolicy::Linear); \
-    cmdBuffer.Write<uint16>(_cmd)
-
-bool RDBG::AttachToProcess(uint32 id)
-{
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
-        return 0;
-
-    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ATTACH_TO_PROCESS_BY_PID);
-
-    if (id == 0)
-        id = GetCurrentProcessId();
-
-    cmdBuffer.Write<uint32>(id);
-    cmdBuffer.Write<rdbg_Bool>(true);
-    cmdBuffer.Write<uint8>(RDBG_IF_DEBUGGING_TARGET_STOP_DEBUGGING);
-    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
-    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
-}
-
-bool RDBG::DetachFromProcess()
-{
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
-        return 0;
-
-    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_DETACH_FROM_PROCESS);
-    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
-    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
-}
-
-bool RDBG::Break()
-{
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
-        return 0;
-    
-    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_BREAK_EXECUTION);
-    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
-    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
-}
-
-bool RDBG::Continue()
-{
-    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_CONTINUE_EXECUTION);
-    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
-    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
-}
-
-bool RDBG::RunToFileAtLine(const char* filename, uint32 line)
-{
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
-        return 0;
-
-    ASSERT(filename);
-    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_RUN_TO_FILE_AT_LINE);
-    cmdBuffer.WriteStringBinary16(filename);
-    cmdBuffer.Write<uint32>(line);
-    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
-    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
-}
-
-RDBG_Id RDBG::AddFunctionBreakpoint(const char* funcName, const char* conditionExpr, uint32 overloadId)
-{
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
-        return 0;
-
-    ASSERT(funcName);
-    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ADD_BREAKPOINT_AT_FUNCTION);
-    cmdBuffer.WriteStringBinary16(funcName);
-    cmdBuffer.Write<uint32>(overloadId);
-    cmdBuffer.WriteStringBinary16(conditionExpr ? conditionExpr : "");
-    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
-
-    RDBG_Id bid = 0;
-    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
-        res.Read<RDBG_Id>(&bid);
-    return bid;
-}
-
-RDBG_Id RDBG::AddFileLineBreakpoint(const char* filename, uint32 line, const char* conditionExpr)
-{
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
-        return 0;
-
-    ASSERT(filename);
-    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ADD_BREAKPOINT_AT_FILENAME_LINE);
-    cmdBuffer.WriteStringBinary16(filename);
-    cmdBuffer.Write<uint32>(line);
-    cmdBuffer.WriteStringBinary16(conditionExpr ? conditionExpr : "");
-    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
-
-    RDBG_Id bid = 0;
-    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
-        res.Read<RDBG_Id>(&bid);
-    return bid;
-}
-
-RDBG_Id RDBG::AddAddressBreakpoint(uintptr_t addr, const char* conditionExpr)
-{
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
-        return 0;
-
-    ASSERT(addr);
-    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ADD_BREAKPOINT_AT_ADDRESS);
-    cmdBuffer.Write<uint64>(addr);
-    cmdBuffer.WriteStringBinary16(conditionExpr ? conditionExpr : "");
-    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
-
-    RDBG_Id bid = 0;
-    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
-        res.Read<RDBG_Id>(&bid);
-    return bid;
-}
-
-RDBG_Id RDBG::AddProcessorBreakpoint(const void* addr, uint8 numBytes, RDBG_ProcessorBreakpointType type, const char* conditionExpr)
-{
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
-        return 0;
-
-    ASSERT_MSG(numBytes <= 8, "Processor breakpoints cannot be more than 8 bytes");
-
-    ASSERT(addr);
-    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ADD_PROCESSOR_BREAKPOINT);
-
-    char addrExpr[64];
-    Str::PrintFmt(addrExpr, sizeof(addrExpr), "0x%llx", addr);
-    cmdBuffer.WriteStringBinary16(addrExpr);
-    cmdBuffer.Write<uint8>(numBytes);
-    cmdBuffer.Write<uint8>(uint8(type));
-    cmdBuffer.WriteStringBinary16(conditionExpr ? conditionExpr : "");
-    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
-
-    RDBG_Id bid = 0;
-    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
-        res.Read<RDBG_Id>(&bid);
-
-    return bid;
-}
-
-bool RDBG::EnableBreakpoint(RDBG_Id bId, bool enable)
-{
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
-        return 0;
-
-    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ENABLE_BREAKPOINT);
-    cmdBuffer.Write<rdbg_Id>(bId);
-    cmdBuffer.Write<rdbg_Bool>(enable);
-    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
-    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
-}
-
-bool RDBG::SetBreakpointCondition(RDBG_Id bId, const char* conditionExpr)
-{
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
-        return 0;
-
-    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ENABLE_BREAKPOINT);
-    cmdBuffer.Write<rdbg_Id>(bId);
-    cmdBuffer.WriteStringBinary16(conditionExpr ? conditionExpr : "");
-    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
-    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
-}
-
-bool RDBG::DeleteBreakpoint(RDBG_Id bId)
-{
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
-        return 0;
-
-    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_DELETE_BREAKPOINT);
-    cmdBuffer.Write<rdbg_Id>(bId);
-    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
-    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
-}
-
-bool RDBG::DeleteAllBreakpoints()
-{
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
-        return 0;
-
-    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_DELETE_ALL_BREAKPOINTS);
-    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
-    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
-}
-
-RDBG_Id RDBG::AddWatch(const char* expr, const char* comment, uint8 windowNum)
-{
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
-        return 0;
-
-    ASSERT(expr);
-    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ADD_WATCH);
-    cmdBuffer.Write<uint8>(windowNum);
-    cmdBuffer.WriteStringBinary16(expr);
-    cmdBuffer.WriteStringBinary16(comment ? comment : "");
-    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
-
-    RDBG_Id wid = 0;
-    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
-        res.Read<RDBG_Id>(&wid);
-    return wid;
-}
-
-RDBG_Id RDBG::DeleteWatch(RDBG_Id wId)
-{
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
-        return 0;
-
-    ASSERT(wId);
-    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_DELETE_WATCH);
-    cmdBuffer.Write<rdbg_Id>(wId);
-    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
-
-    RDBG_Id wid = 0;
-    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
-        res.Read<RDBG_Id>(&wid);
-    return wid;
-}
-
-bool RDBG::DeleteAllWatches()
-{
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
-        return 0;
-
-    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_DELETE_ALL_WATCHES);
-    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
-    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
-}
-
-#endif // PLATFORM_WINDOWS
-
-    #elif PLATFORM_POSIX
-//----------------------------------------------------------------------------------------------------------------------
-// DebugClang.cpp
-
-
-#if COMPILER_CLANG && !COMPILER_MSVC
-
-#include <unwind.h> // _Unwind_Backtrace
-#include <dlfcn.h>  // dladdr
-#include <cxxabi.h> // __cxa_demangle
-
-#if PLATFORM_ANDROID || PLATFORM_LINUX
-#include <malloc.h>
-#elif PLATFORM_APPLE
-#include <stdlib.h>    
-#endif
-
-
-
-
-#define DEBUG_STACKTRACE_SKIP_FRAMES 1
-#define DEBUG_STACKTRACE_HASH_SEED 0x0CCE41BB
-
-struct DebugStacktraceState
-{
-    void** current;
-    void** end;
-    uint16 framesToSkip;
-    uint16 numFrames;
-};
-
-static StaticArray<void*, 16> gDebugStopFuncs;
-
-namespace Debug
-{
-    static _Unwind_Reason_Code UnwindCallback(_Unwind_Context* context, void* arg)
-    {
-        DebugStacktraceState* state = reinterpret_cast<DebugStacktraceState*>(arg);
-
-        state->numFrames++;
-        if (state->numFrames <= state->framesToSkip)
-        return _URC_NO_REASON;
-
-        void* ip = reinterpret_cast<void*>(_Unwind_GetIP(context));
-        if (ip) {
-            bool endOfStack = false;
-            if (gDebugStopFuncs.Count()) {
-                void* fn = _Unwind_FindEnclosingFunction(ip);
-                endOfStack = gDebugStopFuncs.FindIf([fn](const void* _fn)->bool { return fn == _fn; }) != UINT32_MAX;
-            }
-
-            if (state->current == state->end || endOfStack)
-            return _URC_END_OF_STACK;
-            else
-            *state->current++ = ip;
-        }
-        return _URC_NO_REASON;
-    }
-}
-
-NO_INLINE uint16 Debug::CaptureStacktrace(void** stackframes, uint16 maxStackframes, uint16 framesToSkip, uint32* pHash)
-{
-    ASSERT(maxStackframes);
-    DebugStacktraceState state {stackframes, stackframes + maxStackframes, framesToSkip};
-    _Unwind_Backtrace(Debug::UnwindCallback, &state);
-    uint32 numStacktrace = PtrToInt<uint16>((void*)(state.current - stackframes));
-
-    if (pHash)
-        *pHash = Hash::Murmur32(stackframes, sizeof(void*)*numStacktrace, DEBUG_STACKTRACE_HASH_SEED);
-
-    return numStacktrace;
-}
-
-void Debug::ResolveStacktrace(uint16 numStacktrace, void* const* stackframes, DebugStacktraceEntry* entries)
-{
-    for (uint16 i = 0; i < numStacktrace; i++) {
-        memset(&entries[i], 0x0, sizeof(entries[i]));
-
-        const void* addr = stackframes[i];
-        Dl_info info;
-        if (dladdr(addr, &info)) {
-            Str::Copy(entries[i].filename, sizeof(entries[i].filename), info.dli_fname);
-            Str::Copy(entries[i].name, sizeof(entries[i].name), info.dli_sname);
-
-            int status = 0;
-            char* demangled = abi::__cxa_demangle(entries[i].name, 0, 0, &status);
-            if (status == 0)
-                Str::Copy(entries[i].name, sizeof(entries[i].name), demangled);
-            ::free(demangled);
-        }
-    }
-}
-
-void Debug::StacktraceSaveStopPoint(void* funcPtr)
-{
-    ASSERT(funcPtr);
-    ASSERT_MSG(gDebugStopFuncs.FindIf([funcPtr](const void* fn)->bool { return funcPtr == fn; }) == UINT32_MAX, 
-               "Function pointer is already saved");
-    gDebugStopFuncs.Push(funcPtr);
-}
-
-#endif // COMPILER_CLANG
-
-
-    #endif
-#endif 
-
-static bool gDebugCaptureStacktraceForFiberProtector;
-
-void Debug::Print(const char* text)
-{
-    #if PLATFORM_WINDOWS
-        OS::Win32PrintToDebugger(text);
-    #elif PLATFORM_ANDROID
-        OS::AndroidPrintToLog(OSAndroidLogType::Debug, CONFIG_APP_NAME, text);
-    #else
-        puts(text);
-    #endif
-}
-
-void Debug::SetCaptureStacktraceForFiberProtector(bool capture)
-{
-    gDebugCaptureStacktraceForFiberProtector = capture;
-}
-
-#if CONFIG_ENABLE_ASSERT
-static constexpr uint16 kDebugMaxFiberProtectorStackframes = 8;
-
-using DebugFiberScopeProtectorCallbackPair = Pair<DebugFiberScopeProtectorCallback, void*>;
-struct DebugFiberProtector
-{
-    StaticArray<DebugFiberScopeProtectorCallbackPair, 4> callbacks;
-};
-
-struct DebugFiberProtectorThreadContext
-{
-    struct Item 
-    {
-        const char* name;
-        void* stackframes[kDebugMaxFiberProtectorStackframes];
-        uint16 numStackframes;
-        uint16 id;
-    };
-
-    ~DebugFiberProtectorThreadContext()
-    {
-        items.Free();
-    }
-
-    uint16 idGen;
-    Array<Item> items;
-};
- 
-static DebugFiberProtector gFiberProtector;
-NO_INLINE static DebugFiberProtectorThreadContext& FiberProtectorCtx() 
-{ 
-    static thread_local DebugFiberProtectorThreadContext fiberProtectorCtx;
-    return fiberProtectorCtx; 
-}
-
-void Debug::FiberScopeProtector_RegisterCallback(DebugFiberScopeProtectorCallback callback, void* userData)
-{
-    ASSERT_MSG(gFiberProtector.callbacks.FindIf([callback](const DebugFiberScopeProtectorCallbackPair& p) { return p.first == callback; }) == UINT32_MAX,
-               "Callback already added");
-    gFiberProtector.callbacks.Push(DebugFiberScopeProtectorCallbackPair(callback, userData));
-}
-
-INLINE bool debugFiberScopeProtector_IsInFiber()
-{
-    bool inFiber = false;
-    for (const DebugFiberScopeProtectorCallbackPair p : gFiberProtector.callbacks)
-        inFiber |= p.first(p.second);
-    return inFiber;
-}
-
-uint16 Debug::FiberScopeProtector_Push(const char* name)
-{
-    if (debugFiberScopeProtector_IsInFiber()) {
-        ASSERT(name);
-        DebugFiberProtectorThreadContext::Item* item = FiberProtectorCtx().items.Push();
-        memset(item, 0x0, sizeof(*item));
-        item->name = name;
-        if (gDebugCaptureStacktraceForFiberProtector) 
-            item->numStackframes = Debug::CaptureStacktrace(item->stackframes, kDebugMaxFiberProtectorStackframes, 2);
-        uint16 id = ++FiberProtectorCtx().idGen;
-        if (id == 0)
-            id = 1;
-        item->id = id;
-        return id;
-    }
-    return 0;
-}
-
-void Debug::FiberScopeProtector_Pop(uint16 id)
-{
-    if (id == 0)
-        return;
-    
-    ASSERT_MSG(debugFiberScopeProtector_IsInFiber(), "Item was pushed in the fiber, but not popping in any fibers");
-    ASSERT(FiberProtectorCtx().items.Count());
-
-    uint32 index = FiberProtectorCtx().items.FindIf([id](const DebugFiberProtectorThreadContext::Item& item) { return item.id == id; });
-    ASSERT_MSG(index != UINT32_MAX, "Something went wrong. Very likely, you are not popping the protected item in the correct thread");
-    FiberProtectorCtx().items.Pop(index);
-}
-
-void Debug::FiberScopeProtector_Check()
-{
-    char msg[512];
-    
-    if (FiberProtectorCtx().items.Count()) {
-        Str::PrintFmt(msg, sizeof(msg), "Found %u protected items in the fiber that are not destructed in the scope:", FiberProtectorCtx().items.Count());
-        Debug::Print(msg);
-        if constexpr (PLATFORM_WINDOWS) Debug::Print("\n");
-        
-        DebugStacktraceEntry stacktraces[kDebugMaxFiberProtectorStackframes];
-        for (const DebugFiberProtectorThreadContext::Item& item : FiberProtectorCtx().items) {
-            Str::PrintFmt(msg, sizeof(msg), "\t%s:", item.name);
-            Debug::Print(msg);
-            if constexpr (PLATFORM_WINDOWS) Debug::Print("\n");
-            if (item.numStackframes) {
-                Debug::ResolveStacktrace(item.numStackframes, item.stackframes, stacktraces);
-                for (uint16 i = 0; i < item.numStackframes; i++) {
-                    Str::PrintFmt(msg, sizeof(msg), "\t\t%s(%u): %s", stacktraces[i].filename, stacktraces[i].line, stacktraces[i].name);
-                    Debug::Print(msg);
-                    if constexpr (PLATFORM_WINDOWS) Debug::Print("\n");
-                }
-            }
-        }
-
-        DEBUG_BREAK();
-    }
-}
-#else
-void Debug::FiberScopeProtector_RegisterCallback(DebugFiberScopeProtectorCallback, void*) {}
-uint16 Debug::FiberScopeProtector_Push(const char*) { return 0; }
-void Debug::FiberScopeProtector_Pop(uint16) {}
-void Debug::FiberScopeProtector_Check() {}
-#endif  // CONFIG_ENABLE_ASSERT
-
-
 
 #include <stdlib.h>
 
@@ -4081,2266 +2988,3356 @@ void MemProxyAllocator::Free(void* ptr, uint32 align)
 }
 
 
-
-#include <math.h>
-
-float M::CopySign(float _x, float _y)
-{
-    return ::copysignf(_x, _y);
-}
-
-float M::Floor(float _f)
-{
-    return ::floorf(_f);
-}
-
-float M::Cos(float _a)
-{
-    return ::cosf(_a);
-}
-
-float M::ACos(float _a)
-{
-    return ::acosf(_a);
-}
-
-float M::Sin(float _a)
-{
-    return ::sinf(_a);
-}
-
-float M::ASin(float _a)
-{
-    return ::asinf(_a);
-}
-
-float M::ATan2(float _y, float _x)
-{
-    return ::atan2f(_y, _x);
-}
-
-float M::Exp(float _a)
-{
-    return ::expf(_a);
-}
-
-float M::Log(float _a)
-{
-    return ::logf(_a);
-}
-
-#if !(defined(__SSE2__) || (COMPILER_MSVC && (ARCH_64BIT || _M_IX86_FP >= 2)))
-    float M::Sqrt(float _a)
-    {
-        return ::sqrtf(_a);
-    }
-
-    float M::Rsqrt(float _a)
-    {
-        return 1.0f / ::sqrtf(_a);
-    }
-#endif // if not __SSE2__
-
-    
-                                        
-Mat4 Mat4::ViewLookAt(Float3 eye, Float3 target, Float3 up)
-{
-    Float3 zaxis = Float3::Norm(Float3::Sub(target, eye));
-    Float3 xaxis = Float3::Norm(Float3::Cross(zaxis, up));
-    Float3 yaxis = Float3::Cross(xaxis, zaxis);
-    
-    return Mat4(xaxis.x,    xaxis.y,    xaxis.z,    -Float3::Dot(xaxis, eye), 
-                yaxis.x,    yaxis.y,    yaxis.z,    -Float3::Dot(yaxis, eye), 
-                -zaxis.x,   -zaxis.y,   -zaxis.z,    Float3::Dot(zaxis, eye),
-                0,          0,          0,           1.0f);
-}
-
-Mat4 Mat4::ViewLookAtLH(Float3 eye, Float3 target, Float3 up)
-{
-    Float3 zaxis = Float3::Norm(Float3::Sub(target, eye));
-    Float3 xaxis = Float3::Norm(Float3::Cross(up, zaxis));
-    Float3 yaxis = Float3::Cross(zaxis, xaxis);
-    
-    return Mat4(xaxis.x, xaxis.y, xaxis.z, -Float3::Dot(xaxis, eye), 
-                yaxis.x, yaxis.y, yaxis.z, -Float3::Dot(yaxis, eye), 
-                zaxis.x, zaxis.y, zaxis.z, -Float3::Dot(zaxis, eye),
-                0,       0,       0,        1.0f);
-}
-
-Mat4 Mat4::ViewFPS(Float3 eye, float pitch, float yaw)
-{
-    float cos_pitch = M::Cos(pitch);
-    float sin_pitch = M::Sin(pitch);
-    float cos_yaw = M::Cos(yaw);
-    float sin_yaw = M::Sin(yaw);
-    
-    Float3 xaxis = Float3(cos_yaw, 0, -sin_yaw);
-    Float3 yaxis = Float3(sin_yaw * sin_pitch, cos_pitch, cos_yaw * sin_pitch);
-    Float3 zaxis = Float3(sin_yaw * cos_pitch, -sin_pitch, cos_pitch * cos_yaw);
-    
-    return Mat4(xaxis.x, xaxis.y, xaxis.z, -Float3::Dot(xaxis, eye), yaxis.x, yaxis.y, yaxis.z,
-                -Float3::Dot(yaxis, eye), zaxis.x, zaxis.y, zaxis.z, -Float3::Dot(zaxis, eye),
-                0, 0, 0, 1.0f);
-}
-
-Mat4 Mat4::ViewArcBall(Float3 move, Quat rot, Float3 target_pos)
-{
-    Mat4 translateInv = Mat4::Translate(-move.x, -move.y, -move.z);
-    Mat4 rotateInv = Mat4::FromQuat(Quat::Inverse(rot));
-    Mat4 translateObjInv = Mat4::Translate(-target_pos.x, -target_pos.y, -target_pos.z);
-    Mat4 TR = Mat4::Mul(translateObjInv, rotateInv);
-    return Mat4::Mul(TR, translateInv);
-}
-
-
-Mat4 Mat4::Perspective(float width, float height, float zn, float zf, bool d3dNdc)
-{
-    const float d = zf - zn;
-    const float aa = zf / d;
-    const float bb = zn * aa;
-    const float invY = !d3dNdc ? -1.0f : 1.0f;
-    return Mat4(width,  0,              0,      0, 
-                0,      height*invY,    0,      0, 
-                0,      0,              -aa,    -bb, 
-                0,      0,              -1.0f,  0);
-}
-
-Mat4 Mat4::PerspectiveLH(float width, float height, float zn, float zf, bool d3dNdc)
-{
-    const float d = zf - zn;
-    const float aa = zf / d;
-    const float bb = zn * aa;
-    const float invY = !d3dNdc ? -1.0f : 1.0f;
-    return Mat4(width,  0,              0,      0, 
-                0,      height*invY,    0,      0, 
-                0,      0,              aa,     -bb, 
-                0,      0,              1.0f,   0);
-}
-
-Mat4 Mat4::PerspectiveOffCenter(float xmin, float ymin, float xmax, float ymax, float zn, float zf, bool d3dNdc)
-{
-    const float d = zf - zn;
-    const float aa = zf / d;
-    const float bb = zn * aa;
-    const float width = xmax - xmin;
-    const float height = ymax - ymin;
-    const float invY = !d3dNdc ? -1.0f : 1.0f;
-    return Mat4(width,  0,              xmin,   0, 
-                0,      height*invY,    ymin,   0, 
-                0,      0,              -aa,    -bb, 
-                0,      0,              -1.0f,  0);
-}
-
-Mat4 Mat4::PerspectiveOffCenterLH(float xmin, float ymin, float xmax, float ymax, float zn, float zf, bool d3dNdc)
-{
-    const float d = zf - zn;
-    const float aa = zf / d;
-    const float bb = zn * aa;
-    const float width = xmax - xmin;
-    const float height = ymax - ymin;
-    const float invY = !d3dNdc ? -1.0f : 1.0f;
-    return Mat4(width,  0,              -xmin,  0, 
-                0,      height*invY,    -ymin,  0, 
-                0,      0,              aa,     -bb, 
-                0,      0,              1.0f,   0);
-}
-
-Mat4 Mat4::PerspectiveFOV(float fov_y, float aspect, float zn, float zf, bool d3dNdc)
-{
-    const float height = 1.0f / M::Tan(fov_y * 0.5f);
-    const float width = height / aspect;
-    return Mat4::Perspective(width, height, zn, zf, d3dNdc);
-}
-
-Mat4 Mat4::PerspectiveFOVLH(float fov_y, float aspect, float zn, float zf, bool d3dNdc)
-{
-    const float height = 1.0f / M::Tan(fov_y * 0.5f);
-    const float width = height / aspect;
-    return Mat4::PerspectiveLH(width, height, zn, zf, d3dNdc);
-}
-
-Mat4 Mat4::Ortho(float width, float height, float zn, float zf, float offset, bool d3dNdc)
-{
-    const float d = zf - zn;
-    const float cc = 1.0f / d;
-    const float ff = -zn / d;
-    const float ym = !d3dNdc ? -1.0f : 1.0f;
-    
-    return Mat4(2.0f / width,   0,                      0,      offset, 
-                0,              (2.0f / height)*ym,     0,      0, 
-                0,              0,                      -cc,    ff, 
-                0,              0,                      0,      1.0f);
-}
-
-Mat4 Mat4::OrthoLH(float width, float height, float zn, float zf, float offset, bool d3dNdc)
-{
-    const float d = zf - zn;
-    const float cc = 1.0f / d;
-    const float ff = -zn / d;
-    const float ym = !d3dNdc ? -1.0f : 1.0f;
-    
-    return Mat4(2.0f / width,   0,                      0,      offset, 
-                0,              (2.0f / height)*ym,     0,      0, 
-                0,              0,                      cc,     ff, 
-                0,              0,                      0,      1.0f);
-}
-
-Mat4 Mat4::OrthoOffCenter(float xmin, float ymin, float xmax, float ymax, float zn, float zf, float offset, bool d3dNdc)
-{
-    const float width = xmax - xmin;
-    const float height = ymax - ymin;
-    const float d = zf - zn;
-    const float cc = 1.0f / d;
-    const float dd = (xmin + xmax) / (xmin - xmax);
-    const float ee = (ymin + ymax) / (ymin - ymax);
-    const float ff = -zn / d;
-    const float ym = !d3dNdc ? -1.0f : 1.0f;
-    
-    return Mat4(2.0f / width,   0,                  0,      dd + offset, 
-                0,              (2.0f / height)*ym, 0,      ee*ym, 
-                0,              0,                  -cc,    ff,
-                0,              0,                  0,      1.0f);
-}
-
-Mat4 Mat4::OrthoOffCenterLH(float xmin, float ymin, float xmax, float ymax, float zn, float zf, float offset, bool d3dNdc)
-{
-    const float width = xmax - xmin;
-    const float height = ymax - ymin;
-    const float d = zf - zn;
-    const float cc = 1.0f / d;
-    const float dd = (xmin + xmax) / (xmin - xmax);
-    const float ee = (ymin + ymax) / (ymin - ymax);
-    const float ff = -zn / d;
-    const float ym = !d3dNdc ? -1.0f : 1.0f;
-    
-    return Mat4(2.0f / width,   0,                      0,      dd + offset, 
-                0,              (2.0f / height)*ym,     0,      ee*ym, 
-                0,              0,                      cc,     ff, 
-                0,              0,                      0,      1.0f);
-}
-
-Mat4 Mat4::ScaleRotateTranslate(float _sx, float _sy, float _sz, float _ax, float _ay, float _az, float _tx, float _ty, float _tz)
-{
-    float sx, cx, sy, cy, sz, cz;
-    
-    if (_ax != 0) {
-        sx = M::Sin(_ax);
-        cx = M::Cos(_ax);
-    } else {
-        sx = 0;
-        cx = 1.0f;
-    }
-    
-    if (_ay != 0) {
-        sy = M::Sin(_ay);
-        cy = M::Cos(_ay);
-    } else {
-        sy = 0;
-        cy = 1.0f;
-    }
-    
-    if (_az != 0) {
-        sz = M::Sin(_az);
-        cz = M::Cos(_az);
-    } else {
-        sz = 0;
-        cz = 1.0f;
-    }
-    
-    const float sxsz = sx * sz;
-    const float cycz = cy * cz;
-    
-    return Mat4(_sx * (cycz - sxsz * sy),       _sx * -cx * sz, _sx * (cz * sy + cy * sxsz),    _tx,
-                    _sy * (cz * sx * sy + cy * sz), _sy * cx * cz,  _sy * (sy * sz - cycz * sx),    _ty,
-                    _sz * -cx * sy,                 _sz * sx,       _sz * cx * cy,                  _tz, 
-                    0.0f,                           0.0f,           0.0f,                           1.0f);
-}
-
-Mat4 Mat4::FromNormal(Float3 _normal, float _scale, Float3 _pos)
-{
-    Float3 tangent;
-    Float3 bitangent;
-    Float3::Tangent(&tangent, &bitangent, _normal);
-    
-    Float4 row1 = Float4(Float3::Mul(bitangent, _scale), 0.0f);
-    Float4 row2 = Float4(Float3::Mul(_normal, _scale), 0.0f);
-    Float4 row3 = Float4(Float3::Mul(tangent, _scale), 0.0f);
-    
-    return Mat4(row1.f, row2.f, row3.f, Float4(_pos, 1.0f).f);
-}
-
-Mat4 Mat4::Inverse(const Mat4& _a)
-{
-    float xx = _a.f[0];
-    float xy = _a.f[1];
-    float xz = _a.f[2];
-    float xw = _a.f[3];
-    float yx = _a.f[4];
-    float yy = _a.f[5];
-    float yz = _a.f[6];
-    float yw = _a.f[7];
-    float zx = _a.f[8];
-    float zy = _a.f[9];
-    float zz = _a.f[10];
-    float zw = _a.f[11];
-    float wx = _a.f[12];
-    float wy = _a.f[13];
-    float wz = _a.f[14];
-    float ww = _a.f[15];
-    
-    float det = 0.0f;
-    det += xx * (yy * (zz * ww - zw * wz) - yz * (zy * ww - zw * wy) + yw * (zy * wz - zz * wy));
-    det -= xy * (yx * (zz * ww - zw * wz) - yz * (zx * ww - zw * wx) + yw * (zx * wz - zz * wx));
-    det += xz * (yx * (zy * ww - zw * wy) - yy * (zx * ww - zw * wx) + yw * (zx * wy - zy * wx));
-    det -= xw * (yx * (zy * wz - zz * wy) - yy * (zx * wz - zz * wx) + yz * (zx * wy - zy * wx));
-    
-    float det_rcp = 1.0f / det;
-    
-    return Mat4(
-        Float4(
-            +(yy * (zz*ww - wz*zw) - yz * (zy * ww - wy * zw) + yw * (zy * wz - wy * zz))*det_rcp,
-            -(xy * (zz * ww - wz * zw) - xz * (zy * ww - wy * zw) + xw * (zy * wz - wy * zz))*det_rcp,
-            +(xy * (yz * ww - wz * yw) - xz * (yy * ww - wy * yw) + xw * (yy * wz - wy * yz))*det_rcp,
-            -(xy * (yz * zw - zz * yw) - xz * (yy * zw - zy * yw) + xw * (yy * zz - zy * yz))*det_rcp),
-        Float4(
-            -(yx * (zz * ww - wz * zw) - yz * (zx * ww - wx * zw) + yw * (zx * wz - wx * zz))*det_rcp,
-            +(xx * (zz * ww - wz * zw) - xz * (zx * ww - wx * zw) + xw * (zx * wz - wx * zz))*det_rcp,
-            -(xx * (yz * ww - wz * yw) - xz * (yx * ww - wx * yw) + xw * (yx * wz - wx * yz))*det_rcp,
-            +(xx * (yz * zw - zz * yw) - xz * (yx * zw - zx * yw) + xw * (yx * zz - zx * yz))*det_rcp),
-        Float4(
-            +(yx * (zy * ww - wy * zw) - yy * (zx * ww - wx * zw) + yw * (zx * wy - wx * zy))*det_rcp,
-            -(xx * (zy * ww - wy * zw) - xy * (zx * ww - wx * zw) + xw * (zx * wy - wx * zy))*det_rcp,
-            +(xx * (yy * ww - wy * yw) - xy * (yx * ww - wx * yw) + xw * (yx * wy - wx * yy))*det_rcp,
-            -(xx * (yy * zw - zy * yw) - xy * (yx * zw - zx * yw) + xw * (yx * zy - zx * yy))*det_rcp),
-        Float4(
-            -(yx * (zy * wz - wy * zz) - yy * (zx * wz - wx * zz) + yz * (zx * wy - wx * zy))*det_rcp,
-            +(xx * (zy * wz - wy * zz) - xy * (zx * wz - wx * zz) + xz * (zx * wy - wx * zy))*det_rcp,
-            -(xx * (yy * wz - wy * yz) - xy * (yx * wz - wx * yz) + xz * (yx * wy - wx * yy))*det_rcp,
-            +(xx * (yy * zz - zy * yz) - xy * (yx * zz - zx * yz) + xz * (yx * zy - zx * yy))*det_rcp));
-}
-
-Mat4 Mat4::InverseTransformMat(const Mat4& _mat)
-{
-    ASSERT((_mat.m41 + _mat.m42 + _mat.m43) == 0 && _mat.m44 == 1.0f);
-
-    float det = (_mat.m11 * (_mat.m22 * _mat.m33 - _mat.m23 * _mat.m32) +
-        _mat.m12 * (_mat.m23 * _mat.m31 - _mat.m21 * _mat.m33) +
-        _mat.m13 * (_mat.m21 * _mat.m32 - _mat.m22 * _mat.m31));
-    float det_rcp = 1.0f / det;
-    float tx = _mat.m14;
-    float ty = _mat.m24;
-    float tz = _mat.m34;
-    
-    Mat4 r = Mat4((_mat.m22 * _mat.m33 - _mat.m23 * _mat.m32) * det_rcp,
-                  (_mat.m13 * _mat.m32 - _mat.m12 * _mat.m33) * det_rcp,
-                  (_mat.m12 * _mat.m23 - _mat.m13 * _mat.m22) * det_rcp, 0.0f,
-                  (_mat.m23 * _mat.m31 - _mat.m21 * _mat.m33) * det_rcp,
-                  (_mat.m11 * _mat.m33 - _mat.m13 * _mat.m31) * det_rcp,
-                  (_mat.m13 * _mat.m21 - _mat.m11 * _mat.m23) * det_rcp, 0,
-                  (_mat.m21 * _mat.m32 - _mat.m22 * _mat.m31) * det_rcp,
-                  (_mat.m12 * _mat.m31 - _mat.m11 * _mat.m32) * det_rcp,
-                  (_mat.m11 * _mat.m22 - _mat.m12 * _mat.m21) * det_rcp, 0, 0.0f,
-                  0.0f, 0.0f, 1.0f);
-    
-    r.f[12] = -(tx * r.m11 + ty * r.m12 + tz * r.m13);
-    r.f[13] = -(tx * r.m21 + ty * r.m22 + tz * r.m23);
-    r.f[14] = -(tx * r.m31 + ty * r.m32 + tz * r.m33);
-    return r;
-}
-
-Quat Mat4::ToQuat(const Mat4& m)
-{
-    float trace, r, rinv;
-    Quat q;
-    
-    trace = m.m11 + m.m22 + m.m33;
-    if (trace >= 0.0f) {
-        r = M::Sqrt(1.0f + trace);
-        rinv = 0.5f / r;
-        
-        q.x = rinv * (m.m32 - m.m23);
-        q.y = rinv * (m.m13 - m.m31);
-        q.z = rinv * (m.m21 - m.m12);
-        q.w = r * 0.5f;
-    } 
-    else if (m.m11 >= m.m22 && m.m11 >= m.m33) {
-        r = M::Sqrt(1.0f - m.m22 - m.m33 + m.m11);
-        rinv = 0.5f / r;
-        
-        q.x = r * 0.5f;
-        q.y = rinv * (m.m21 + m.m12);
-        q.z = rinv * (m.m31 + m.m13);
-        q.w = rinv * (m.m32 - m.m23);
-    } 
-    else if (m.m22 >= m.m33) {
-        r = M::Sqrt(1.0f - m.m11 - m.m33 + m.m22);
-        rinv = 0.5f / r;
-        
-        q.x = rinv * (m.m21 + m.m12);
-        q.y = r * 0.5f;
-        q.z = rinv * (m.m32 + m.m23);
-        q.w = rinv * (m.m13 - m.m31);
-    } 
-    else {
-        r = M::Sqrt(1.0f - m.m11 - m.m22 + m.m33);
-        rinv = 0.5f / r;
-        
-        q.x = rinv * (m.m31 + m.m13);
-        q.y = rinv * (m.m32 + m.m23);
-        q.z = r * 0.5f;
-        q.w = rinv * (m.m21 - m.m12);
-    }
-    
-    return q;
-}
-
-Mat4 Mat4::FromQuat(Quat q)
-{
-    float norm = M::Sqrt(Quat::Dot(q, q));
-    float s = norm > 0.0f ? (2.0f / norm) : 0.0f;
-    
-    float x = q.x;
-    float y = q.y;
-    float z = q.z;
-    float w = q.w;
-    
-    float xx = s * x * x;
-    float xy = s * x * y;
-    float wx = s * w * x;
-    float yy = s * y * y;
-    float yz = s * y * z;
-    float wy = s * w * y;
-    float zz = s * z * z;
-    float xz = s * x * z;
-    float wz = s * w * z;
-    
-    return Mat4(1.0f - yy - zz,     xy - wz,            xz + wy,        0.0f,
-                xy + wz,            1.0f - xx - zz,     yz - wx,        0.0f,
-                xz - wy,            yz + wx,            1.0f - xx - yy, 0.0f,
-                0.0f,               0.0f,               0.0f,           1.0f);
-}
-
-Mat4 Mat4::FromNormalAngle(Float3 _normal, float _scale, Float3 _pos, float _angle)
-{
-    Float3 tangent;
-    Float3 bitangent;
-    Float3::TangentAngle(&tangent, &bitangent, _normal, _angle);
-    
-    Float4 row1 = Float4(Float3::Mul(bitangent, _scale), 0.0f);
-    Float4 row2 = Float4(Float3::Mul(_normal, _scale), 0.0f);
-    Float4 row3 = Float4(Float3::Mul(tangent, _scale), 0.0f);
-    
-    return Mat4(row1.f, row2.f, row3.f, Float4(_pos, 1.0f).f);
-}
-
-Mat4 Mat4::ProjectPlane(Float3 planeNormal)
-{
-    float xx = planeNormal.x * planeNormal.x;
-    float yy = planeNormal.y * planeNormal.y;
-    float zz = planeNormal.z * planeNormal.z;
-    float xy = planeNormal.x * planeNormal.y;
-    float xz = planeNormal.x * planeNormal.z;
-    float yz = planeNormal.y * planeNormal.z;
-    
-    return Mat4(1.0f - xx,      -xy,        -xz,        0.0f,
-                -xy,            1.0f - yy,  -yz,        0.0f,
-                -xz,            -yz,        1.0f - zz,  0.0f,
-                0.0f,           0.0f,       0.0f,       1.0f);
-}
-
-Mat4 Mat4::Mul(const Mat4& _a, const Mat4& _b)
-{
-    return Mat4(
-        Mat4::MulFloat4(_a, Float4(_b.fc1)).f, 
-        Mat4::MulFloat4(_a, Float4(_b.fc2)).f,
-        Mat4::MulFloat4(_a, Float4(_b.fc3)).f, 
-        Mat4::MulFloat4(_a, Float4(_b.fc4)).f);
-}
-
-Mat3 Mat3::Inverse(const Mat3& _a)
-{
-    float xx = _a.f[0];
-    float xy = _a.f[3];
-    float xz = _a.f[6];
-    float yx = _a.f[1];
-    float yy = _a.f[4];
-    float yz = _a.f[7];
-    float zx = _a.f[2];
-    float zy = _a.f[5];
-    float zz = _a.f[8];
-    
-    float det = 0.0f;
-    det += xx * (yy * zz - yz * zy);
-    det -= xy * (yx * zz - yz * zx);
-    det += xz * (yx * zy - yy * zx);
-    
-    float det_rcp = 1.0f / det;
-    
-    return Mat3(+(yy * zz - yz * zy) * det_rcp, -(xy * zz - xz * zy) * det_rcp,
-        +(xy * yz - xz * yy) * det_rcp, -(yx * zz - yz * zx) * det_rcp,
-        +(xx * zz - xz * zx) * det_rcp, -(xx * yz - xz * yx) * det_rcp,
-        +(yx * zy - yy * zx) * det_rcp, -(xx * zy - xy * zx) * det_rcp,
-        +(xx * yy - xy * yx) * det_rcp);
-}
-
-Mat3 Mat3::Mul(const Mat3& _a, const Mat3& _b)
-{
-    return Mat3(
-        Mat3::MulFloat3(_a, Float3(_b.fc1)), 
-        Mat3::MulFloat3(_a, Float3(_b.fc2)),
-        Mat3::MulFloat3(_a, Float3(_b.fc3)));
-}
-
-Mat3 Mat3::Abs(const Mat3& m)
-{
-    return Mat3(
-        M::Abs(m.m11), M::Abs(m.m12), M::Abs(m.m13), 
-        M::Abs(m.m21), M::Abs(m.m22), M::Abs(m.m23), 
-        M::Abs(m.m31), M::Abs(m.m32), M::Abs(m.m33));
-}
-
-Mat3 Mat3::FromQuat(Quat q)
-{
-    float norm = M::Sqrt(Quat::Dot(q, q));
-    float s = norm > 0.0f ? (2.0f / norm) : 0.0f;
-    
-    float x = q.x;
-    float y = q.y;
-    float z = q.z;
-    float w = q.w;
-    
-    float xx = s * x * x;
-    float xy = s * x * y;
-    float wx = s * w * x;
-    float yy = s * y * y;
-    float yz = s * y * z;
-    float wy = s * w * y;
-    float zz = s * z * z;
-    float xz = s * x * z;
-    float wz = s * w * z;
-    
-    return Mat3(1.0f - yy - zz,     xy - wz,            xz + wy,
-                xy + wz,            1.0f - xx - zz,     yz - wx,
-                xz - wy,            yz + wx,            1.0f - xx - yy);
-}
-
-Float2 float2CalcLinearFit2D(const Float2* _points, int _num)
-{
-    float sumX = 0.0f;
-    float sumY = 0.0f;
-    float sumXX = 0.0f;
-    float sumXY = 0.0f;
-    
-    for (int ii = 0; ii < _num; ++ii) {
-        float xx = _points[ii].f[0];
-        float yy = _points[ii].f[1];
-        sumX += xx;
-        sumY += yy;
-        sumXX += xx * xx;
-        sumXY += xx * yy;
-    }
-    
-    
-    float det = (sumXX * _num - sumX * sumX);
-    float invDet = 1.0f / det;
-    
-    return Float2((-sumX * sumY + _num * sumXY) * invDet, (sumXX * sumY - sumX * sumXY) * invDet);
-}
-
-
-Float3 Float3::CalcLinearFit3D(const Float3* _points, int _num)
-{
-    float sumX = 0.0f;
-    float sumY = 0.0f;
-    float sumZ = 0.0f;
-    float sumXX = 0.0f;
-    float sumXY = 0.0f;
-    float sumXZ = 0.0f;
-    float sumYY = 0.0f;
-    float sumYZ = 0.0f;
-    
-    for (int ii = 0; ii < _num; ++ii) {
-        float xx = _points[ii].f[0];
-        float yy = _points[ii].f[1];
-        float zz = _points[ii].f[2];
-        
-        sumX += xx;
-        sumY += yy;
-        sumZ += zz;
-        sumXX += xx * xx;
-        sumXY += xx * yy;
-        sumXZ += xx * zz;
-        sumYY += yy * yy;
-        sumYZ += yy * zz;
-    }
-    
-    
-    Mat3 mat(sumXX, sumXY, sumX, sumXY, sumYY, sumY, sumX, sumY, (float)(_num));
-    Mat3 matInv = Mat3::Inverse(mat);
-    
-    return Float3(matInv.f[0] * sumXZ + matInv.f[1] * sumYZ + matInv.f[2] * sumZ,
-                  matInv.f[3] * sumXZ + matInv.f[4] * sumYZ + matInv.f[5] * sumZ,
-                  matInv.f[6] * sumXZ + matInv.f[7] * sumYZ + matInv.f[8] * sumZ);
-}
-
-
-Float3 Color4u::RGBtoHSV(Float3 rgb)
-{
-    float K = 0.f;
-    float r = rgb.f[0];
-    float g = rgb.f[1];
-    float b = rgb.f[2];
-    
-    if (g < b)
-    {
-        Swap(g, b);
-        K = -1.f;
-    }
-    
-    if (r < g)
-    {
-        Swap(r, g);
-        K = -2.f / 6.f - K;
-    }
-    
-    float chroma = r - Min(g, b);
-    return Float3(M::Abs(K + (g - b) / (6.f * chroma + 1e-20f)),
-                  chroma / (r + 1e-20f),
-                  r);
-}
-
-Float3 Color4u::HSVtoRGB(Float3 hsv)
-{
-    const float hh = hsv.f[0];
-    const float ss = hsv.f[1];
-    const float vv = hsv.f[2];
-    
-    const float px = M::Abs(M::Fract(hh + 1.0f) * 6.0f - 3.0f);
-    const float py = M::Abs(M::Fract(hh + 2.0f / 3.0f) * 6.0f - 3.0f);
-    const float pz = M::Abs(M::Fract(hh + 1.0f / 3.0f) * 6.0f - 3.0f);
-    
-    return Float3(vv * M::Lerp(1.0f, M::Saturate(px - 1.0f), ss), 
-                  vv * M::Lerp(1.0f, M::Saturate(py - 1.0f), ss),
-                  vv * M::Lerp(1.0f, M::Saturate(pz - 1.0f), ss));
-}
-
-Color4u Color4u::Blend(Color4u _a, Color4u _b, float _t)
-{
-    Float4 c1 = Color4u::ToFloat4(_a);
-    Float4 c2 = Color4u::ToFloat4(_b);
-    
-    return Color4u(
-        M::Lerp(c1.x, c2.x, _t),
-        M::Lerp(c1.y, c2.y, _t),
-        M::Lerp(c1.z, c2.z, _t),
-        M::Lerp(c1.w, c2.w, _t)
-    );
-}
-
-Float4 Color4u::ToFloat4Linear(Float4 c)
-{
-    for (int i = 0; i < 3; i++) {
-        c.f[i] = c.f[i] < 0.04045f ? c.f[i]/12.92f : M::Pow((c.f[i] + 0.055f)/1.055f, 2.4f);
-    }
-    return c;
-}
-
-Float4 Color4u::ToFloat4SRGB(Float4 cf) 
-{
-    for (int i = 0; i < 3; i++) {
-        cf.f[i] = cf.f[i] <= 0.0031308 ? 
-            (12.92f*cf.f[i]) : 
-            1.055f*M::Pow(cf.f[i], 0.416666f) - 0.055f;
-    }
-    return cf;
-}
-
-Quat Quat::Lerp(Quat _a, Quat _b, float t)
-{
-    float tinv = 1.0f - t;
-    float dot = Quat::Dot(_a, _b);
-    Quat r;
-    if (dot >= 0.0f) {
-        r = Quat(tinv * _a.x + t * _b.x, 
-                 tinv * _a.y + t * _b.y, 
-                 tinv * _a.z + t * _b.z, 
-                 tinv * _a.w + t * _b.w);
-    } else {
-        r = Quat(tinv * _a.x - t * _b.x, 
-                 tinv * _a.y - t * _b.y, 
-                 tinv * _a.z - t * _b.z, 
-                 tinv * _a.w - t * _b.w);
-    }
-    return Quat::Norm(r);
-}
-
-Quat Quat::Slerp(Quat _a, Quat _b, float t)
-{
-    const float epsilon = 1e-6f;
-    
-    float dot = Quat::Dot(_a, _b);
-    bool flip = false;
-    if (dot < 0.0f) {
-        flip = true;
-        dot *= -1.0f;
-    }
-    
-    float s1, s2;
-    if (dot > (1.0f - epsilon)) {
-        s1 = 1.0f - t;
-        s2 = t;
-        if (flip)
-            s2 *= -1.0f;
-    } else {
-        float omega = M::ACos(dot);
-        float inv_omega_sin = 1.0f / M::Sin(omega);
-        s1 = M::Sin((1.0f - t) * omega) * inv_omega_sin;
-        s2 = M::Sin(t * omega) * inv_omega_sin;
-        if (flip)
-            s2 *= -1.0f;
-    }
-
-    return Quat(s1 * _a.x + s2 * _b.x, 
-                s1 * _a.y + s2 * _b.y, 
-                s1 * _a.z + s2 * _b.z,
-                s1 * _a.w + s2 * _b.w);
-}
-
-Float3 Quat::ToEuler(Quat q)
-{
-    float sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
-    float cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
-    float x = M::ATan2(sinr_cosp, cosr_cosp);
-    
-    float sinp = 2 * (q.w * q.y - q.z * q.x);
-    float y;
-    if (M::Abs(sinp) >= 1)
-        y = M::CopySign(M_HALFPI, sinp);
-    else
-        y = M::ASin(sinp);
-    
-    float siny_cosp = 2 * (q.w * q.z + q.x * q.y);
-    float cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
-    float z = M::ATan2(siny_cosp, cosy_cosp);
-    
-    return Float3(x, y, z);
-}
-
-Quat Quat::FromEuler(Float3 _vec3)
-{
-    float z = _vec3.z;
-    float x = _vec3.x;
-    float y = _vec3.y;
-    
-    float cy = M::Cos(z * 0.5f);
-    float sy = M::Sin(z * 0.5f);
-    float cp = M::Cos(y * 0.5f);
-    float sp = M::Sin(y * 0.5f);
-    float cr = M::Cos(x * 0.5f);
-    float sr = M::Sin(x * 0.5f);
-    
-    Quat q;
-    q.w = cr * cp * cy + sr * sp * sy;
-    q.x = sr * cp * cy - cr * sp * sy;
-    q.y = cr * sp * cy + sr * cp * sy;
-    q.z = cr * cp * sy - sr * sp * cy;
-    
-    return q;
-}
-
-
-Float3 Plane::CalcNormal(Float3 _va, Float3 _vb, Float3 _vc)
-{
-    Float3 ba = Float3::Sub(_vb, _va);
-    Float3 ca = Float3::Sub(_vc, _va);
-    Float3 baca = Float3::Cross(ca, ba);
-    
-    return Float3::Norm(baca);
-}
-
-Plane Plane::From3Points(Float3 _va, Float3 _vb, Float3 _vc)
-{
-    Float3 normal = Plane::CalcNormal(_va, _vb, _vc);
-    return Plane(normal, -Float3::Dot(normal, _va));
-}
-
-Plane Plane::FromNormalPoint(Float3 _normal, Float3 _p)
-{
-    Float3 normal = Float3::Norm(_normal);
-    float d = Float3::Dot(_normal, _p);
-    return Plane(normal, -d);
-}
-
-float Plane::Distance(Plane _plane, Float3 _p)
-{
-    return Float3::Dot(Float3(_plane.normal), _p) + _plane.dist;
-}
-
-Float3 Plane::ProjectPoint(Plane _plane, Float3 _p)
-{
-    return Float3::Sub(_p, Float3::Mul(Float3(_plane.normal), Distance(_plane, _p)));
-}
-
-Float3 Plane::Origin(Plane _plane)
-{
-    return Float3::Mul(Float3(_plane.normal), -_plane.dist);
-}
-
-AABB AABB::Transform(const AABB& aabb, const Mat4& mat)
-{
-    Float3 center = aabb.Center();
-    Float3 extents = aabb.Extents();
-    
-    Mat3 rotMat = Mat3(mat.fc1, mat.fc2, mat.fc3);
-    Mat3 absMat  = Mat3::Abs(rotMat);
-    Float3 newCenter = Mat4::MulFloat3(mat, center);
-    Float3 newExtents = Mat3::MulFloat3(absMat, extents);
-    
-    return AABB(Float3::Sub(newCenter, newExtents), Float3::Add(newCenter, newExtents));
-}
-
-AABB Box::ToAABB(const Box& box)
-{
-    Float3 center = box.tx.pos;
-    Mat3 absMat = Mat3::Abs(box.tx.rot);
-    Float3 extents = Mat3::MulFloat3(absMat, box.e);
-    return AABB(Float3::Sub(center, extents), Float3::Add(center, extents));
-}
-
-
-
-
-#define CJ5_IMPLEMENT
-#define CJ5_ASSERT(e) ASSERT(e)
-#define CJ5_SKIP_ASAN NO_ASAN
-//----------------------------------------------------------------------------------------------------------------------
-// External/cj5/cj5.h
-
-
-#include <stdbool.h>    // bool
-#include <stdint.h>     // uint32_t, int64_t, etc.
-
-#ifndef CJ5_TOKEN_HELPERS
-#    define CJ5_TOKEN_HELPERS 1
+#define __STDC_WANT_LIB_EXT1__ 1
+
+#if MEMPRO_ENABLED
+    #define OVERRIDE_NEW_DELETE
+    #define WAIT_FOR_CONNECT true
+    #define MEMPRO_BACKTRACE(_stackframes, _maxStackframes, _hashPtr) Debug::CaptureStacktrace(_stackframes, _maxStackframes, 3, _hashPtr)
+    #include "External/mempro/MemPro.cpp"
+    #define MEMPRO_TRACK_REALLOC(oldPtr, ptr, size) do { if (oldPtr)  { MEMPRO_TRACK_FREE(oldPtr); } MEMPRO_TRACK_ALLOC(ptr, size);} while(0)
+#else
+    #define MEMPRO_TRACK_ALLOC(ptr, size) 
+    #define MEMPRO_TRACK_REALLOC(oldPtr, ptr, size)
+    #define MEMPRO_TRACK_FREE(ptr)
 #endif
 
-#ifndef CJ5_API
-#    ifdef __cplusplus
-#        define CJ5_API extern "C"
-#    else
-#        define CJ5_API
-#    endif
+#if PLATFORM_APPLE
+    #define strcpy_s(dest, size, src)  strlcpy(dest, src, size)
+    #define strcat_s(dest, size, src)  strlcat(dest, src, size)
+#elif PLATFORM_ANDROID || PLATFORM_LINUX
+    static size_t strcpy_s(char *dest, size_t size, const char *src);
+    static size_t strcat_s(char *dst, size_t size, const char *src);
+#elif PLATFORM_WINDOWS
+    #if !MEMPRO_ENABLED
+    extern "C" __declspec(dllimport) void __stdcall OutputDebugStringA(const char* lpOutputString);
+    #endif
+#else
+    #define __STDC_WANT_LIB_EXT1__ 1
 #endif
 
-#ifndef CJ5_SKIP_ASAN
-#    define CJ5_SKIP_ASAN
+#include <time.h>   // time
+#include <stdio.h>  // puts
+#include <string.h>
+#include <stdarg.h>
+
+#if PLATFORM_ANDROID
+    #include <android/log.h>
 #endif
 
-typedef enum cj5_token_type {
-    CJ5_TOKEN_OBJECT = 0,
-    CJ5_TOKEN_ARRAY,
-    CJ5_TOKEN_NUMBER,
-    CJ5_TOKEN_STRING,
-    CJ5_TOKEN_BOOL,
-    CJ5_TOKEN_NULL
-} cj5_token_type;
+#if PLATFORM_POSIX
+    #include <stdlib.h>
+#else
+    #include <malloc.h>
+#endif
 
-typedef enum cj5_token_number_type {
-    CJ5_TOKEN_NUMBER_UNKNOWN = 0,
-    CJ5_TOKEN_NUMBER_FLOAT,
-    CJ5_TOKEN_NUMBER_INT,
-    CJ5_TOKEN_NUMBER_HEX
-} cj5_token_number_type;
 
-typedef enum cj5_error_code {
-    CJ5_ERROR_NONE = 0,
-    CJ5_ERROR_INVALID,       // invalid character/syntax
-    CJ5_ERROR_INCOMPLETE,    // incomplete json string
-    CJ5_ERROR_OVERFLOW       // token buffer overflow, need more tokens (see cj5_result.num_tokens)
-} cj5_error_code;
+struct RandomContextCtor
+{
+    RandomContext ctx;
 
-typedef struct cj5_token {
-    cj5_token_type type;
+    RandomContextCtor() 
+    {
+        ctx = Random::CreateContext();
+    }
+};
+
+namespace Random
+{
+
+NO_INLINE static RandomContextCtor& RandomCtx() 
+{ 
+    static thread_local RandomContextCtor randomCtx;
+    return randomCtx; 
+}
+
+PRAGMA_DIAGNOSTIC_PUSH()
+PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wstrict-aliasing")
+static inline float FloatNormalized(uint32 value)
+{
+    uint32 exponent = 127;
+    uint32 mantissa = value >> 9;
+    uint32 result = (exponent << 23) | mantissa;
+    float fresult = *(float*)(&result);
+    return fresult - 1.0f;
+}
+PRAGMA_DIAGNOSTIC_POP()
+
+INLINE uint64 Avalanche64(uint64 h)
+{
+    h ^= h >> 33;
+    h *= 0xff51afd7ed558ccd;
+    h ^= h >> 33;
+    h *= 0xc4ceb9fe1a85ec53;
+    h ^= h >> 33;
+    return h;
+}
+
+uint32 Seed()
+{
+    return static_cast<uint32>(time(nullptr));
+}
+
+RandomContext CreateContext(uint32 seed)
+{
+    RandomContext ctx = {{0, 0}};
+    uint64 value = (((uint64)seed) << 1ull) | 1ull;    // make it odd
+    value = Avalanche64(value);
+    ctx.state[0] = 0ull;
+    ctx.state[1] = (value << 1ull) | 1ull;
+    Int(&ctx);
+    ctx.state[0] += Avalanche64(value);
+    Int(&ctx);
+    return ctx;
+}
+
+uint32 Int(RandomContext* ctx)
+{
+    uint64 oldstate = ctx->state[0];
+    ctx->state[0] = oldstate * 0x5851f42d4c957f2dull + ctx->state[1];
+    uint32 xorshifted = uint32(((oldstate >> 18ull) ^ oldstate) >> 27ull);
+    uint32 rot = uint32(oldstate >> 59ull);
+    return (xorshifted >> rot) | (xorshifted << ((-(int)rot) & 31));
+}
+
+float Float(RandomContext* ctx)
+{
+    return FloatNormalized(Int(ctx));
+}
+
+float Float(RandomContext* ctx, float _min, float _max)
+{
+    ASSERT(_min <= _max);
+    
+    float r = Float(ctx);
+    return _min + r*(_max - _min);
+}
+
+int Int(RandomContext* ctx, int _min, int _max)
+{
+    ASSERT(_min <= _max);
+    
+    uint32 range = static_cast<uint32>(_max - _min) + 1;
+    return _min + static_cast<int>(Int(ctx) % range);
+}
+
+uint32 Int()
+{
+    return Int(&RandomCtx().ctx);
+}
+
+float Float()
+{
+    return Float(&RandomCtx().ctx);
+}
+
+float Float(float _min, float _max)
+{
+    return Float(&RandomCtx().ctx, _min, _max);
+}
+
+int Int(int _min, int _max)
+{
+    return Int(&RandomCtx().ctx, _min, _max);
+}
+} // Random
+
+static AssertFailCallback gAssertFailCallback;
+static void* gAssertFailUserData;
+
+void Assert::DebugMessage(const char* fmt, ...)
+{
+    char msgFmt[4972];
+    char msg[4972];
+    
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(msgFmt, sizeof(msgFmt), fmt, args);
+    va_end(args);
+
+    const char* closeBracket = "] ";
+    char threadName[32];
+    Thread::GetCurrentThreadName(threadName, sizeof(threadName));
+    strcpy_s(msg, sizeof(msg), "[ASSERT_FAIL: ");
+    strcat_s(msg, sizeof(msg), threadName);
+    strcat_s(msg, sizeof(msg), closeBracket);
+    strcat_s(msg, sizeof(msg), msgFmt);
+    
+    puts(msg);
+
+    #if PLATFORM_WINDOWS
+    strcat_s(msg, sizeof(msg), "\n");
+    OutputDebugStringA(msg);
+    #elif PLATFORM_ANDROID
+    __android_log_write(ANDROID_LOG_FATAL, CONFIG_APP_NAME, msg);
+    #endif
+
+}
+
+void Assert::SetFailCallback(AssertFailCallback callback, void* userdata)
+{
+    gAssertFailCallback = callback;
+    gAssertFailUserData = userdata;
+}
+
+void Assert::RunFailCallback()
+{
+    if (gAssertFailCallback)
+        gAssertFailCallback(gAssertFailUserData);
+}
+
+struct MemHeapAllocator final : MemAllocator 
+{
+    void* Malloc(size_t size, uint32 align) override;
+    void* Realloc(void* ptr, size_t size, uint32 align) override;
+    void  Free(void* ptr, uint32 align) override;
+    MemAllocatorType GetType() const override { return MemAllocatorType::Heap; }
+};
+
+struct MemBaseContext
+{
+    MemFailCallback  memFailFn;
+    void* 			 memFailUserdata;
+    MemAllocator*		 defaultAlloc = &heapAlloc;
+    MemHeapAllocator heapAlloc;
+    bool             enableMemPro;
+};
+
+static MemBaseContext gMemBase;
+
+#if PLATFORM_WINDOWS
+    #define aligned_malloc(_align, _size) _aligned_malloc(_size, _align)
+    #define aligned_realloc(_ptr, _align, _size) _aligned_realloc(_ptr, _size, _align)
+    #define aligned_free(_ptr) _aligned_free(_ptr)
+#else
+    INLINE void* aligned_malloc(uint32 align, size_t size);
+    INLINE void* aligned_realloc(void*, uint32, size_t);
+    INLINE void  aligned_free(void* ptr);
+#endif
+
+void Mem::SetFailCallback(MemFailCallback callback, void* userdata)
+{
+    gMemBase.memFailFn = callback;
+    gMemBase.memFailUserdata = userdata;
+}
+
+void Mem::RunFailCallback()
+{
+    if (gMemBase.memFailFn) {
+        gMemBase.memFailFn(gMemBase.memFailUserdata);
+    }
+}
+
+void* Mem::AlignPointer(void* ptr, size_t extra, uint32 align)
+{
     union {
-        cj5_token_number_type num_type;
-        uint32_t key_hash;
-    };
-    int key_start;
-    int key_end;
-    int start;
-    int end;
-    int size;
-    int parent_id;      // = -1 if there is no parent
-} cj5_token;
-
-typedef struct cj5_factory {
-    cj5_token* (*create_token)(void* user);
-    cj5_token* (*get_all)(void* user);
-    void* user_data;
-} cj5_factory;
-
-typedef struct cj5_result {
-    cj5_error_code error;
-    int error_line;
-    int error_col;
-    int num_tokens;
-    const cj5_token* tokens;
-    const char* json5;
-} cj5_result;
-
-CJ5_API cj5_result cj5_parse(const char* json5, int len, cj5_token* tokens, int max_tokens);
-CJ5_API cj5_result cj5_parse_with_factory(const char* json5, int len, cj5_factory factory);
-
-#if CJ5_TOKEN_HELPERS
-CJ5_API int cj5_seek(cj5_result* r, int parent_id, const char* key);
-CJ5_API int cj5_seek_hash(cj5_result* r, int parent_id, const uint32_t key_hash);
-CJ5_API int cj5_seek_recursive(cj5_result* r, int parent_id, const char* key);
-CJ5_API const char* cj5_get_string(cj5_result* r, int id, char* str, int max_str);
-CJ5_API double cj5_get_double(cj5_result* r, int id);
-CJ5_API float cj5_get_float(cj5_result* r, int id);
-CJ5_API int cj5_get_int(cj5_result* r, int id);
-CJ5_API uint32_t cj5_get_uint(cj5_result* r, int id);
-CJ5_API uint64_t cj5_get_uint64(cj5_result* r, int id);
-CJ5_API int64_t cj5_get_int64(cj5_result* r, int id);
-CJ5_API bool cj5_get_bool(cj5_result* r, int id);
-CJ5_API double cj5_seekget_double(cj5_result* r, int parent_id, const char* key, double def_val);
-CJ5_API float cj5_seekget_float(cj5_result* r, int parent_id, const char* key, float def_val);
-CJ5_API int cj5_seekget_array_int16(cj5_result* r, int parent_id, const char* key, int16_t* values, int max_values);
-CJ5_API int cj5_seekget_array_uint16(cj5_result* r, int parent_id, const char* key, uint16_t* values, int max_values);
-CJ5_API int cj5_seekget_int(cj5_result* r, int parent_id, const char* key, int def_val);
-CJ5_API uint32_t cj5_seekget_uint(cj5_result* r, int parent_id, const char* key, uint32_t def_val);
-CJ5_API uint64_t cj5_seekget_uint64(cj5_result* r, int parent_id, const char* key, uint64_t def_val);
-CJ5_API int64_t cj5_seekget_int64(cj5_result* r, int parent_id, const char* key, int64_t def_val);
-CJ5_API bool cj5_seekget_bool(cj5_result* r, int parent_id, const char* key, bool def_val);
-CJ5_API const char* cj5_seekget_string(cj5_result* r, int parent_id, const char* key, char* str, int max_str, const char* def_val);
-
-CJ5_API int cj5_seekget_array_double(cj5_result* r, int parent_id, const char* key, double* values, int max_values);
-CJ5_API int cj5_seekget_array_float(cj5_result* r, int parent_id, const char* key, float* values, int max_values);
-CJ5_API int cj5_seekget_array_int(cj5_result* r, int parent_id, const char* key, int* values, int max_values);
-CJ5_API int cj5_seekget_array_uint(cj5_result* r, int parent_id, const char* key, uint32_t* values, int max_values);
-CJ5_API int cj5_seekget_array_uint64(cj5_result* r, int parent_id, const char* key, uint64_t* values, int max_values);
-CJ5_API int cj5_seekget_array_int64(cj5_result* r, int parent_id, const char* key, int64_t* values, int max_values);
-CJ5_API int cj5_seekget_array_bool(cj5_result* r, int parent_id, const char* key, bool* values, int max_values);
-CJ5_API int cj5_seekget_array_string(cj5_result* r, int parent_id, const char* key, char** strs, int max_str, int max_values);
-CJ5_API int cj5_get_array_elem(cj5_result* r, int id, int index);
-CJ5_API int cj5_get_array_elem_incremental(cj5_result* r, int id, int index, int prev_elem);
-#endif
-
-#if defined(CJ5_IMPLEMENT)
-
-#    ifndef CJ5_ASSERT
-#        include <assert.h>
-#        define CJ5_ASSERT(_e) assert(_e)
-#    endif
-
-#    ifndef CJ5_MEMCPY
-#        include <string.h>    // memcpy
-#        define CJ5_MEMCPY(_dst, _src, _n) memcpy((_dst), (_src), (_n))
-#    endif
-
-#    ifndef CJ5_MEMSET
-#        include <string.h>
-#        define CJ5_MEMSET(_dst, _val, _size) memset((_dst), (_val), (_size))
-#    endif
-
-#    define CJ5__ARCH_64BIT 0
-#    define CJ5__ARCH_32BIT 0
-#    if defined(__x86_64__) || defined(_M_X64) || defined(__aarch64__) || defined(__64BIT__) || \
-        defined(__mips64) || defined(__powerpc64__) || defined(__ppc64__) || defined(__LP64__)
-#        undef CJ5__ARCH_64BIT
-#        define CJ5__ARCH_64BIT 64
-#    else
-#        undef CJ5__ARCH_32BIT
-#        define CJ5__ARCH_32BIT 32
-#    endif    //
-
-#    if defined(_MSC_VER)
-#        define CJ5__RESTRICT __restrict
-#    else
-#        define CJ5__RESTRICT __restrict__
-#    endif
-
-#    define CJ5__UNUSED(_a) (void)(_a)
-
-#    define CJ5__FOURCC(_a, _b, _c, _d) \
-        (((uint32_t)(_a) | ((uint32_t)(_b) << 8) | ((uint32_t)(_c) << 16) | ((uint32_t)(_d) << 24)))
-
-static const uint32_t CJ5__NULL_FOURCC = CJ5__FOURCC('n', 'u', 'l', 'l');
-static const uint32_t CJ5__TRUE_FOURCC = CJ5__FOURCC('t', 'r', 'u', 'e');
-static const uint32_t CJ5__FALSE_FOURCC = CJ5__FOURCC('f', 'a', 'l', 's');
-
-static const uint32_t CJ5__FNV1_32_INIT = 0x811c9dc5;
-static const uint32_t CJ5__FNV1_32_PRIME = 0x01000193;
-
-typedef struct cj5__parser {
-    int pos;
-    int next_id;
-    int super_id;
-    int line;
-    cj5_token* tokens;
-    cj5_factory token_factory;
-} cj5__parser;
-
-static inline uint32_t cj5__hash_fnv32(const char* start, const char* end)
-{
-    const char* bp = start;
-    const char* be = end;    // start + len
-
-    uint32_t hval = CJ5__FNV1_32_INIT;
-    while (bp < be) {
-        hval ^= (uint32_t)*bp++;
-        hval *= CJ5__FNV1_32_PRIME;
-    }
-
-    return hval;
+        void* ptr;
+        uintptr_t addr;
+    } un;
+    un.ptr = ptr;
+    uintptr_t unaligned = un.addr + extra;    // space for header
+    uintptr_t aligned = AlignValue<uintptr_t>(unaligned, align);
+    un.addr = aligned;
+    return un.ptr;
 }
 
-static inline bool cj5__isspace(char ch)
+MemAllocator* Mem::GetDefaultAlloc()
 {
-    return (uint32_t)(ch - 1) < 32 && ((0x80001F00 >> (uint32_t)(ch - 1)) & 1) == 1;
+    return static_cast<MemAllocator*>(&gMemBase.heapAlloc);
 }
 
-static inline bool cj5__isrange(char ch, char from, char to)
+void Mem::SetDefaultAlloc(MemAllocator* alloc)
 {
-    return (uint8_t)(ch - from) <= (uint8_t)(to - from);
+    gMemBase.defaultAlloc = alloc != nullptr ? alloc : &gMemBase.heapAlloc;
 }
 
-static inline bool cj5__isupperchar(char ch)
+void Mem::EnableMemPro(bool enable)
 {
-    return cj5__isrange(ch, 'A', 'Z');
-}
-
-static inline bool cj5__islowerchar(char ch)
-{
-    return cj5__isrange(ch, 'a', 'z');
-}
-
-static inline bool cj5__isnum(char ch)
-{
-    return cj5__isrange(ch, '0', '9');
-}
-
-static inline char* cj5__strcpy(char* CJ5__RESTRICT dst, int dst_sz, const char* CJ5__RESTRICT src, int num)
-{
-    const int _max = dst_sz - 1;
-    const int _num = (num < _max ? num : _max);
-    if (_num > 0) {
-        CJ5_MEMCPY(dst, src, _num);
-    }
-    dst[_num] = '\0';
-    return dst;
-}
-
-CJ5_SKIP_ASAN static int cj5__strlen(const char* str)
-{
-    const char* char_ptr;
-    const uintptr_t* longword_ptr;
-    uintptr_t longword, himagic, lomagic;
-
-    for (char_ptr = str; ((uintptr_t)char_ptr & (sizeof(longword) - 1)) != 0; ++char_ptr) {
-        if (*char_ptr == '\0')
-            return (int)(intptr_t)(char_ptr - str);
-    }
-    longword_ptr = (uintptr_t*)char_ptr;
-    himagic = 0x80808080L;
-    lomagic = 0x01010101L;
-#    if CJ5__ARCH_64BIT
-    /* 64-bit version of the magic.  */
-    /* Do the shift in two steps to avoid a warning if long has 32 bits.  */
-    himagic = ((himagic << 16) << 16) | himagic;
-    lomagic = ((lomagic << 16) << 16) | lomagic;
-#    endif
-
-    for (;;) {
-        longword = *longword_ptr++;
-
-        if (((longword - lomagic) & ~longword & himagic) != 0) {
-            const char* cp = (const char*)(longword_ptr - 1);
-
-            if (cp[0] == 0)
-                return (int)(intptr_t)(cp - str);
-            if (cp[1] == 0)
-                return (int)(intptr_t)(cp - str + 1);
-            if (cp[2] == 0)
-                return (int)(intptr_t)(cp - str + 2);
-            if (cp[3] == 0)
-                return (int)(intptr_t)(cp - str + 3);
-#    if CJ5__ARCH_64BIT
-            if (cp[4] == 0)
-                return (int)(intptr_t)(cp - str + 4);
-            if (cp[5] == 0)
-                return (int)(intptr_t)(cp - str + 5);
-            if (cp[6] == 0)
-                return (int)(intptr_t)(cp - str + 6);
-            if (cp[7] == 0)
-                return (int)(intptr_t)(cp - str + 7);
-#    endif
-        }
-    }
-
-    #ifndef _MSC_VER
-    CJ5_ASSERT(0);
-    return -1;
+    #if MEMPRO_ENABLED
+    gMemBase.enableMemPro = enable;
+    #else
+    UNUSED(enable);
     #endif
 }
 
-static inline cj5_token* cj5__alloc_token(cj5__parser* parser)
+bool Mem::IsMemProEnabled()
 {
-    cj5_token* token = parser->token_factory.create_token(parser->token_factory.user_data);
-    if (!token)
-        return NULL;
-    CJ5_MEMSET(token, 0x0, sizeof(cj5_token));
-
-    ++parser->next_id;
-    parser->tokens = parser->token_factory.get_all(parser->token_factory.user_data);
-
-    token->start = -1;
-    token->end = -1;
-    token->parent_id = -1;
-    return token;
-}
-
-static inline void cj5__set_error(cj5_result* r, cj5_error_code code, int line, int col)
-{
-    r->error = code;
-    r->error_line = line + 1;
-    r->error_col = col + 1;
-}
-
-static bool cj5__parse_primitive(cj5__parser* parser, cj5_result* r, const char* json5, int len)
-{
-    cj5_token* token;
-    int start = parser->pos;
-    int line_start = start;
-    bool keyname = false;
-    bool new_line = false;
-
-    for (; parser->pos < len; parser->pos++) {
-        switch (json5[parser->pos]) {
-        case '\n':
-            line_start = parser->pos;
-            new_line = true;
-            goto found;
-        case ':':
-            keyname = true;
-            goto found;
-        case '\t':
-        case '\r':
-        case ' ':
-        case ',':
-        case ']':
-        case '}':
-            goto found;
-        default:
-            break;
-        }
-
-        if (json5[parser->pos] < 32 || json5[parser->pos] >= 127) {
-            cj5__set_error(r, CJ5_ERROR_INVALID, parser->line, parser->pos - line_start);
-            parser->pos = start;
-            return false;
-        }
-    }
-
-    cj5__set_error(r, CJ5_ERROR_INCOMPLETE, parser->line, parser->pos - line_start);
-    parser->pos = start;
+    #if MEMPRO_ENABLED
+    return gMemBase.enableMemPro;
+    #else
     return false;
-
-found:
-    token = cj5__alloc_token(parser);
-    if (token == NULL) {
-        r->error = CJ5_ERROR_OVERFLOW;
-        --parser->pos;
-        return true;
-    }
-
-    cj5_token_type type;
-    cj5_token_number_type num_type = CJ5_TOKEN_NUMBER_UNKNOWN;
-    if (keyname) {
-        for (int i = start; i < parser->pos; i++) {
-            if (cj5__islowerchar(json5[i]) || cj5__isupperchar(json5[i]) || json5[i] == '_') {
-                continue;
-            }
-
-            if (cj5__isnum(json5[i])) {
-                if (i == start) {
-                    cj5__set_error(r, CJ5_ERROR_INVALID, parser->line, parser->pos - line_start);
-                    parser->pos = start;
-                    return false;
-                }
-                continue;
-            }
-
-            cj5__set_error(r, CJ5_ERROR_INVALID, parser->line, parser->pos - line_start);
-            parser->pos = start;
-            return false;
-        }
-
-        type = CJ5_TOKEN_STRING;
-    } else {
-        uint32_t fourcc_;
-        CJ5_MEMCPY(&fourcc_, &json5[start], 4);
-        uint32_t* fourcc = &fourcc_;
- 
-        if (*fourcc == CJ5__NULL_FOURCC) {
-            type = CJ5_TOKEN_NULL;
-        } else if (*fourcc == CJ5__TRUE_FOURCC) {
-            type = CJ5_TOKEN_BOOL;
-        } else if (*fourcc == CJ5__FALSE_FOURCC) {
-            type = CJ5_TOKEN_BOOL;
-        } else {
-            num_type = CJ5_TOKEN_NUMBER_INT;
-            if (json5[start] == '0' && start < parser->pos + 1 && json5[start + 1] == 'x') {
-                start = start + 2;
-                for (int i = start; i < parser->pos; i++) {
-                    if (!(cj5__isrange(json5[i], '0', '9') || cj5__isrange(json5[i], 'A', 'F') ||
-                          cj5__isrange(json5[i], 'a', 'f'))) {
-                        cj5__set_error(r, CJ5_ERROR_INVALID, parser->line,
-                                       parser->pos - line_start);
-                        parser->pos = start;
-                        return false;
-                    }
-                }
-                num_type = CJ5_TOKEN_NUMBER_HEX;
-            } else {
-                int start_index = start;
-                if (json5[start] == '+') {
-                    ++start_index;
-                    ++start;
-                } else if (json5[start] == '-') {
-                    ++start_index;
-                }
-
-                for (int i = start_index; i < parser->pos; i++) {
-                    if (json5[i] == '.') {
-                        if (num_type == CJ5_TOKEN_NUMBER_FLOAT) {
-                            cj5__set_error(r, CJ5_ERROR_INVALID, parser->line,
-                                           parser->pos - line_start);
-                            parser->pos = start;
-                            return false;
-                        }
-                        num_type = CJ5_TOKEN_NUMBER_FLOAT;
-                        continue;
-                    }
-
-                    if (!cj5__isnum(json5[i])) {
-                        cj5__set_error(r, CJ5_ERROR_INVALID, parser->line,
-                                       parser->pos - line_start);
-                        parser->pos = start;
-                        return false;
-                    }
-                }
-            }
-
-            type = CJ5_TOKEN_NUMBER;
-        }
-    }
-
-    if (new_line) {
-        ++parser->line;
-    }
-
-    token->type = type;
-    if (type == CJ5_TOKEN_STRING) {
-        token->key_hash = cj5__hash_fnv32(&json5[start], &json5[parser->pos]);
-        token->key_start = start;
-        token->key_end = parser->pos;
-    } else {
-        token->num_type = num_type;
-    }
-    token->start = start;
-    token->end = parser->pos;
-    token->parent_id = parser->super_id;
-    --parser->pos;
-    return true;
+    #endif
 }
 
-static bool cj5__parse_string(cj5__parser* parser, cj5_result* r, const char* json5, int len)
+void Mem::TrackMalloc([[maybe_unused]] void* ptr, [[maybe_unused]] size_t size)
 {
-    cj5_token* token;
-    int start = parser->pos;
-    int line_start = start;
-    char str_open = json5[start];
-    ++parser->pos;
-
-    for (; parser->pos < len; parser->pos++) {
-        char c = json5[parser->pos];
-
-        if (str_open == c) {
-            token = cj5__alloc_token(parser);
-            if (token == NULL) {
-                r->error = CJ5_ERROR_OVERFLOW;
-                return true;
-            }
-
-            token->type = CJ5_TOKEN_STRING;
-            token->start = start + 1;
-            token->end = parser->pos;
-            token->parent_id = parser->super_id;
-
-            return true;
-        }
-
-        if (c == '\\' && parser->pos + 1 < len) {
-            ++parser->pos;
-            switch (json5[parser->pos]) {
-            case '\"':
-            case '/':
-            case '\\':
-            case 'b':
-            case 'f':
-            case 'r':
-            case 'n':
-            case 't':
-                break;
-            case 'u':
-                ++parser->pos;
-                for (int i = 0; i < 4 && parser->pos < len; i++) {
-                    /* If it isn't a hex character we have an error */
-                    if (!((json5[parser->pos] >= 48 && json5[parser->pos] <= 57) ||   /* 0-9 */
-                          (json5[parser->pos] >= 65 && json5[parser->pos] <= 70) ||   /* A-F */
-                          (json5[parser->pos] >= 97 && json5[parser->pos] <= 102))) { /* a-f */
-                        cj5__set_error(r, CJ5_ERROR_INVALID, parser->line,
-                                       parser->pos - line_start);
-                        parser->pos = start;
-                        return false;
-                    }
-                    parser->pos++;
-                }
-
-                --parser->pos;
-                break;
-            case '\n':
-                line_start = parser->pos;
-                ++parser->line;
-                break;
-            default:
-                cj5__set_error(r, CJ5_ERROR_INVALID, parser->line, parser->pos - line_start);
-                parser->pos = start;
-                return false;
-            }
-        }
-    }
-
-    parser->pos = start;
-    return true;
+    if constexpr (MEMPRO_ENABLED) {
+        if (gMemBase.enableMemPro)
+            MEMPRO_TRACK_ALLOC(ptr, size);
+    }    
 }
 
-static void cj5__skip_comment(cj5__parser* parser, const char* json5, int len)
+void Mem::TrackFree([[maybe_unused]] void* ptr)
 {
-    for (; parser->pos < len; parser->pos++) {
-        if (json5[parser->pos] == '\n' || json5[parser->pos] == '\r') {
-            return;
-        }
+    if constexpr (MEMPRO_ENABLED) {
+        if (gMemBase.enableMemPro)
+            MEMPRO_TRACK_FREE(ptr);
     }
 }
 
-static void cj5__skip_multiline_comment(cj5__parser* parser, const char* json5, int len)
+void Mem::TrackRealloc([[maybe_unused]] void* oldPtr, [[maybe_unused]] void* ptr, [[maybe_unused]] size_t size)
 {
-    for (; parser->pos < len; parser->pos++) {
-        if (json5[parser->pos] == '*' && parser->pos < (len - 1) && json5[parser->pos+1] == '/') {
-            return;
-        }
+    if constexpr (MEMPRO_ENABLED) {
+        if (gMemBase.enableMemPro)
+            MEMPRO_TRACK_REALLOC(oldPtr, ptr, size);
     }
 }
 
-cj5_result cj5_parse_with_factory(const char* json5, int len, cj5_factory factory)
+inline void* MemHeapAllocator::Malloc(size_t size, uint32 align)
 {
-    CJ5_ASSERT(json5);
-
-    cj5__parser parser;
-    CJ5_MEMSET(&parser, 0x0, sizeof(parser));
-    parser.super_id = -1;
-    parser.token_factory = factory;
-
-    cj5_result r;
-    CJ5_MEMSET(&r, 0x0, sizeof(r));
-
-    cj5_token* token;
-    int count = parser.next_id;
-    bool can_comment = false;
-
-    for (; parser.pos < len; parser.pos++) {
-        char c;
-        cj5_token_type type;
-
-        c = json5[parser.pos];
-        switch (c) {
-        case '{':
-        case '[':
-            can_comment = false;
-            count++;
-            token = cj5__alloc_token(&parser);
-            if (token == NULL) {
-                r.error = CJ5_ERROR_OVERFLOW;
-                break;
-            }
-
-            if (parser.super_id != -1) {
-                cj5_token* super_token = &parser.tokens[parser.super_id];
-                token->parent_id = parser.super_id;
-                if (++super_token->size == 1 && super_token->type == CJ5_TOKEN_STRING) {
-                    super_token->key_hash =
-                        cj5__hash_fnv32(&json5[super_token->start], &json5[super_token->end]);
-                    super_token->key_start = super_token->start;
-                    super_token->key_end = super_token->end;
-                }
-            }
-
-            token->type = (c == '{' ? CJ5_TOKEN_OBJECT : CJ5_TOKEN_ARRAY);
-            token->start = parser.pos;
-            parser.super_id = parser.next_id - 1;
-            break;
-
-        case '}':
-        case ']':
-            can_comment = false;
-            if (r.error == CJ5_ERROR_OVERFLOW) {
-                break;
-            }
-            type = (c == '}' ? CJ5_TOKEN_OBJECT : CJ5_TOKEN_ARRAY);
-
-            if (parser.next_id < 1) {
-                cj5__set_error(&r, CJ5_ERROR_INVALID, parser.line, parser.pos - parser.line);
-                return r;
-            }
-
-            token = &parser.tokens[parser.next_id - 1];
-            for (;;) {
-                if (token->start != -1 && token->end == -1) {
-                    if (token->type != type) {
-                        cj5__set_error(&r, CJ5_ERROR_INVALID, parser.line,
-                                       parser.pos - parser.line);
-                        return r;
-                    }
-                    token->end = parser.pos + 1;
-                    parser.super_id = token->parent_id;
-                    break;
-                }
-
-                if (token->parent_id == -1) {
-                    if (token->type != type || parser.super_id == -1) {
-                        cj5__set_error(&r, CJ5_ERROR_INVALID, parser.line,
-                                       parser.pos - parser.line);
-                        return r;
-                    }
-                    break;
-                }
-
-                token = &parser.tokens[token->parent_id];
-            }
-            break;
-
-        case '\"':
-        case '\'':
-            can_comment = false;
-            cj5__parse_string(&parser, &r, json5, len);
-            if (r.error && r.error != CJ5_ERROR_OVERFLOW) {
-                return r;
-            }
-            count++;
-            if (parser.super_id != -1 && r.error != CJ5_ERROR_OVERFLOW) {
-                if (++parser.tokens[parser.super_id].size == 1 &&
-                    parser.tokens[parser.super_id].type == CJ5_TOKEN_STRING) {
-                    parser.tokens[parser.super_id].key_hash = cj5__hash_fnv32(
-                        &json5[parser.tokens[parser.super_id].start], &json5[parser.tokens[parser.super_id].end]);
-                    parser.tokens[parser.super_id].key_start = parser.tokens[parser.super_id].start;
-                    parser.tokens[parser.super_id].key_end = parser.tokens[parser.super_id].end;
-                }
-            }
-            break;
-
-        case '\r':
-            can_comment = true;
-            break;
-        case '\n':
-            ++parser.line;
-            can_comment = true;
-            break;
-        case '\t':
-        case ' ':
-            break;
-
-        case ':':
-            can_comment = false;
-            parser.super_id = parser.next_id - 1;
-            break;
-
-        case ',':
-            can_comment = false;
-            if (parser.super_id != -1 && r.error != CJ5_ERROR_OVERFLOW &&
-                parser.tokens[parser.super_id].type != CJ5_TOKEN_ARRAY &&
-                parser.tokens[parser.super_id].type != CJ5_TOKEN_OBJECT) {
-                parser.super_id = parser.tokens[parser.super_id].parent_id;
-            }
-            break;
-        case '/':
-            if (can_comment && parser.pos < len - 1) {
-                if (json5[parser.pos + 1] == '/') {
-                    cj5__skip_comment(&parser, json5, len);
-                } else if (json5[parser.pos + 1] == '*') {
-                    cj5__skip_multiline_comment(&parser, json5, len);
-                }
-            } 
-            break;
-
-        default:
-            cj5__parse_primitive(&parser, &r, json5, len);
-            if (r.error && r.error != CJ5_ERROR_OVERFLOW) {
-                return r;
-            }
-            can_comment = false;
-            count++;
-            if (parser.super_id != -1 && r.error != CJ5_ERROR_OVERFLOW) {
-                if (++parser.tokens[parser.super_id].size == 1 &&
-                    parser.tokens[parser.super_id].type == CJ5_TOKEN_STRING) {
-                    parser.tokens[parser.super_id].key_hash = cj5__hash_fnv32(
-                        &json5[parser.tokens[parser.super_id].start], &json5[parser.tokens[parser.super_id].end]);
-                    parser.tokens[parser.super_id].key_start = parser.tokens[parser.super_id].start;
-                    parser.tokens[parser.super_id].key_end = parser.tokens[parser.super_id].end;
-                }
-            }
-            break;
-        }
-    }
-
-    if (r.error != CJ5_ERROR_OVERFLOW) {
-        for (int i = parser.next_id - 1; i >= 0; i--) {
-            if (parser.tokens[i].start != -1 && parser.tokens[i].end == -1) {
-                cj5__set_error(&r, CJ5_ERROR_INCOMPLETE, parser.line, parser.pos - parser.line);
-                return r;
-            }
-        }
-    }
-
-    r.num_tokens = count;
-    r.tokens = parser.tokens;
-    r.json5 = json5;
-    return r;
-}
-
-typedef struct cj5_factory_default {
-    cj5_token* tokens;
-    int max_tokens;
-    int index;
-} cj5_factory_default;
-
-static cj5_token* cj5_factory_default_create_fn(void* user)
-{
-    cj5_factory_default* factory = (cj5_factory_default*)user;
-
-    if (factory->index < factory->max_tokens)
-        return &factory->tokens[factory->index++];
-    else
-        return NULL;
-}
-
-static cj5_token* cj5_factory_default_getall_fn(void* user)
-{
-    cj5_factory_default* factory = (cj5_factory_default*)user;
-    return factory->tokens;
-}
-
-cj5_result cj5_parse(const char* json5, int len, cj5_token* tokens, int max_tokens)
-{
-    CJ5_ASSERT(json5);
-    CJ5_ASSERT(tokens);
-    CJ5_ASSERT(max_tokens > 0);
-
-    cj5_factory factory;
-    cj5_factory_default factory_data;
-    factory_data.tokens = tokens;
-    factory_data.max_tokens = max_tokens;
-    factory_data.index = 0;
-
-    factory.create_token = cj5_factory_default_create_fn;
-    factory.get_all = cj5_factory_default_getall_fn;
-    factory.user_data = &factory_data;
-
-    return cj5_parse_with_factory(json5, len, factory);
-}
-
-#    if CJ5_TOKEN_HELPERS
-#        include <stdlib.h>
-
-static int cj5__seek_recursive(cj5_result* r, int parent_id, uint32_t key_hash)
-{
-    const cj5_token* parent_tok = &r->tokens[parent_id];
-
-    for (int i = parent_id + 1, count = 0; i < r->num_tokens && count < parent_tok->size; i++) {
-        const cj5_token* tok = &r->tokens[i];
-
-        if (tok->size != 1 || tok->type != CJ5_TOKEN_STRING) {
-            continue;
-        }
-
-        if (parent_id == tok->parent_id) {
-            CJ5_ASSERT((i + 1) < r->num_tokens);
-            if (key_hash == tok->key_hash) {
-                return i + 1;    // return next "value" token (array/objects and primitive values)
-            } else if (r->tokens[i + 1].size) {
-                int found_id = cj5__seek_recursive(r, i + 1, key_hash);
-                if (found_id != -1) {
-                    return found_id;
-                }
-            }
-            count++;
-        }
-    }
-
-    return -1;
-}
-
-static bool cj5__tofloat(const char* str, double* ofloat)
-{
-    while (*str && cj5__isspace(*str)) {
-        str++;
-    }
-    int sign = 1;
-
-    const char* pC = str;
-    if (*pC == '-') {
-        sign = -1;
-        pC++;
-    }
-
-    int64_t tmp = 0;
-    while (*pC >= '0' && *pC <= '9') {
-        tmp *= 10;
-        tmp += *pC - '0';
-        pC++;
-    }
-
-    if (*pC == 0) {
-        *ofloat = (double)(sign >= 0 ? tmp : -tmp);
-        return true;
-    }
-
-    if (*pC == '.') {
-        pC++;
-
-        int64_t divisor = sign;
-        while (*pC >= '0' && *pC <= '9') {
-            divisor *= 10;
-            tmp *= 10;
-            tmp += *pC - '0';
-            pC++;
-        }
-
-        while (*pC && cj5__isspace(*pC)) {
-            pC++;
-        }
-
-        if (*pC == 0) {
-            *ofloat = (double)tmp / (double)divisor;
-            return true;
-        }
-    }
-
-    *ofloat = strtod(str, NULL);
-    return true;
-}
-
-int cj5_seek_recursive(cj5_result* r, int parent_id, const char* key)
-{
-    CJ5_ASSERT(parent_id >= 0 && parent_id < r->num_tokens);
-
-    uint32_t key_hash = cj5__hash_fnv32(key, key + cj5__strlen(key));
-    return cj5__seek_recursive(r, parent_id, key_hash);
-}
-
-int cj5_seek_hash(cj5_result* r, int parent_id, const uint32_t key_hash)
-{
-    CJ5_ASSERT(parent_id >= 0 && parent_id < r->num_tokens);
-    const cj5_token* parent_tok = &r->tokens[parent_id];
-
-    for (int i = parent_id + 1, count = 0; i < r->num_tokens && count < parent_tok->size; i++) {
-        const cj5_token* tok = &r->tokens[i];
-
-        if (tok->size != 1 || tok->type != CJ5_TOKEN_STRING) {
-            continue;
-        }
-
-        if (parent_id == tok->parent_id) {
-            if (key_hash == tok->key_hash) {
-                CJ5_ASSERT((i + 1) < r->num_tokens);
-                return i + 1;    // return next "value" token (array/objects and primitive values)
-            }
-            count++;
-        }
-    }
-
-    return -1;
-}
-
-int cj5_seek(cj5_result* r, int parent_id, const char* key)
-{
-    CJ5_ASSERT(parent_id >= 0 && parent_id < r->num_tokens);
-
-    uint32_t key_hash = cj5__hash_fnv32(key, key + cj5__strlen(key));
-
-    return cj5_seek_hash(r, parent_id, key_hash);
-}
-
-const char* cj5_get_string(cj5_result* r, int id, char* str, int max_str)
-{
-    CJ5_ASSERT(id >= 0 && id < r->num_tokens);
-    const cj5_token* tok = &r->tokens[id];
-    CJ5_ASSERT(tok->type == CJ5_TOKEN_STRING);
-    return cj5__strcpy(str, max_str, &r->json5[tok->start], tok->end - tok->start);
-}
-
-double cj5_get_double(cj5_result* r, int id)
-{
-    CJ5_ASSERT(id >= 0 && id < r->num_tokens);
-    const cj5_token* tok = &r->tokens[id];
-    CJ5_ASSERT(tok->type == CJ5_TOKEN_NUMBER);
-    char snum[32];
-    double num;
-    cj5__strcpy(snum, sizeof(snum), &r->json5[tok->start], tok->end - tok->start);
-    bool valid = cj5__tofloat(snum, &num);
-    CJ5__UNUSED(valid);
-    CJ5_ASSERT(valid);
-    return num;
-}
-
-float cj5_get_float(cj5_result* r, int id)
-{
-    return (float)cj5_get_double(r, id);
-}
-
-int cj5_get_int(cj5_result* r, int id)
-{
-    CJ5_ASSERT(id >= 0 && id < r->num_tokens);
-    const cj5_token* tok = &r->tokens[id];
-    CJ5_ASSERT(tok->type == CJ5_TOKEN_NUMBER);
-    char snum[32];
-    cj5__strcpy(snum, sizeof(snum), &r->json5[tok->start], tok->end - tok->start);
-    return (int)strtol(snum, NULL, tok->num_type != CJ5_TOKEN_NUMBER_HEX ? 10 : 16);
-}
-
-uint32_t cj5_get_uint(cj5_result* r, int id)
-{
-    CJ5_ASSERT(id >= 0 && id < r->num_tokens);
-    const cj5_token* tok = &r->tokens[id];
-    CJ5_ASSERT(tok->type == CJ5_TOKEN_NUMBER);
-    char snum[32];
-    cj5__strcpy(snum, sizeof(snum), &r->json5[tok->start], tok->end - tok->start);
-    return (uint32_t)strtoul(snum, NULL, tok->num_type != CJ5_TOKEN_NUMBER_HEX ? 10 : 16);
-}
-
-uint64_t cj5_get_uint64(cj5_result* r, int id)
-{
-    CJ5_ASSERT(id >= 0 && id < r->num_tokens);
-    const cj5_token* tok = &r->tokens[id];
-    CJ5_ASSERT(tok->type == CJ5_TOKEN_NUMBER);
-    char snum[64];
-    cj5__strcpy(snum, sizeof(snum), &r->json5[tok->start], tok->end - tok->start);
-    return strtoull(snum, NULL, tok->num_type != CJ5_TOKEN_NUMBER_HEX ? 10 : 16);
-}
-
-int64_t cj5_get_int64(cj5_result* r, int id)
-{
-    CJ5_ASSERT(id >= 0 && id < r->num_tokens);
-    const cj5_token* tok = &r->tokens[id];
-    CJ5_ASSERT(tok->type == CJ5_TOKEN_NUMBER);
-    char snum[64];
-    cj5__strcpy(snum, sizeof(snum), &r->json5[tok->start], tok->end - tok->start);
-    return strtoll(snum, NULL, tok->num_type != CJ5_TOKEN_NUMBER_HEX ? 10 : 16);
-}
-
-bool cj5_get_bool(cj5_result* r, int id)
-{
-    CJ5_ASSERT(id >= 0 && id < r->num_tokens);
-    const cj5_token* tok = &r->tokens[id];
-    CJ5_ASSERT(tok->type == CJ5_TOKEN_BOOL);
-    CJ5_ASSERT((tok->end - tok->start) >= 4);
-
-    uint32_t fourcc = *((const uint32_t*)&r->json5[tok->start]);
-    if (fourcc == CJ5__TRUE_FOURCC) {
-        return true;
-    } else if (fourcc == CJ5__FALSE_FOURCC) {
-        return false;
-    } else {
-        CJ5_ASSERT(0);
-        return false;
-    }
-}
-
-double cj5_seekget_double(cj5_result* r, int parent_id, const char* key, double def_val)
-{
-    int id = cj5_seek(r, parent_id, key);
-    return id > -1 ? cj5_get_double(r, id) : def_val;
-}
-
-float cj5_seekget_float(cj5_result* r, int parent_id, const char* key, float def_val)
-{
-    int id = cj5_seek(r, parent_id, key);
-    return id > -1 ? cj5_get_float(r, id) : def_val;
-}
-
-int cj5_seekget_int(cj5_result* r, int parent_id, const char* key, int def_val)
-{
-    int id = cj5_seek(r, parent_id, key);
-    return id > -1 ? cj5_get_int(r, id) : def_val;
-}
-
-uint32_t cj5_seekget_uint(cj5_result* r, int parent_id, const char* key, uint32_t def_val)
-{
-    int id = cj5_seek(r, parent_id, key);
-    return id > -1 ? cj5_get_uint(r, id) : def_val;
-}
-
-uint64_t cj5_seekget_uint64(cj5_result* r, int parent_id, const char* key, uint64_t def_val)
-{
-    int id = cj5_seek(r, parent_id, key);
-    return id > -1 ? cj5_get_uint64(r, id) : def_val;
-}
-
-int64_t cj5_seekget_int64(cj5_result* r, int parent_id, const char* key, int64_t def_val)
-{
-    int id = cj5_seek(r, parent_id, key);
-    return id > -1 ? cj5_get_int64(r, id) : def_val;
-}
-
-bool cj5_seekget_bool(cj5_result* r, int parent_id, const char* key, bool def_val)
-{
-    int id = cj5_seek(r, parent_id, key);
-    return id > -1 ? cj5_get_bool(r, id) : def_val;
-}
-
-const char* cj5_seekget_string(cj5_result* r, int parent_id, const char* key, char* str,
-                               int max_str, const char* def_val)
-{
-    int id = cj5_seek(r, parent_id, key);
-    return id > -1 ? cj5_get_string(r, id, str, max_str) : def_val;
-}
-
-int cj5_seekget_array_double(cj5_result* r, int parent_id, const char* key, double* values,
-                             int max_values)
-{
-    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
-    if (id != -1) {
-        const cj5_token* tok = &r->tokens[id];
-        CJ5__UNUSED(tok);
-        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
-        int count = 0;
-        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
-            values[count++] = cj5_get_double(r, i);
-        }
-        return count;
-    } else {
-        return 0;
-    }
-}
-
-int cj5_seekget_array_float(cj5_result* r, int parent_id, const char* key, float* values,
-                            int max_values)
-{
-    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
-    if (id != -1) {
-        const cj5_token* tok = &r->tokens[id];
-        CJ5__UNUSED(tok);
-        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
-        int count = 0;
-        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
-            values[count++] = cj5_get_float(r, i);
-        }
-        return count;
-    } else {
-        return 0;
-    }
-}
-
-int cj5_seekget_array_int16(cj5_result* r, int parent_id, const char* key, int16_t* values,
-                            int max_values)
-{
-    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
-    if (id != -1) {
-        const cj5_token* tok = &r->tokens[id];
-        CJ5__UNUSED(tok);
-        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
-        int count = 0;
-        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
-            values[count++] = (int16_t)cj5_get_int(r, i);
-        }
-        return count;
-    } else {
-        return 0;
-    }
-}
-
-int cj5_seekget_array_uint16(cj5_result* r, int parent_id, const char* key, uint16_t* values,
-                             int max_values)
-{
-    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
-    if (id != -1) {
-        const cj5_token* tok = &r->tokens[id];
-        CJ5__UNUSED(tok);
-        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
-        int count = 0;
-        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
-            values[count++] = (uint16_t)cj5_get_int(r, i);
-        }
-        return count;
-    } else {
-        return 0;
-    }
-}
-
-
-int cj5_seekget_array_int(cj5_result* r, int parent_id, const char* key, int* values,
-                          int max_values)
-{
-    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
-    if (id != -1) {
-        const cj5_token* tok = &r->tokens[id];
-        CJ5__UNUSED(tok);
-        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
-        int count = 0;
-        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
-            values[count++] = cj5_get_int(r, i);
-        }
-        return count;
-    } else {
-        return 0;
-    }
-}
-
-int cj5_seekget_array_uint(cj5_result* r, int parent_id, const char* key, uint32_t* values,
-                           int max_values)
-{
-    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
-    if (id != -1) {
-        const cj5_token* tok = &r->tokens[id];
-        CJ5__UNUSED(tok);
-        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
-        int count = 0;
-        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
-            values[count++] = cj5_get_uint(r, i);
-        }
-        return count;
-    } else {
-        return 0;
-    }
-}
-
-int cj5_seekget_array_uint64(cj5_result* r, int parent_id, const char* key, uint64_t* values,
-                             int max_values)
-{
-    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
-    if (id != -1) {
-        const cj5_token* tok = &r->tokens[id];
-        CJ5__UNUSED(tok);
-        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
-        int count = 0;
-        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
-            values[count++] = cj5_get_uint64(r, i);
-        }
-        return count;
-    } else {
-        return 0;
-    }
-}
-
-int cj5_seekget_array_int64(cj5_result* r, int parent_id, const char* key, int64_t* values,
-                            int max_values)
-{
-    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
-    if (id != -1) {
-        const cj5_token* tok = &r->tokens[id];
-        CJ5__UNUSED(tok);
-        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
-        int count = 0;
-        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
-            values[count++] = cj5_get_int64(r, i);
-        }
-        return count;
-    } else {
-        return 0;
-    }
-}
-
-int cj5_seekget_array_bool(cj5_result* r, int parent_id, const char* key, bool* values,
-                           int max_values)
-{
-    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
-    if (id != -1) {
-        const cj5_token* tok = &r->tokens[id];
-        CJ5__UNUSED(tok);
-        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
-        int count = 0;
-        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
-            values[count++] = cj5_get_bool(r, i);
-        }
-        return count;
-    } else {
-        return 0;
-    }
-}
-
-int cj5_seekget_array_string(cj5_result* r, int parent_id, const char* key, char** strs,
-                             int max_str, int max_values)
-{
-    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
-    if (id != -1) {
-        const cj5_token* tok = &r->tokens[id];
-        CJ5__UNUSED(tok);
-        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
-        int count = 0;
-        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
-            cj5_get_string(r, i, strs[count++], max_str);
-        }
-        return count;
-    } else {
-        return 0;
-    }
-}
-
-int cj5_get_array_elem(cj5_result* r, int id, int index)
-{
-    const cj5_token* tok = &r->tokens[id];
-    CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
-    CJ5_ASSERT(index < tok->size);
-    for (int i = id + 1, count = 0, ic = r->num_tokens; i < ic && count < tok->size; i++) {
-        if (r->tokens[i].parent_id == id) {
-            if (count == index) {
-                return i;
-            }
-            count++;
-        }
-    }
-    return -1;
-}
-
-int cj5_get_array_elem_incremental(cj5_result* r, int id, int index, int prev_elem)
-{
-    const cj5_token* tok = &r->tokens[id];
-    CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
-    CJ5_ASSERT(index < tok->size);
-    int start = prev_elem <= 0 ? (id + 1) : (prev_elem + 1);
-    for (int i = start, count = index, ic = r->num_tokens; i < ic && count < tok->size; i++) {
-        if (r->tokens[i].parent_id == id) {
-            if (count == index) {
-                return i;
-            }
-            count++;
-        }
-    }
-    return -1;
-}
-
-#    endif    // CJ5_TOKEN_HELPERS
-#endif        // CJ5_IMPLEMENT
-
-#undef CJ5_IMPLEMENT
-
-
-struct JsonContext
-{
-    cj5_result r;       // This should always come first, because the wrapper API casts JsonContext to cj5_result*
-    uint32 numTokens;
-    MemAllocator* alloc;
-    cj5_token* tokens;
-};
-
-JsonContext* Json::Parse(const char* json5, uint32 json5Len, JsonErrorLocation* outErrLoc, MemAllocator* alloc)
-{
-    ASSERT(json5);
-    ASSERT(json5Len < INT32_MAX);
-    ASSERT(alloc);
-
-    bool mainAllocIsTemp = alloc->GetType() == MemAllocatorType::Temp;
-    MemTempAllocator::ID tempMemId = mainAllocIsTemp ? ((MemTempAllocator*)alloc)->GetId() : MemTempAllocator::PushId();
-    MemTempAllocator tmpAlloc(tempMemId);
-    Array<cj5_token> tokens(&tmpAlloc);
-    tokens.Reserve(64);
-
-    auto CreateToken = [](void* user)->cj5_token* { return ((Array<cj5_token>*)user)->Push(); };
-    auto GetAll = [](void* user)->cj5_token* { return ((Array<cj5_token>*)user)->Ptr(); };
-    cj5_factory factory {
-        .create_token = CreateToken,
-        .get_all = GetAll,
-        .user_data = &tokens
-    };
-
-    json5Len = json5Len == 0 ? json5Len : Str::Len(json5);
-    cj5_result r = cj5_parse_with_factory(json5, (int)json5Len, factory);
-
-    if (r.error == CJ5_ERROR_NONE) {
-        ASSERT(tokens.Count());
-
-        MemSingleShotMalloc<JsonContext> mallocator;
-        mallocator.AddMemberArray<cj5_token>(offsetof(JsonContext, tokens), tokens.Count());
-        JsonContext* ctx = mallocator.Malloc(alloc);
-
-        ctx->numTokens = tokens.Count();
-        memcpy(ctx->tokens, r.tokens, tokens.Count());
-        ctx->r.tokens = ctx->tokens;
-
-        ctx->r = r;
-        ctx->alloc = alloc;
-
-        if (!mainAllocIsTemp)
-            MemTempAllocator::PopId(tempMemId);
-        return ctx;
+    void* ptr;
+    if (align <= CONFIG_MACHINE_ALIGNMENT) {
+        ptr = malloc(size);
+        ASSERT((uintptr_t(ptr) % CONFIG_MACHINE_ALIGNMENT) == 0);   // Validate machine alignment with malloc
     }
     else {
-        if (outErrLoc) {
-            *outErrLoc = JsonErrorLocation {
-                .line = (uint32)r.error_line,
-                .col = (uint32)r.error_col
-            };
-        }
-        if (!mainAllocIsTemp)
-            MemTempAllocator::PopId(tempMemId);
+        align = Max(align, CONFIG_MACHINE_ALIGNMENT);
+        ptr = aligned_malloc(align, size);
+    }
+    if (!ptr) {
+        MEM_FAIL();
         return nullptr;
     }
+
+    TracyCAlloc(ptr, size);        
+
+    Mem::TrackMalloc(ptr, size);
+    return ptr;
 }
-
-void Json::Destroy(JsonContext* ctx)
+    
+inline void* MemHeapAllocator::Realloc(void* ptr, size_t size, uint32 align)
 {
-    if (ctx && ctx->alloc) 
-        MemSingleShotMalloc<JsonContext>::Free(ctx, ctx->alloc);
-}
+    [[maybe_unused]] void* freePtr = ptr;
 
-uint32 JsonNode::GetChildCount() const
-{
-    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
-
-    const cj5_token* tok = &r->tokens[mTokenId];
-    if (tok->parent_id != -1) {
-        const cj5_token* parent = &r->tokens[tok->parent_id];
-        if (parent->type == CJ5_TOKEN_STRING) {     // this would be the key
-            return r->tokens[parent->parent_id].type == CJ5_TOKEN_OBJECT ? r->tokens[parent->parent_id].size : 0;
-        }
-        else {
-            return 0;
-        }
+    if (align <= CONFIG_MACHINE_ALIGNMENT) {
+        ptr = realloc(ptr, size);
     }
     else {
-        return tok->type == CJ5_TOKEN_OBJECT ? tok->size : 0;
+        align = Max(align, CONFIG_MACHINE_ALIGNMENT);
+        ptr = aligned_realloc(ptr, align, size);
+    }
+    
+    if (!ptr) {
+        MEM_FAIL();
+        return nullptr;
+    }
+    
+    TracyCRealloc(freePtr, ptr, size);
+    Mem::TrackRealloc(freePtr, ptr, size);
+    return ptr;
+}
+    
+inline void MemHeapAllocator::Free(void* ptr, uint32 align)
+{
+    if (ptr != nullptr) {
+        if (align <= CONFIG_MACHINE_ALIGNMENT) {
+            free(ptr);
+        }
+        else {
+            aligned_free(ptr);
+        }
+    
+        TracyCFree(ptr);
+        Mem::TrackFree(ptr);
     }
 }
 
-uint32 JsonNode::GetArrayCount() const
+#if !PLATFORM_WINDOWS
+INLINE void* aligned_malloc(uint32 align, size_t size)
 {
-    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
-    const cj5_token* tok = &r->tokens[mTokenId];
-    ASSERT(tok->type == CJ5_TOKEN_ARRAY);
-    return tok->size;
-}
-
-bool JsonNode::IsArray() const
-{
-    return mCtx->r.tokens[mTokenId].type == CJ5_TOKEN_ARRAY;
-}
-
-bool JsonNode::IsObject() const
-{
-    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
+    ASSERT(align >= CONFIG_MACHINE_ALIGNMENT);
     
-    const cj5_token* tok = &r->tokens[mTokenId];
-    if (tok->type == CJ5_TOKEN_OBJECT)
+    size_t total = size + align + sizeof(uint32);
+    uint8* ptr = (uint8*)malloc(total);
+    if (!ptr)
+        return nullptr;
+    uint8* aligned = (uint8*)Mem::AlignPointer(ptr, sizeof(uint32), align);
+    uint32* header = (uint32*)aligned - 1;
+    *header = PtrToInt<uint32>((void*)(aligned - ptr));  // Save the offset needed to move back from aligned pointer
+    return aligned;
+}
+
+INLINE void* aligned_realloc(void* ptr, uint32 align, size_t size)
+{
+    ASSERT(align >= CONFIG_MACHINE_ALIGNMENT);
+
+    if (ptr) {
+        uint8* aligned = (uint8*)ptr;
+        uint32 offset = *((uint32*)aligned - 1);
+        ptr = aligned - offset;
+
+        size_t total = size + align + sizeof(uint32);
+        ptr = realloc(ptr, total);
+        if (!ptr)
+            return nullptr;
+        uint8* newAligned = (uint8*)Mem::AlignPointer(ptr, sizeof(uint32), align);
+        if (newAligned == aligned)
+            return aligned;
+
+        aligned = (uint8*)ptr + offset;
+        memmove(newAligned, aligned, size);
+        uint32* header = (uint32*)newAligned - 1;
+        *header = PtrToInt<uint32>((void*)(newAligned - (uint8*)ptr));
+        return newAligned;
+    }
+    else {
+        return aligned_malloc(align, size);
+    }
+}
+
+INLINE void aligned_free(void* ptr)
+{
+    if (ptr) {
+        uint8* aligned = (uint8*)ptr;
+        uint32* header = (uint32*)aligned - 1;
+        ptr = aligned - *header;
+        free(ptr);
+    }
+}
+#endif  // !PLATFORM_WINDOWS
+
+#if PLATFORM_ANDROID || PLATFORM_LINUX
+static size_t strcpy_s(char *dest, size_t size, const char *src)
+{
+    size_t ret = strlen(src);
+
+    if (size) {
+        size_t len = (ret >= size) ? size - 1 : ret;
+        memcpy(dest, src, len);
+        dest[len] = '\0';
+    }
+    return ret;
+}
+
+static size_t strcat_s(char *dst, size_t size, const char *src)
+{
+    size_t  len;
+    size_t  slen;
+
+    len = 0;
+    slen = strlen(src);
+    while (*dst && size > 0) // added @JS1 edit
+    {
+        dst++;
+        len++;
+        size--;
+    }
+    while (*src && size-- > 1) //added @JS1 edit
+        *dst++ = *src++;
+    if (size == 1 || *src == 0) // **VERY IMPORTANT:** read update below
+        *dst = '\0';
+    return (slen + len);
+}
+#endif  // PLATFORM_ANDROID
+
+
+#include <stdarg.h> // va_list/va_start
+#include <stdio.h>  // puts
+
+
+#ifdef BUILD_UNITY
+    #if PLATFORM_WINDOWS
+//----------------------------------------------------------------------------------------------------------------------
+// DebugWin.cpp
+
+
+#if PLATFORM_WINDOWS
+
+//----------------------------------------------------------------------------------------------------------------------
+// External/remedybg/remedybg_driver.h
+
+/*
+
+RemedyBG driver for 0.3.9.1 and later.
+
+Note that the following documentation is preliminary and is subject to change.
+
+The RemedyBG driver on Windows uses named pipes for communication between
+processes. To enable this feature, RemedyBG can be invoked with the
+"--servername" argument, passing the base name used for the creation of the
+pipes. Without this argument, no named pipes will be created.
+
+There are two named pipes created when the "--servername basename" argument is
+given: one named ""\\.\pipe\basename", the debug control pipe, and another named
+"\\.\pipe\basename-events", the debug events pipe.
+
+The debug control pipe is a read-write pipe that should be setup in message mode
+and can be used to control the debugger, including things such as creating a
+session, adding a breakpoint, or deleting an expression from a watch window.
+
+The debug control pipe command pipe accepts a packed stream of data beginning
+with a 2 byte rdbg_Command. Depending on the command, one or more arguments to
+the command may be required. See the documentation for individual commands in
+the rdbg_Command enumeration below.
+
+All commands will first return a rdbg_CommandResult followed by zero or more
+additional values depending on the command.
+
+The debug events pipe is a secondary, read-only pipe that can be used to
+receive notifications of various events such as a breakpoint being hit. It, like
+the debug control pipe, will use a packed stream of data. The format of the data
+is documented in the rdbg_DebugEventKind enumeration below.
+
+Note that to aid in debugging, you can view the RemedyBG error log at
+`%APPDATA%\remedybg\app.log`.
+
+*/
+
+
+#include <stdint.h>
+
+#define RDBG_MAX_SERVERNAME_LEN 64
+
+typedef uint8_t rdbg_Bool;
+
+typedef uint32_t rdbg_Id;
+
+#pragma warning(push)
+#pragma warning(disable: 4200)
+#pragma pack(push, 1)
+struct rdbg_String
+{
+   uint16_t len;
+   uint8_t data[0];
+};
+#pragma pack(pop)
+#pragma warning(pop)
+
+enum rdbg_CommandResult
+{
+   RDBG_COMMAND_RESULT_UNKNOWN = 0,
+
+   RDBG_COMMAND_RESULT_OK = 1,
+
+   RDBG_COMMAND_RESULT_FAIL = 2,
+
+   RDBG_COMMAND_RESULT_ABORTED = 3,
+
+   RDBG_COMMAND_RESULT_INVALID_COMMAND = 4,
+
+   RDBG_COMMAND_RESULT_BUFFER_TOO_SMALL = 5,
+
+   RDBG_COMMAND_RESULT_FAILED_OPENING_FILE = 6,
+
+   RDBG_COMMAND_RESULT_FAILED_SAVING_SESSION = 7,
+
+   RDBG_COMMAND_RESULT_INVALID_ID = 8,
+
+   RDBG_COMMAND_RESULT_INVALID_TARGET_STATE = 9,
+
+   RDBG_COMMAND_RESULT_FAILED_NO_ACTIVE_CONFIG = 10,
+
+   RDBG_COMMAND_RESULT_INVALID_BREAKPOINT_KIND = 11,
+};
+
+enum rdbg_DebuggingTargetBehavior
+{
+   RDBG_IF_DEBUGGING_TARGET_STOP_DEBUGGING = 1,
+   RDBG_IF_DEBUGGING_TARGET_ABORT_COMMAND = 2
+};
+
+enum rdbg_ModifiedSessionBehavior
+{
+   RDBG_IF_SESSION_IS_MODIFIED_SAVE_AND_CONTINUE = 1,
+   RDBG_IF_SESSION_IS_MODIFIED_CONTINUE_WITHOUT_SAVING = 2,
+   RDBG_IF_SESSION_IS_MODIFIED_ABORT_COMMAND = 3,
+};
+
+enum rdbg_TargetState
+{
+   RDBG_TARGET_STATE_NONE = 1,
+   RDBG_TARGET_STATE_SUSPENDED = 2,
+   RDBG_TARGET_STATE_EXECUTING = 3,
+};
+
+enum rdbg_BreakpointKind
+{
+   RDBG_BREAKPOINT_KIND_FUNCTION_NAME = 1,
+   RDBG_BREAKPOINT_KIND_FILENAME_LINE = 2,
+   RDBG_BREAKPOINT_KIND_ADDRESS = 3,
+   RDBG_BREAKPOINT_KIND_PROCESSOR = 4,
+};
+
+enum rdbg_ProcessorBreakpointAccessKind
+{
+   RDBG_PROCESSOR_BREAKPOINT_ACCESS_KIND_WRITE = 1,
+   RDBG_PROCESSOR_BREAKPOINT_ACCESS_KIND_READ_WRITE = 2,
+   RDBG_PROCESSOR_BREAKPOINT_ACCESS_KIND_EXECUTE = 3,
+};
+
+enum rdbg_Command
+{
+   RDBG_COMMAND_BRING_DEBUGGER_TO_FOREGROUND = 50,
+
+   RDBG_COMMAND_SET_WINDOW_POS = 51,
+
+   RDBG_COMMAND_GET_WINDOW_POS = 52,
+   
+   RDBG_COMMAND_SET_BRING_TO_FOREGROUND_ON_SUSPENDED = 53,
+
+   RDBG_COMMAND_EXIT_DEBUGGER = 75,
+
+
+   RDBG_COMMAND_GET_IS_SESSION_MODIFIED = 100,
+
+   RDBG_COMMAND_GET_SESSION_FILENAME = 101,
+
+   RDBG_COMMAND_NEW_SESSION = 102,
+
+   RDBG_COMMAND_OPEN_SESSION = 103,
+
+   RDBG_COMMAND_SAVE_SESSION = 104,
+
+   RDBG_COMMAND_SAVE_AS_SESSION = 105,
+
+   RDBG_COMMAND_GET_SESSION_CONFIGS = 106,
+
+   RDBG_COMMAND_ADD_SESSION_CONFIG = 107,
+
+   RDBG_COMMAND_SET_ACTIVE_SESSION_CONFIG = 108,
+
+   RDBG_COMMAND_DELETE_SESSION_CONFIG = 109,
+
+   RDBG_COMMAND_DELETE_ALL_SESSION_CONFIGS = 110,
+
+
+   RDBG_COMMAND_GOTO_FILE_AT_LINE = 200,
+
+   RDBG_COMMAND_CLOSE_FILE = 201,
+
+   RDBG_COMMAND_CLOSE_ALL_FILES = 202,
+
+   RDBG_COMMAND_GET_CURRENT_FILE = 203,
+
+   RDBG_COMMAND_GET_OPEN_FILES = 204,
+
+
+   RDBG_COMMAND_GET_TARGET_STATE = 300,
+
+   RDBG_COMMAND_START_DEBUGGING = 301,
+
+   RDBG_COMMAND_STOP_DEBUGGING = 302,
+
+   RDBG_COMMAND_RESTART_DEBUGGING = 303,
+
+   RDBG_COMMAND_ATTACH_TO_PROCESS_BY_PID = 304,
+
+   RDBG_COMMAND_ATTACH_TO_PROCESS_BY_NAME = 305,
+
+   RDBG_COMMAND_DETACH_FROM_PROCESS = 306,
+
+   RDBG_COMMAND_STEP_INTO_BY_LINE = 307,
+
+   RDBG_COMMAND_STEP_INTO_BY_INSTRUCTION = 308,
+
+   RDBG_COMMAND_STEP_OVER_BY_LINE = 309,
+
+   RDBG_COMMAND_STEP_OVER_BY_INSTRUCTION = 310,
+
+   RDBG_COMMAND_STEP_OUT = 311,
+
+   RDBG_COMMAND_CONTINUE_EXECUTION = 312,
+
+   RDBG_COMMAND_RUN_TO_FILE_AT_LINE = 313,
+
+   RDBG_COMMAND_BREAK_EXECUTION = 314,
+
+
+   RDBG_COMMAND_GET_BREAKPOINTS = 600,
+
+   RDBG_COMMAND_GET_BREAKPOINT_LOCATIONS = 601,
+
+   RDBG_COMMAND_GET_FUNCTION_OVERLOADS = 602,
+
+   RDBG_COMMAND_ADD_BREAKPOINT_AT_FUNCTION = 603,
+
+   RDBG_COMMAND_ADD_BREAKPOINT_AT_FILENAME_LINE = 604,
+
+   RDBG_COMMAND_ADD_BREAKPOINT_AT_ADDRESS = 605,
+
+   RDBG_COMMAND_ADD_PROCESSOR_BREAKPOINT = 606,
+
+   RDBG_COMMAND_SET_BREAKPOINT_CONDITION = 607,
+
+   RDBG_COMMAND_UPDATE_BREAKPOINT_LINE = 608,
+
+   RDBG_COMMAND_ENABLE_BREAKPOINT = 609,
+
+   RDBG_COMMAND_DELETE_BREAKPOINT = 610,
+
+   RDBG_COMMAND_DELETE_ALL_BREAKPOINTS = 611,
+
+   RDBG_COMMAND_GET_BREAKPOINT = 612,
+
+
+   RDBG_COMMAND_GET_WATCHES = 700,
+
+   RDBG_COMMAND_ADD_WATCH = 701,
+
+   RDBG_COMMAND_UPDATE_WATCH_EXPRESSION = 702,
+
+   RDBG_COMMAND_UPDATE_WATCH_COMMENT = 703,
+
+   RDBG_COMMAND_DELETE_WATCH = 704,
+
+   RDBG_COMMAND_DELETE_ALL_WATCHES = 705,
+};
+
+enum rdbg_SourceLocChangedReason
+{
+   RDBG_SOURCE_LOC_CHANGED_REASON_UNSPECIFIED = 0,
+
+   RDBG_SOURCE_LOC_CHANGED_REASON_BY_COMMAND_LINE = 1,
+
+   RDBG_SOURCE_LOC_CHANGED_REASON_BY_DRIVER = 2,
+
+   RDBG_SOURCE_LOC_CHANGED_REASON_BREAKPOINT_SELECTED = 3,
+
+   RDBG_SOURCE_LOC_CHANGED_REASON_CURRENT_FRAME_CHANGED = 4,
+
+   RDBG_SOURCE_LOC_CHANGED_REASON_ACTIVE_THREAD_CHANGED = 5,
+
+   RDBG_SOURCE_LOC_CHANGED_REASON_BREAKPOINT_HIT = 6,
+   RDBG_SOURCE_LOC_CHANGED_REASON_EXCEPTION_HIT = 7,
+   RDBG_SOURCE_LOC_CHANGED_REASON_STEP_OVER = 8,
+   RDBG_SOURCE_LOC_CHANGED_REASON_STEP_IN = 9,
+   RDBG_SOURCE_LOC_CHANGED_REASON_STEP_OUT = 10,
+   RDBG_SOURCE_LOC_CHANGED_REASON_NON_USER_BREAKPOINT = 11,
+   RDBG_SOURCE_LOC_CHANGED_REASON_DEBUG_BREAK = 12,
+};
+
+enum rdbg_DebugEventKind
+{
+   RDBG_DEBUG_EVENT_KIND_EXIT_PROCESS = 100,
+
+   RDBG_DEBUG_EVENT_KIND_TARGET_STARTED = 101,
+
+   RDBG_DEBUG_EVENT_KIND_TARGET_ATTACHED = 102,
+
+   RDBG_DEBUG_EVENT_KIND_TARGET_DETACHED = 103,
+
+   RDBG_DEBUG_EVENT_KIND_TARGET_CONTINUED = 104,
+
+   RDBG_DEBUG_EVENT_KIND_SOURCE_LOCATION_CHANGED = 200,
+
+   RDBG_DEBUG_EVENT_KIND_BREAKPOINT_HIT = 600,
+
+   RDBG_DEBUG_EVENT_KIND_BREAKPOINT_RESOLVED = 601,
+
+   RDBG_DEBUG_EVENT_KIND_BREAKPOINT_ADDED = 602,
+
+   RDBG_DEBUG_EVENT_KIND_BREAKPOINT_MODIFIED = 603,
+
+   RDBG_DEBUG_EVENT_KIND_BREAKPOINT_REMOVED = 604,
+
+   RDBG_DEBUG_EVENT_KIND_OUTPUT_DEBUG_STRING = 800,
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// IncludeWin.h
+
+
+#if defined(_WIN32) || defined(_WIN64)
+
+#define WIN32_MEAN_AND_LEAN
+#define VC_EXTRALEAN
+#define NOMINMAX          // Macros min(a,b) and max(a,b)
+
+#include <winsock2.h>
+#include <windows.h>
+
+#undef WIN32_MEAN_AND_LEAN
+#undef VC_EXTRALEAN
+#undef NOMINMAX
+
+#endif // _WIN32 / _WIN64
+
+
+
+#pragma pack(push, 8)
+#include <DbgHelp.h>
+
+typedef struct _IMAGEHLP_MODULE64_V3
+{
+    DWORD SizeOfStruct;        // set to sizeof(IMAGEHLP_MODULE64)
+    DWORD64 BaseOfImage;       // base load address of module
+    DWORD ImageSize;           // virtual size of the loaded module
+    DWORD TimeDateStamp;       // date/time stamp from pe header
+    DWORD CheckSum;            // checksum from the pe header
+    DWORD NumSyms;             // number of symbols in the symbol table
+    SYM_TYPE SymType;          // type of symbols loaded
+    CHAR ModuleName[32];       // module name
+    CHAR ImageName[256];       // image name
+    CHAR LoadedImageName[256]; // symbol file name
+    CHAR LoadedPdbName[256];   // pdb file name
+    DWORD CVSig;               // Signature of the CV record in the debug directories
+    CHAR CVData[PATH_CHARS_MAX * 3]; // Contents of the CV record
+    DWORD PdbSig;              // Signature of PDB
+    GUID PdbSig70;             // Signature of PDB (VC 7 and up)
+    DWORD PdbAge;              // DBI age of pdb
+    BOOL PdbUnmatched;         // loaded an unmatched pdb
+    BOOL DbgUnmatched;         // loaded an unmatched dbg
+    BOOL LineNumbers;          // we have line number information
+    BOOL GlobalSymbols;        // we have internal symbol information
+    BOOL TypeInfo;             // we have type information
+    BOOL SourceIndexed; // pdb supports source server
+    BOOL Publics;       // contains public symbols
+} IMAGEHLP_MODULE64_V3, *PIMAGEHLP_MODULE64_V3;
+
+typedef struct _IMAGEHLP_MODULE64_V2
+{
+    DWORD SizeOfStruct;        // set to sizeof(IMAGEHLP_MODULE64)
+    DWORD64 BaseOfImage;       // base load address of module
+    DWORD ImageSize;           // virtual size of the loaded module
+    DWORD TimeDateStamp;       // date/time stamp from pe header
+    DWORD CheckSum;            // checksum from the pe header
+    DWORD NumSyms;             // number of symbols in the symbol table
+    SYM_TYPE SymType;          // type of symbols loaded
+    CHAR ModuleName[32];       // module name
+    CHAR ImageName[256];       // image name
+    CHAR LoadedImageName[256]; // symbol file name
+} IMAGEHLP_MODULE64_V2, *PIMAGEHLP_MODULE64_V2;
+#pragma pack(pop)
+
+using SymInitializeFn = BOOL(*)(IN HANDLE process, IN LPCSTR UserSearchPath, IN BOOL fInvadeProcess);
+using SymCleanupFn = BOOL(*)(IN HANDLE process);
+using SymGetSymFromAddr64Fn = BOOL(*)(IN HANDLE process, IN DWORD64 dwAddr, OUT PDWORD64 pdwDisplacement, OUT PIMAGEHLP_SYMBOL64 Symbol);
+using UnDecorateSymbolNameFn = DWORD(WINAPI*)(PCSTR DecoratedName, PSTR UnDecoratedName, DWORD UndecoratedLength, DWORD Flags);
+using SymGetLineFromAddr64Fn = BOOL(*)(IN HANDLE process, IN DWORD64 dwAddr, OUT PDWORD pdwDisplacement, OUT PIMAGEHLP_LINE64 line);  
+
+static SymInitializeFn _SymInitialize;
+static SymCleanupFn _SymCleanup;
+static SymGetSymFromAddr64Fn _SymGetSymFromAddr64;
+static UnDecorateSymbolNameFn _UnDecorateSymbolName;
+static SymGetLineFromAddr64Fn _SymGetLineFromAddr64;
+
+struct DebugStacktraceContext
+{
+    bool mInitialized;
+    HINSTANCE mDbgHelp;
+    HANDLE mProcess;
+    CRITICAL_SECTION mMutex;
+    
+    DebugStacktraceContext();
+    ~DebugStacktraceContext();
+};
+
+static DebugStacktraceContext gStacktrace;
+
+namespace Debug
+{
+    static bool InitializeStacktrace()
+    {
+        if (gStacktrace.mInitialized)
         return true;
+        gStacktrace.mInitialized = true;
 
-    if (tok->parent_id != -1)
-        return r->tokens[tok->parent_id].type == CJ5_TOKEN_OBJECT;
+        EnterCriticalSection(&gStacktrace.mMutex);
+        ASSERT(gStacktrace.mDbgHelp == nullptr);
 
-    return false;
+        gStacktrace.mDbgHelp = LoadLibraryA("dbghelp.dll");
+        if (!gStacktrace.mDbgHelp) {
+            Debug::Print("Could not load DbgHelp.dll");
+            gStacktrace.mInitialized = false;
+            return false;
+        }
+
+        _SymInitialize = (SymInitializeFn)GetProcAddress(gStacktrace.mDbgHelp, "SymInitialize");
+        _SymCleanup = (SymCleanupFn)GetProcAddress(gStacktrace.mDbgHelp, "SymCleanup");
+        _SymGetLineFromAddr64 = (SymGetLineFromAddr64Fn)GetProcAddress(gStacktrace.mDbgHelp, "SymGetLineFromAddr64");
+        _SymGetSymFromAddr64 = (SymGetSymFromAddr64Fn)GetProcAddress(gStacktrace.mDbgHelp, "SymGetSymFromAddr64");
+        _UnDecorateSymbolName = (UnDecorateSymbolNameFn)GetProcAddress(gStacktrace.mDbgHelp, "UnDecorateSymbolName");
+        ASSERT(_SymInitialize && _SymCleanup && _SymGetLineFromAddr64 && _SymGetSymFromAddr64 && _UnDecorateSymbolName);
+
+        gStacktrace.mProcess = GetCurrentProcess();
+
+        if (!_SymInitialize(gStacktrace.mProcess, NULL, TRUE)) {
+            LeaveCriticalSection(&gStacktrace.mMutex);
+            Debug::Print("DbgHelp: _SymInitialize failed");
+            gStacktrace.mInitialized = false;
+            return false;
+        }
+
+        ASSERT(_SymInitialize && _SymCleanup && _SymGetLineFromAddr64 && _SymGetSymFromAddr64 && _UnDecorateSymbolName);
+        LeaveCriticalSection(&gStacktrace.mMutex);
+
+        return true;
+    }
+};
+
+#ifdef TRACY_ENABLE
+void DebugDbgHelpInit()
+{
+    if (!gStacktrace.mInitialized) {
+        Debug::InitializeStacktrace();
+        ASSERT_MSG(gStacktrace.mInitialized, "Failed to initialize stacktrace capture");
+    }  
 }
 
-const char* JsonNode::GetKey(char* outKey, uint32 keySize) const
+void DebugDbgHelpLock()
 {
-    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
-    ASSERT(mTokenId > 0 && mTokenId < r->num_tokens);
-    ASSERT(r->tokens[mTokenId].parent_id != -1);
-    const cj5_token* tok = &r->tokens[r->tokens[mTokenId].parent_id];   // get the 'key' token (parent)
-    ASSERT(tok->type == CJ5_TOKEN_STRING);
-    return cj5__strcpy(outKey, keySize, &r->json5[tok->start], tok->end - tok->start);
+    EnterCriticalSection(&gStacktrace.mMutex);
 }
 
-const char* JsonNode::GetValue(char* outValue, uint32 valueSize) const
+void DebugDbgHelpUnlock()
 {
-    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
-    CJ5_ASSERT(mTokenId >= 0 && mTokenId < r->num_tokens);
-    const cj5_token* tok = &r->tokens[mTokenId];
-    return cj5__strcpy(outValue, valueSize, &r->json5[tok->start], tok->end - tok->start);
+    LeaveCriticalSection(&gStacktrace.mMutex);
+}
+#endif // if TRACY_ENABLE
 
+NO_INLINE uint16 Debug::CaptureStacktrace(void** stackframes, uint16 maxStackframes, uint16 framesToSkip, uint32* pHash)
+{
+    static_assert(sizeof(DWORD) == sizeof(uint32));
+
+    return (uint16)RtlCaptureStackBackTrace(framesToSkip, maxStackframes, stackframes, PDWORD(pHash));
 }
 
-JsonNode JsonNode::GetChildItem(uint32 _index) const
+void Debug::ResolveStacktrace(uint16 numStacktrace, void* const* stackframes, DebugStacktraceEntry* entries)
 {
-    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
-    const cj5_token* tok = &r->tokens[mTokenId];
-    int index = (int)_index;
+    if (!gStacktrace.mInitialized) {
+        Debug::InitializeStacktrace();
+        ASSERT_MSG(gStacktrace.mInitialized, "Failed to initialize stacktrace capture");
+    }  
 
-    ASSERT(tok->type == CJ5_TOKEN_OBJECT);
-    ASSERT(index < tok->size);
+    IMAGEHLP_LINE64 line;
+    uint8* symbolBuffer[sizeof(IMAGEHLP_SYMBOL64) + PATH_CHARS_MAX];
+    IMAGEHLP_SYMBOL64* symbol = reinterpret_cast<IMAGEHLP_SYMBOL64*>(symbolBuffer);
+    memset(symbol, 0, sizeof(IMAGEHLP_SYMBOL64) + PATH_CHARS_MAX);
+    symbol->SizeOfStruct = sizeof(IMAGEHLP_SYMBOL64);
+    symbol->MaxNameLength = PATH_CHARS_MAX;
+
+    EnterCriticalSection(&gStacktrace.mMutex);
+    for (uint16 i = 0; i < numStacktrace; i++) {
+        DebugStacktraceEntry entry = {};
+        if (_SymGetSymFromAddr64(gStacktrace.mProcess, (DWORD64)stackframes[i], &entry.offsetFromSymbol, symbol)) {
+            Str::Copy(entry.name, sizeof(entry.name), symbol->Name);
+        } 
+        else {
+            DWORD gle = GetLastError();
+            if (gle != ERROR_INVALID_ADDRESS && gle != ERROR_MOD_NOT_FOUND) {
+                Debug::Print("_SymGetSymFromAddr64 failed");
+                break;
+            }
+            Str::Copy(entry.name, sizeof(entry.name), "[NA]");
+        }
+
+        if (_SymGetLineFromAddr64(gStacktrace.mProcess, (DWORD64)stackframes[i], (PDWORD)&(entry.offsetFromLine), &line)) {
+            entry.line = line.LineNumber;
+            Str::Copy(entry.filename, PATH_CHARS_MAX, line.FileName);
+        } 
+        else {
+            DWORD gle = GetLastError();
+            if (gle != ERROR_INVALID_ADDRESS && gle != ERROR_MOD_NOT_FOUND) {
+                Debug::Print("_SymGetLineFromAddr64 failed");
+                break;
+            }
+            Str::Copy(entry.filename, PATH_CHARS_MAX, "[NA]");
+        }
+
+        memcpy(&entries[i], &entry, sizeof(DebugStacktraceEntry));
+    }
+    LeaveCriticalSection(&gStacktrace.mMutex);
+}
+
+void Debug::StacktraceSaveStopPoint(void*)
+{
+}
+
+DebugStacktraceContext::DebugStacktraceContext() : mDbgHelp(nullptr), mProcess(nullptr)
+{
+    if constexpr (!CONFIG_FINAL_BUILD) {
+        InitializeCriticalSectionAndSpinCount(&mMutex, 32);
+        Debug::InitializeStacktrace();
+    }
+}
+
+DebugStacktraceContext::~DebugStacktraceContext()
+{
+    if (mInitialized) {
+        ASSERT(mDbgHelp);
+        ASSERT(_SymCleanup);
+
+        EnterCriticalSection(&mMutex);
+        _SymCleanup(mProcess);
+        FreeLibrary(mDbgHelp);
+        mDbgHelp = nullptr;
+        LeaveCriticalSection(&mMutex);
+
+        #if defined(TRACY_ENABLE)
+        DeleteCriticalSection(&mMutex);
+        #endif
+    }
+}
+
+
+static const char* RDBG_PIPE_NAME_PREFIX = "\\\\.\\pipe\\";
+static constexpr uint32 RDBG_BUFFER_SIZE = 8*SIZE_KB;
+
+struct RDBG_Context
+{
+    OSProcess remedybgProc;
+    HANDLE cmdPipe = INVALID_HANDLE_VALUE;
+};
+static RDBG_Context gRemedyBG;
+
+namespace RDBG
+{
+    static Blob SendCommand(const Blob& cmdBuffer, MemAllocator* outBufferAlloc)
+    {
+        ASSERT(gRemedyBG.cmdPipe != INVALID_HANDLE_VALUE);
+
+        uint8 tempBuffer[RDBG_BUFFER_SIZE];
+        DWORD bytesRead;
+        Blob outBuffer(outBufferAlloc);
+        outBuffer.SetGrowPolicy(Blob::GrowPolicy::Linear);
+
+        BOOL r = TransactNamedPipe(gRemedyBG.cmdPipe, const_cast<void*>(cmdBuffer.Data()), DWORD(cmdBuffer.Size()), tempBuffer, sizeof(tempBuffer), &bytesRead, nullptr);
+        if (r)
+            outBuffer.Write(tempBuffer, bytesRead);
+
+        while (!r && GetLastError() == ERROR_MORE_DATA) {
+            r = ReadFile(gRemedyBG.cmdPipe, tempBuffer, sizeof(tempBuffer), &bytesRead, nullptr);
+            if (r)
+                outBuffer.Write(tempBuffer, bytesRead);
+        }
+
+        if (!r) {
+            LOG_ERROR("Reading RemedyBG pipe failed");
+            RDBG::Release();
+            return outBuffer;
+        }
+
+        return outBuffer;
+    }
+
+    static inline rdbg_CommandResult GetResult(Blob& resultBuff)
+    {
+        uint16 res;
+        resultBuff.Read<uint16>(&res);
+        return rdbg_CommandResult(res);
+    }
+}
+
+bool RDBG::Initialize(const char* serverName, const char* remedybgPath)
+{
+    ASSERT(remedybgPath);
+    ASSERT_MSG(gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE, "RemedyBG is initialized before");
+
+    ASSERT_MSG(!OS::IsDebuggerPresent(), "Another debugger is already attached to this executable");
+    ASSERT_ALWAYS(Str::Len(serverName) <= RDBG_MAX_SERVERNAME_LEN, "ServerName is too long for RemedyBG sessions: %s", serverName);
+
+    Path remedybgCmdline(remedybgPath);
+    remedybgCmdline.Append(" --servername ");
+    remedybgCmdline.Append(serverName);
+    if (!gRemedyBG.remedybgProc.Run(remedybgCmdline.CStr(), OSProcessFlags::None)) {
+        LOG_ERROR("RemedyBG: Could not run RemedyBG instance '%s'", remedybgPath);
+        return false;
+    }
+    while (!gRemedyBG.remedybgProc.IsRunning())
+        Thread::Sleep(20);
+    Thread::Sleep(200);   // wait a little more so remedybg gets it's shit together
+
+    String<256> pipeName(RDBG_PIPE_NAME_PREFIX);
+    pipeName.Append(serverName);
+
+    gRemedyBG.cmdPipe = CreateFileA(pipeName.CStr(), GENERIC_READ|GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE) {
+        LOG_ERROR("RemedyBG: Creating command pipe failed");
+        return false;
+    }
     
-    for (int i = mTokenId + 1, count = 0, ic = r->num_tokens; i < ic && count < tok->size; i+=2) {
-        ASSERT(r->tokens[i].type == CJ5_TOKEN_STRING);
-        if (r->tokens[i].parent_id == mTokenId) {
-            if (count == index)
-                return JsonNode(mCtx, i + 1, index);       // get next 'value' token
-            count++;
+    DWORD newMode = PIPE_READMODE_MESSAGE;
+    if (!SetNamedPipeHandleState(gRemedyBG.cmdPipe, &newMode, nullptr, nullptr)) {
+        LOG_ERROR("RemedyBG: SetNamedPipeHandleState failed");
+        return false;
+    }
+
+    if (RDBG::AttachToProcess(0)) {
+        LOG_DEBUG("RemedyBG launched and attached to the process");
+        return true;
+    }
+    else {
+        LOG_ERROR("Attaching RemedyBG debugger to the current process failed");
+        return false;
+    }
+}
+
+void RDBG::Release()
+{
+    if (gRemedyBG.cmdPipe != INVALID_HANDLE_VALUE) 
+        CloseHandle(gRemedyBG.cmdPipe);
+    gRemedyBG.cmdPipe = INVALID_HANDLE_VALUE;
+    if (gRemedyBG.remedybgProc.IsValid())
+        gRemedyBG.remedybgProc.Abort();
+}
+
+#define DEBUG_REMEDYBG_BEGINCOMMAND(_cmd)   \
+    MemTempAllocator tempAlloc; \
+    Blob cmdBuffer(&tempAlloc); \
+    cmdBuffer.SetGrowPolicy(Blob::GrowPolicy::Linear); \
+    cmdBuffer.Write<uint16>(_cmd)
+
+bool RDBG::AttachToProcess(uint32 id)
+{
+    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
+        return 0;
+
+    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ATTACH_TO_PROCESS_BY_PID);
+
+    if (id == 0)
+        id = GetCurrentProcessId();
+
+    cmdBuffer.Write<uint32>(id);
+    cmdBuffer.Write<rdbg_Bool>(true);
+    cmdBuffer.Write<uint8>(RDBG_IF_DEBUGGING_TARGET_STOP_DEBUGGING);
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
+}
+
+bool RDBG::DetachFromProcess()
+{
+    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
+        return 0;
+
+    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_DETACH_FROM_PROCESS);
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
+}
+
+bool RDBG::Break()
+{
+    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
+        return 0;
+    
+    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_BREAK_EXECUTION);
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
+}
+
+bool RDBG::Continue()
+{
+    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_CONTINUE_EXECUTION);
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
+}
+
+bool RDBG::RunToFileAtLine(const char* filename, uint32 line)
+{
+    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
+        return 0;
+
+    ASSERT(filename);
+    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_RUN_TO_FILE_AT_LINE);
+    cmdBuffer.WriteStringBinary16(filename);
+    cmdBuffer.Write<uint32>(line);
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
+}
+
+RDBG_Id RDBG::AddFunctionBreakpoint(const char* funcName, const char* conditionExpr, uint32 overloadId)
+{
+    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
+        return 0;
+
+    ASSERT(funcName);
+    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ADD_BREAKPOINT_AT_FUNCTION);
+    cmdBuffer.WriteStringBinary16(funcName);
+    cmdBuffer.Write<uint32>(overloadId);
+    cmdBuffer.WriteStringBinary16(conditionExpr ? conditionExpr : "");
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+
+    RDBG_Id bid = 0;
+    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
+        res.Read<RDBG_Id>(&bid);
+    return bid;
+}
+
+RDBG_Id RDBG::AddFileLineBreakpoint(const char* filename, uint32 line, const char* conditionExpr)
+{
+    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
+        return 0;
+
+    ASSERT(filename);
+    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ADD_BREAKPOINT_AT_FILENAME_LINE);
+    cmdBuffer.WriteStringBinary16(filename);
+    cmdBuffer.Write<uint32>(line);
+    cmdBuffer.WriteStringBinary16(conditionExpr ? conditionExpr : "");
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+
+    RDBG_Id bid = 0;
+    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
+        res.Read<RDBG_Id>(&bid);
+    return bid;
+}
+
+RDBG_Id RDBG::AddAddressBreakpoint(uintptr_t addr, const char* conditionExpr)
+{
+    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
+        return 0;
+
+    ASSERT(addr);
+    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ADD_BREAKPOINT_AT_ADDRESS);
+    cmdBuffer.Write<uint64>(addr);
+    cmdBuffer.WriteStringBinary16(conditionExpr ? conditionExpr : "");
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+
+    RDBG_Id bid = 0;
+    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
+        res.Read<RDBG_Id>(&bid);
+    return bid;
+}
+
+RDBG_Id RDBG::AddProcessorBreakpoint(const void* addr, uint8 numBytes, RDBG_ProcessorBreakpointType type, const char* conditionExpr)
+{
+    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
+        return 0;
+
+    ASSERT_MSG(numBytes <= 8, "Processor breakpoints cannot be more than 8 bytes");
+
+    ASSERT(addr);
+    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ADD_PROCESSOR_BREAKPOINT);
+
+    char addrExpr[64];
+    Str::PrintFmt(addrExpr, sizeof(addrExpr), "0x%llx", addr);
+    cmdBuffer.WriteStringBinary16(addrExpr);
+    cmdBuffer.Write<uint8>(numBytes);
+    cmdBuffer.Write<uint8>(uint8(type));
+    cmdBuffer.WriteStringBinary16(conditionExpr ? conditionExpr : "");
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+
+    RDBG_Id bid = 0;
+    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
+        res.Read<RDBG_Id>(&bid);
+
+    return bid;
+}
+
+bool RDBG::EnableBreakpoint(RDBG_Id bId, bool enable)
+{
+    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
+        return 0;
+
+    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ENABLE_BREAKPOINT);
+    cmdBuffer.Write<rdbg_Id>(bId);
+    cmdBuffer.Write<rdbg_Bool>(enable);
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
+}
+
+bool RDBG::SetBreakpointCondition(RDBG_Id bId, const char* conditionExpr)
+{
+    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
+        return 0;
+
+    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ENABLE_BREAKPOINT);
+    cmdBuffer.Write<rdbg_Id>(bId);
+    cmdBuffer.WriteStringBinary16(conditionExpr ? conditionExpr : "");
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
+}
+
+bool RDBG::DeleteBreakpoint(RDBG_Id bId)
+{
+    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
+        return 0;
+
+    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_DELETE_BREAKPOINT);
+    cmdBuffer.Write<rdbg_Id>(bId);
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
+}
+
+bool RDBG::DeleteAllBreakpoints()
+{
+    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
+        return 0;
+
+    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_DELETE_ALL_BREAKPOINTS);
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
+}
+
+RDBG_Id RDBG::AddWatch(const char* expr, const char* comment, uint8 windowNum)
+{
+    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
+        return 0;
+
+    ASSERT(expr);
+    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_ADD_WATCH);
+    cmdBuffer.Write<uint8>(windowNum);
+    cmdBuffer.WriteStringBinary16(expr);
+    cmdBuffer.WriteStringBinary16(comment ? comment : "");
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+
+    RDBG_Id wid = 0;
+    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
+        res.Read<RDBG_Id>(&wid);
+    return wid;
+}
+
+RDBG_Id RDBG::DeleteWatch(RDBG_Id wId)
+{
+    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
+        return 0;
+
+    ASSERT(wId);
+    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_DELETE_WATCH);
+    cmdBuffer.Write<rdbg_Id>(wId);
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+
+    RDBG_Id wid = 0;
+    if (RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK)
+        res.Read<RDBG_Id>(&wid);
+    return wid;
+}
+
+bool RDBG::DeleteAllWatches()
+{
+    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE)
+        return 0;
+
+    DEBUG_REMEDYBG_BEGINCOMMAND(RDBG_COMMAND_DELETE_ALL_WATCHES);
+    Blob res = RDBG::SendCommand(cmdBuffer, &tempAlloc);
+    return RDBG::GetResult(res) == RDBG_COMMAND_RESULT_OK;
+}
+
+#endif // PLATFORM_WINDOWS
+
+    #elif PLATFORM_POSIX
+//----------------------------------------------------------------------------------------------------------------------
+// DebugClang.cpp
+
+
+#if COMPILER_CLANG && !COMPILER_MSVC
+
+#include <unwind.h> // _Unwind_Backtrace
+#include <dlfcn.h>  // dladdr
+#include <cxxabi.h> // __cxa_demangle
+
+#if PLATFORM_ANDROID || PLATFORM_LINUX
+#include <malloc.h>
+#elif PLATFORM_APPLE
+#include <stdlib.h>    
+#endif
+
+
+
+
+#define DEBUG_STACKTRACE_SKIP_FRAMES 1
+#define DEBUG_STACKTRACE_HASH_SEED 0x0CCE41BB
+
+struct DebugStacktraceState
+{
+    void** current;
+    void** end;
+    uint16 framesToSkip;
+    uint16 numFrames;
+};
+
+static StaticArray<void*, 16> gDebugStopFuncs;
+
+namespace Debug
+{
+    static _Unwind_Reason_Code UnwindCallback(_Unwind_Context* context, void* arg)
+    {
+        DebugStacktraceState* state = reinterpret_cast<DebugStacktraceState*>(arg);
+
+        state->numFrames++;
+        if (state->numFrames <= state->framesToSkip)
+        return _URC_NO_REASON;
+
+        void* ip = reinterpret_cast<void*>(_Unwind_GetIP(context));
+        if (ip) {
+            bool endOfStack = false;
+            if (gDebugStopFuncs.Count()) {
+                void* fn = _Unwind_FindEnclosingFunction(ip);
+                endOfStack = gDebugStopFuncs.FindIf([fn](const void* _fn)->bool { return fn == _fn; }) != UINT32_MAX;
+            }
+
+            if (state->current == state->end || endOfStack)
+            return _URC_END_OF_STACK;
+            else
+            *state->current++ = ip;
+        }
+        return _URC_NO_REASON;
+    }
+}
+
+NO_INLINE uint16 Debug::CaptureStacktrace(void** stackframes, uint16 maxStackframes, uint16 framesToSkip, uint32* pHash)
+{
+    ASSERT(maxStackframes);
+    DebugStacktraceState state {stackframes, stackframes + maxStackframes, framesToSkip};
+    _Unwind_Backtrace(Debug::UnwindCallback, &state);
+    uint32 numStacktrace = PtrToInt<uint16>((void*)(state.current - stackframes));
+
+    if (pHash)
+        *pHash = Hash::Murmur32(stackframes, sizeof(void*)*numStacktrace, DEBUG_STACKTRACE_HASH_SEED);
+
+    return numStacktrace;
+}
+
+void Debug::ResolveStacktrace(uint16 numStacktrace, void* const* stackframes, DebugStacktraceEntry* entries)
+{
+    for (uint16 i = 0; i < numStacktrace; i++) {
+        memset(&entries[i], 0x0, sizeof(entries[i]));
+
+        const void* addr = stackframes[i];
+        Dl_info info;
+        if (dladdr(addr, &info)) {
+            Str::Copy(entries[i].filename, sizeof(entries[i].filename), info.dli_fname);
+            Str::Copy(entries[i].name, sizeof(entries[i].name), info.dli_sname);
+
+            int status = 0;
+            char* demangled = abi::__cxa_demangle(entries[i].name, 0, 0, &status);
+            if (status == 0)
+                Str::Copy(entries[i].name, sizeof(entries[i].name), demangled);
+            ::free(demangled);
         }
     }
-    return JsonNode(mCtx, -1);
 }
 
-JsonNode JsonNode::GetNextChildItem(const JsonNode& curChildItem) const
+void Debug::StacktraceSaveStopPoint(void* funcPtr)
 {
-    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
-    const cj5_token* tok = &r->tokens[mTokenId];
+    ASSERT(funcPtr);
+    ASSERT_MSG(gDebugStopFuncs.FindIf([funcPtr](const void* fn)->bool { return funcPtr == fn; }) == UINT32_MAX, 
+               "Function pointer is already saved");
+    gDebugStopFuncs.Push(funcPtr);
+}
 
-    ASSERT(curChildItem.mItemIndex < tok->size);
+#endif // COMPILER_CLANG
 
-    int nextIndex = curChildItem.mItemIndex + 1;
-    if (nextIndex == tok->size) 
-        return JsonNode(mCtx, -1);
 
-    for (int i = curChildItem.mTokenId + 1, ic = r->num_tokens; i < ic; i+=2) {
-        if (r->tokens[i].parent_id == mTokenId)
-            return JsonNode(mCtx, i + 1, nextIndex);
+    #endif
+#endif 
+
+static bool gDebugCaptureStacktraceForFiberProtector;
+
+void Debug::Print(const char* text)
+{
+    #if PLATFORM_WINDOWS
+        OS::Win32PrintToDebugger(text);
+    #elif PLATFORM_ANDROID
+        OS::AndroidPrintToLog(OSAndroidLogType::Debug, CONFIG_APP_NAME, text);
+    #else
+        puts(text);
+    #endif
+}
+
+void Debug::SetCaptureStacktraceForFiberProtector(bool capture)
+{
+    gDebugCaptureStacktraceForFiberProtector = capture;
+}
+
+#if CONFIG_ENABLE_ASSERT
+static constexpr uint16 kDebugMaxFiberProtectorStackframes = 8;
+
+using DebugFiberScopeProtectorCallbackPair = Pair<DebugFiberScopeProtectorCallback, void*>;
+struct DebugFiberProtector
+{
+    StaticArray<DebugFiberScopeProtectorCallbackPair, 4> callbacks;
+};
+
+struct DebugFiberProtectorThreadContext
+{
+    struct Item 
+    {
+        const char* name;
+        void* stackframes[kDebugMaxFiberProtectorStackframes];
+        uint16 numStackframes;
+        uint16 id;
+    };
+
+    ~DebugFiberProtectorThreadContext()
+    {
+        items.Free();
     }
 
-    return JsonNode(mCtx, -1);
+    uint16 idGen;
+    Array<Item> items;
+};
+ 
+static DebugFiberProtector gFiberProtector;
+NO_INLINE static DebugFiberProtectorThreadContext& FiberProtectorCtx() 
+{ 
+    static thread_local DebugFiberProtectorThreadContext fiberProtectorCtx;
+    return fiberProtectorCtx; 
 }
 
-JsonNode JsonNode::GetArrayItem(uint32 _index) const
+void Debug::FiberScopeProtector_RegisterCallback(DebugFiberScopeProtectorCallback callback, void* userData)
 {
-    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
-    const cj5_token* tok = &r->tokens[mTokenId];
-    int index = (int)_index;
-    ASSERT(tok->type == CJ5_TOKEN_ARRAY);
-    ASSERT(index < tok->size);
-    for (int i = mTokenId + 1, count = 0, ic = r->num_tokens; i < ic && count < tok->size; i++) {
-        if (r->tokens[i].parent_id == mTokenId) {
-            if (count == index)
-                return JsonNode(mCtx, i, _index);
-            count++;
+    ASSERT_MSG(gFiberProtector.callbacks.FindIf([callback](const DebugFiberScopeProtectorCallbackPair& p) { return p.first == callback; }) == UINT32_MAX,
+               "Callback already added");
+    gFiberProtector.callbacks.Push(DebugFiberScopeProtectorCallbackPair(callback, userData));
+}
+
+INLINE bool debugFiberScopeProtector_IsInFiber()
+{
+    bool inFiber = false;
+    for (const DebugFiberScopeProtectorCallbackPair p : gFiberProtector.callbacks)
+        inFiber |= p.first(p.second);
+    return inFiber;
+}
+
+uint16 Debug::FiberScopeProtector_Push(const char* name)
+{
+    if (debugFiberScopeProtector_IsInFiber()) {
+        ASSERT(name);
+        DebugFiberProtectorThreadContext::Item* item = FiberProtectorCtx().items.Push();
+        memset(item, 0x0, sizeof(*item));
+        item->name = name;
+        if (gDebugCaptureStacktraceForFiberProtector) 
+            item->numStackframes = Debug::CaptureStacktrace(item->stackframes, kDebugMaxFiberProtectorStackframes, 2);
+        uint16 id = ++FiberProtectorCtx().idGen;
+        if (id == 0)
+            id = 1;
+        item->id = id;
+        return id;
+    }
+    return 0;
+}
+
+void Debug::FiberScopeProtector_Pop(uint16 id)
+{
+    if (id == 0)
+        return;
+    
+    ASSERT_MSG(debugFiberScopeProtector_IsInFiber(), "Item was pushed in the fiber, but not popping in any fibers");
+    ASSERT(FiberProtectorCtx().items.Count());
+
+    uint32 index = FiberProtectorCtx().items.FindIf([id](const DebugFiberProtectorThreadContext::Item& item) { return item.id == id; });
+    ASSERT_MSG(index != UINT32_MAX, "Something went wrong. Very likely, you are not popping the protected item in the correct thread");
+    FiberProtectorCtx().items.Pop(index);
+}
+
+void Debug::FiberScopeProtector_Check()
+{
+    char msg[512];
+    
+    if (FiberProtectorCtx().items.Count()) {
+        Str::PrintFmt(msg, sizeof(msg), "Found %u protected items in the fiber that are not destructed in the scope:", FiberProtectorCtx().items.Count());
+        Debug::Print(msg);
+        if constexpr (PLATFORM_WINDOWS) Debug::Print("\n");
+        
+        DebugStacktraceEntry stacktraces[kDebugMaxFiberProtectorStackframes];
+        for (const DebugFiberProtectorThreadContext::Item& item : FiberProtectorCtx().items) {
+            Str::PrintFmt(msg, sizeof(msg), "\t%s:", item.name);
+            Debug::Print(msg);
+            if constexpr (PLATFORM_WINDOWS) Debug::Print("\n");
+            if (item.numStackframes) {
+                Debug::ResolveStacktrace(item.numStackframes, item.stackframes, stacktraces);
+                for (uint16 i = 0; i < item.numStackframes; i++) {
+                    Str::PrintFmt(msg, sizeof(msg), "\t\t%s(%u): %s", stacktraces[i].filename, stacktraces[i].line, stacktraces[i].name);
+                    Debug::Print(msg);
+                    if constexpr (PLATFORM_WINDOWS) Debug::Print("\n");
+                }
+            }
+        }
+
+        DEBUG_BREAK();
+    }
+}
+#else
+void Debug::FiberScopeProtector_RegisterCallback(DebugFiberScopeProtectorCallback, void*) {}
+uint16 Debug::FiberScopeProtector_Push(const char*) { return 0; }
+void Debug::FiberScopeProtector_Pop(uint16) {}
+void Debug::FiberScopeProtector_Check() {}
+#endif  // CONFIG_ENABLE_ASSERT
+
+
+
+
+#if CPU_X86 && defined(__SSE4_2__)
+#if COMPILER_MSVC
+#include <intrin.h>     // _mm_crc32_u64
+#else
+#include <immintrin.h>
+#endif
+#endif
+
+
+/* This file is derived from crc32.c from the zlib-1.1.3 distribution
+ * by Jean-loup Gailly and Mark Adler.
+ */
+
+/* crc32.c -- compute the CRC-32 of a data stream
+ * Copyright (C) 1995-1998 Mark Adler
+ * For conditions of distribution and use, see copyright notice in zlib.h
+ */
+
+
+/* ========================================================================
+*  Table of CRC-32's of all single-byte values (made by make_crc_table)
+*/
+static const uint32 HASH_CRC_TABLE[256] = {
+    0x00000000L, 0x77073096L, 0xee0e612cL, 0x990951baL, 0x076dc419L, 0x706af48fL, 0xe963a535L,
+    0x9e6495a3L, 0x0edb8832L, 0x79dcb8a4L, 0xe0d5e91eL, 0x97d2d988L, 0x09b64c2bL, 0x7eb17cbdL,
+    0xe7b82d07L, 0x90bf1d91L, 0x1db71064L, 0x6ab020f2L, 0xf3b97148L, 0x84be41deL, 0x1adad47dL,
+    0x6ddde4ebL, 0xf4d4b551L, 0x83d385c7L, 0x136c9856L, 0x646ba8c0L, 0xfd62f97aL, 0x8a65c9ecL,
+    0x14015c4fL, 0x63066cd9L, 0xfa0f3d63L, 0x8d080df5L, 0x3b6e20c8L, 0x4c69105eL, 0xd56041e4L,
+    0xa2677172L, 0x3c03e4d1L, 0x4b04d447L, 0xd20d85fdL, 0xa50ab56bL, 0x35b5a8faL, 0x42b2986cL,
+    0xdbbbc9d6L, 0xacbcf940L, 0x32d86ce3L, 0x45df5c75L, 0xdcd60dcfL, 0xabd13d59L, 0x26d930acL,
+    0x51de003aL, 0xc8d75180L, 0xbfd06116L, 0x21b4f4b5L, 0x56b3c423L, 0xcfba9599L, 0xb8bda50fL,
+    0x2802b89eL, 0x5f058808L, 0xc60cd9b2L, 0xb10be924L, 0x2f6f7c87L, 0x58684c11L, 0xc1611dabL,
+    0xb6662d3dL, 0x76dc4190L, 0x01db7106L, 0x98d220bcL, 0xefd5102aL, 0x71b18589L, 0x06b6b51fL,
+    0x9fbfe4a5L, 0xe8b8d433L, 0x7807c9a2L, 0x0f00f934L, 0x9609a88eL, 0xe10e9818L, 0x7f6a0dbbL,
+    0x086d3d2dL, 0x91646c97L, 0xe6635c01L, 0x6b6b51f4L, 0x1c6c6162L, 0x856530d8L, 0xf262004eL,
+    0x6c0695edL, 0x1b01a57bL, 0x8208f4c1L, 0xf50fc457L, 0x65b0d9c6L, 0x12b7e950L, 0x8bbeb8eaL,
+    0xfcb9887cL, 0x62dd1ddfL, 0x15da2d49L, 0x8cd37cf3L, 0xfbd44c65L, 0x4db26158L, 0x3ab551ceL,
+    0xa3bc0074L, 0xd4bb30e2L, 0x4adfa541L, 0x3dd895d7L, 0xa4d1c46dL, 0xd3d6f4fbL, 0x4369e96aL,
+    0x346ed9fcL, 0xad678846L, 0xda60b8d0L, 0x44042d73L, 0x33031de5L, 0xaa0a4c5fL, 0xdd0d7cc9L,
+    0x5005713cL, 0x270241aaL, 0xbe0b1010L, 0xc90c2086L, 0x5768b525L, 0x206f85b3L, 0xb966d409L,
+    0xce61e49fL, 0x5edef90eL, 0x29d9c998L, 0xb0d09822L, 0xc7d7a8b4L, 0x59b33d17L, 0x2eb40d81L,
+    0xb7bd5c3bL, 0xc0ba6cadL, 0xedb88320L, 0x9abfb3b6L, 0x03b6e20cL, 0x74b1d29aL, 0xead54739L,
+    0x9dd277afL, 0x04db2615L, 0x73dc1683L, 0xe3630b12L, 0x94643b84L, 0x0d6d6a3eL, 0x7a6a5aa8L,
+    0xe40ecf0bL, 0x9309ff9dL, 0x0a00ae27L, 0x7d079eb1L, 0xf00f9344L, 0x8708a3d2L, 0x1e01f268L,
+    0x6906c2feL, 0xf762575dL, 0x806567cbL, 0x196c3671L, 0x6e6b06e7L, 0xfed41b76L, 0x89d32be0L,
+    0x10da7a5aL, 0x67dd4accL, 0xf9b9df6fL, 0x8ebeeff9L, 0x17b7be43L, 0x60b08ed5L, 0xd6d6a3e8L,
+    0xa1d1937eL, 0x38d8c2c4L, 0x4fdff252L, 0xd1bb67f1L, 0xa6bc5767L, 0x3fb506ddL, 0x48b2364bL,
+    0xd80d2bdaL, 0xaf0a1b4cL, 0x36034af6L, 0x41047a60L, 0xdf60efc3L, 0xa867df55L, 0x316e8eefL,
+    0x4669be79L, 0xcb61b38cL, 0xbc66831aL, 0x256fd2a0L, 0x5268e236L, 0xcc0c7795L, 0xbb0b4703L,
+    0x220216b9L, 0x5505262fL, 0xc5ba3bbeL, 0xb2bd0b28L, 0x2bb45a92L, 0x5cb36a04L, 0xc2d7ffa7L,
+    0xb5d0cf31L, 0x2cd99e8bL, 0x5bdeae1dL, 0x9b64c2b0L, 0xec63f226L, 0x756aa39cL, 0x026d930aL,
+    0x9c0906a9L, 0xeb0e363fL, 0x72076785L, 0x05005713L, 0x95bf4a82L, 0xe2b87a14L, 0x7bb12baeL,
+    0x0cb61b38L, 0x92d28e9bL, 0xe5d5be0dL, 0x7cdcefb7L, 0x0bdbdf21L, 0x86d3d2d4L, 0xf1d4e242L,
+    0x68ddb3f8L, 0x1fda836eL, 0x81be16cdL, 0xf6b9265bL, 0x6fb077e1L, 0x18b74777L, 0x88085ae6L,
+    0xff0f6a70L, 0x66063bcaL, 0x11010b5cL, 0x8f659effL, 0xf862ae69L, 0x616bffd3L, 0x166ccf45L,
+    0xa00ae278L, 0xd70dd2eeL, 0x4e048354L, 0x3903b3c2L, 0xa7672661L, 0xd06016f7L, 0x4969474dL,
+    0x3e6e77dbL, 0xaed16a4aL, 0xd9d65adcL, 0x40df0b66L, 0x37d83bf0L, 0xa9bcae53L, 0xdebb9ec5L,
+    0x47b2cf7fL, 0x30b5ffe9L, 0xbdbdf21cL, 0xcabac28aL, 0x53b39330L, 0x24b4a3a6L, 0xbad03605L,
+    0xcdd70693L, 0x54de5729L, 0x23d967bfL, 0xb3667a2eL, 0xc4614ab8L, 0x5d681b02L, 0x2a6f2b94L,
+    0xb40bbe37L, 0xc30c8ea1L, 0x5a05df1bL, 0x2d02ef8dL
+};
+
+#define DO1(buf) crc = HASH_CRC_TABLE[((int)crc ^ (*buf++)) & 0xff] ^ (crc >> 8);
+#define DO2(buf) \
+    DO1(buf);    \
+    DO1(buf);
+#define DO4(buf) \
+    DO2(buf);    \
+    DO2(buf);
+#define DO8(buf) \
+    DO4(buf);    \
+    DO4(buf);
+
+uint32 Hash::CRC32(const void* data, size_t len, uint32 seed)
+{
+    const uint8* buf = (const uint8*)data;
+    uint32 crc = seed ^ 0xffffffffL;
+
+    while (len >= 8) {
+        DO8(buf);
+        len -= 8;
+    }
+
+    while (len--) {
+        DO1(buf);
+    }
+
+    crc ^= 0xffffffffL;
+
+    return crc;
+}
+
+#if CPU_X86 && defined(__SSE4_2__)
+uint32 Hash::CRC32_x86_Aligned(const void* data, size_t len)
+{
+    ASSERT_MSG(len % 8 == 0, "Data must be aligned to 8 bytes");
+    
+    const uint64* M64 = (const uint64*)data;
+    uint64 hash = 0;
+    len >>= 3;
+    for (uint32 i = 0; i < len; ++i)
+        hash = _mm_crc32_u64(hash, M64[i]);
+    
+    return (uint32)hash;
+}
+#endif
+
+namespace Hash
+{
+    FORCE_INLINE uint32 rotl32(uint32 x, int8 r)
+    {
+        return (x << r) | (x >> (32 - r));
+    }
+
+    FORCE_INLINE uint64 rotl64(uint64 x, int8 r)
+    {
+        return (x << r) | (x >> (64 - r));
+    }
+
+    #define	ROTL32(x,y)	rotl32(x,y)
+    #define ROTL64(x,y)	rotl64(x,y)
+    #define BIG_CONSTANT(x) (x##LLU)
+    #define HASH_M 0x5bd1e995
+    #define HASH_R 24
+    #define MMIX(h, k) { k *= HASH_M; k ^= k >> HASH_R; k *= HASH_M; h *= HASH_M; h ^= k; }
+
+    #define getblock(p, i) (p[i])
+
+
+    FORCE_INLINE uint32 MurmurFmix32(uint32 h)
+    {
+        h ^= h >> 16;
+        h *= 0x85ebca6b;
+        h ^= h >> 13;
+        h *= 0xc2b2ae35;
+        h ^= h >> 16;
+    
+        return h;
+    }
+
+    FORCE_INLINE uint64 MurmurFmix64(uint64 k)
+    {
+        k ^= k >> 33;
+        k *= BIG_CONSTANT(0xff51afd7ed558ccd);
+        k ^= k >> 33;
+        k *= BIG_CONSTANT(0xc4ceb9fe1a85ec53);
+        k ^= k >> 33;
+    
+        return k;
+    }
+} // Hash
+
+uint32 Hash::Murmur32(const void * key, uint32 len, uint32 seed)
+{
+    const uint8 * data = (const uint8*)key;
+    const int nblocks = static_cast<int>(len / 4);
+    int i;
+
+    uint32 h1 = seed;
+    constexpr uint32 c1 = 0xcc9e2d51;
+    constexpr uint32 c2 = 0x1b873593;
+
+    auto blocks = reinterpret_cast<const uint32*>(data + nblocks*4);
+
+    for(i = -nblocks; i; i++) {
+        uint32 k1 = getblock(blocks,i);
+    
+        k1 *= c1;
+        k1 = ROTL32(k1,15);
+        k1 *= c2;
+    
+        h1 ^= k1;
+        h1 = ROTL32(h1,13);
+        h1 = h1*5+0xe6546b64;
+    }
+
+    auto tail = reinterpret_cast<const uint8*>(data + nblocks*4);
+    uint32 k1 = 0;
+
+    switch(len & 3) {
+    case 3: k1 ^= tail[2] << 16;
+    case 2: k1 ^= tail[1] << 8;
+    case 1: k1 ^= tail[0];
+        k1 *= c1; k1 = ROTL32(k1,15); k1 *= c2; h1 ^= k1;
+    }
+
+    h1 ^= len;
+    return MurmurFmix32(h1);
+}
+
+HashResult128 Hash::Murmur128(const void * key, size_t len, const uint32 seed)
+{
+    const uint8 * data = (const uint8*)key;
+    const size_t nblocks = len / 16;
+    size_t i;
+
+    uint64 h1 = seed;
+    uint64 h2 = seed;
+
+    uint64 c1 = BIG_CONSTANT(0x87c37b91114253d5);
+    uint64 c2 = BIG_CONSTANT(0x4cf5ad432745937f);
+
+    const uint64 * blocks = (const uint64 *)(data);
+
+    for(i = 0; i < nblocks; i++)
+    {
+        uint64 k1 = getblock(blocks,i*2+0);
+        uint64 k2 = getblock(blocks,i*2+1);
+    
+        k1 *= c1; k1  = ROTL64(k1,31); k1 *= c2; h1 ^= k1;
+        h1 = ROTL64(h1,27); h1 += h2; h1 = h1*5+0x52dce729;
+        k2 *= c2; k2  = ROTL64(k2,33); k2 *= c1; h2 ^= k2;
+        h2 = ROTL64(h2,31); h2 += h1; h2 = h2*5+0x38495ab5;
+    }
+
+    const uint8* tail = reinterpret_cast<const uint8*>(data + nblocks*16);
+
+    uint64 k1 = 0;
+    uint64 k2 = 0;
+
+    switch(len & 15)
+    {
+    case 15: k2 ^= (uint64)(tail[14]) << 48;
+    case 14: k2 ^= (uint64)(tail[13]) << 40;
+    case 13: k2 ^= (uint64)(tail[12]) << 32;
+    case 12: k2 ^= (uint64)(tail[11]) << 24;
+    case 11: k2 ^= (uint64)(tail[10]) << 16;
+    case 10: k2 ^= (uint64)(tail[ 9]) << 8;
+    case  9: k2 ^= (uint64)(tail[ 8]) << 0;
+        k2 *= c2; k2  = ROTL64(k2,33); k2 *= c1; h2 ^= k2;
+    
+    case  8: k1 ^= (uint64)(tail[ 7]) << 56;
+    case  7: k1 ^= (uint64)(tail[ 6]) << 48;
+    case  6: k1 ^= (uint64)(tail[ 5]) << 40;
+    case  5: k1 ^= (uint64)(tail[ 4]) << 32;
+    case  4: k1 ^= (uint64)(tail[ 3]) << 24;
+    case  3: k1 ^= (uint64)(tail[ 2]) << 16;
+    case  2: k1 ^= (uint64)(tail[ 1]) << 8;
+    case  1: k1 ^= (uint64)(tail[ 0]) << 0;
+        k1 *= c1; k1  = ROTL64(k1,31); k1 *= c2; h1 ^= k1;
+    }
+
+    h1 ^= len; h2 ^= len;
+
+    h1 += h2;
+    h2 += h1;
+
+    h1 = MurmurFmix64(h1);
+    h2 = MurmurFmix64(h2);
+
+    h1 += h2;
+    h2 += h1;
+
+    return {
+        .h1 = h1,
+        .h2 = h2
+    };
+}
+
+HashMurmur32Incremental::HashMurmur32Incremental(uint32 seed) : 
+    mHash(seed),
+    mTail(0),
+    mCount(0),
+    mSize(0)
+{
+}
+
+HashMurmur32Incremental& HashMurmur32Incremental::AddAny(const void* _data, uint32 _size)
+{
+    if (!_data || !_size)
+        return *this;
+
+    const uint8* key = (const uint8*)_data;
+    mSize += _size;
+    
+    Murmur32MixTail(&key, &_size);
+    
+    while (_size >= 4)	{
+        uint32 k = *((const uint32*)key);
+        
+        MMIX(mHash, k);
+        
+        key += 4;
+        _size -= 4;
+    }
+    
+    Murmur32MixTail(&key, &_size);
+    return *this;
+}
+
+HashMurmur32Incremental& HashMurmur32Incremental::AddCStringArray(const char** _strs, uint32 _numStrings)
+{
+    if (!_strs || !_numStrings) 
+        return *this;
+
+    for (uint32 i = 0; i < _numStrings; i++) 
+        AddAny(_strs[i], Str::Len(_strs[i]));
+
+    return *this;
+}
+
+uint32 HashMurmur32Incremental::Hash()
+{
+    MMIX(mHash, mTail);
+    MMIX(mHash, mSize);
+    
+    mHash ^= mHash >> 13;
+    mHash *= HASH_M;
+    mHash ^= mHash >> 15;
+    
+    return mHash;
+}
+
+void HashMurmur32Incremental::Murmur32MixTail(const uint8** pData, uint32* pSize)
+{
+    uint32 size = *pSize;
+    const uint8* data = *pData;
+    
+    while (size && ((size<4) || mCount)) {
+        mTail |= (*data++) << (mCount * 8);
+        
+        mCount++;
+        size--;
+        
+        if (mCount == 4)	{
+            MMIX(mHash, mTail);
+            mTail = 0;
+            mCount = 0;
         }
     }
-    return JsonNode(mCtx, -1);
+    
+    *pData = data;
+    *pSize = size;
 }
 
-JsonNode JsonNode::GetNextArrayItem(const JsonNode& curItem) const
+
+FORCE_INLINE uint32 hashTableFibHash(uint32 h, int bits)
 {
-    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
-    const cj5_token* tok = &r->tokens[mTokenId];
-    int index = curItem.mItemIndex + 1;
-    ASSERT(tok->type == CJ5_TOKEN_ARRAY);
+    uint64 h64 = static_cast<uint64>(h);
+    h64 ^= (h64 >> bits);
+    return static_cast<uint32>((h64 * 11400714819323198485llu) >> bits);
+}
 
-    if (index == tok->size) 
-        return JsonNode(mCtx, -1);
-
-    int startId = curItem.mTokenId <= 0 ? (mTokenId + 1) : (curItem.mTokenId + 1);
-    for (int i = startId, ic = r->num_tokens; i < ic; i++) {
-        if (r->tokens[i].parent_id == mTokenId)
-            return JsonNode(mCtx, i, index);
+FORCE_INLINE uint32 hashTableCalcBitShift(uint32 n)
+{
+    uint32 c = 0;
+    uint32 un = n;
+    while (un > 1) {
+        c++;
+        un >>= 1;
     }
-    return JsonNode(mCtx, -1);
+    return 64 - c;
+}
+
+FORCE_INLINE constexpr int hashTableNearestPow2(int n)
+{
+    n--;
+    n |= n >> 1;
+    n |= n >> 2;
+    n |= n >> 4;
+    n |= n >> 8;
+    n |= n >> 16;
+    n++;
+    return n;
+}
+
+_private::HashTableData* _private::hashtableCreate(uint32 capacity, uint32 valueStride, MemAllocator* alloc)
+{
+    ASSERT(capacity > 0);
+    
+    capacity = hashTableNearestPow2(capacity);   
+    
+    MemSingleShotMalloc<HashTableData> mallocator;
+    mallocator.AddMemberArray<uint32>(offsetof(HashTableData, keys), capacity)
+              .AddMemberArray<uint8>(offsetof(HashTableData, values), valueStride*capacity);
+    HashTableData* tbl = mallocator.Calloc(alloc);
+    
+    tbl->bitshift = hashTableCalcBitShift(capacity);
+    tbl->valueStride = valueStride;
+    tbl->count = 0;
+    tbl->capacity = capacity;
+    
+    return tbl;
+}
+
+size_t _private::hashtableGetMemoryRequirement(uint32 capacity, uint32 valueStride)
+{
+    ASSERT(capacity > 0);
+    
+    capacity = hashTableNearestPow2(capacity);
+    MemSingleShotMalloc<HashTableData> mallocator;
+    return mallocator.AddMemberArray<uint32>(offsetof(HashTableData, keys), capacity)
+                     .AddMemberArray<uint8>(offsetof(HashTableData, values), valueStride*capacity)
+                     .GetMemoryRequirement();        
+}
+
+void _private::hashtableDestroy(HashTableData* tbl, MemAllocator* alloc)
+{
+    ASSERT(tbl);
+    tbl->count = tbl->capacity = 0;
+
+    MemSingleShotMalloc<HashTableData>::Free(tbl, alloc);
+}
+
+bool _private::hashtableGrow(HashTableData** pTbl, MemAllocator* alloc)
+{
+    HashTableData* tbl = *pTbl;
+    HashTableData* newTable = hashtableCreate(tbl->capacity << 1, tbl->valueStride, alloc);
+    if (!newTable)
+        return false;
+    
+    for (uint32 i = 0, c = tbl->capacity; i < c; i++) {
+        if (tbl->keys[i] > 0) {
+            hashtableAdd(newTable, tbl->keys[i], tbl->values + i * tbl->valueStride);
+        }
+    }
+    
+    hashtableDestroy(tbl, alloc);
+    *pTbl = newTable;
+    return true;
+}
+
+uint32 _private::hashtableAdd(HashTableData* tbl, uint32 key, const void* value)
+{
+    uint32 h = _private::hashtableAddKey(tbl, key);
+    memcpy(tbl->values + tbl->valueStride * h, value, tbl->valueStride);
+    return h;
+}
+
+uint32 _private::hashtableAddKey(HashTableData* tbl, uint32 key)
+{
+    ASSERT(tbl->count < tbl->capacity);
+    
+    uint32 h = hashTableFibHash(key, tbl->bitshift);
+    uint32 cnt = (uint32)tbl->capacity;
+
+    if (tbl->keys[h]) {
+        for (uint32 i = 1; i < cnt; i++) {
+            uint32 index = (h + i) % cnt;
+            if (tbl->keys[index] == 0) {
+                h = index;
+                break;
+            }
+        }
+    }
+    
+    ASSERT_MSG(tbl->keys[h] == 0, "No free slot found in the hash-table");
+    tbl->keys[h] = key;
+    ++tbl->count;
+    return h;
+}
+
+uint32 _private::hashtableFind(const HashTableData* tbl, uint32 key)
+{
+    uint32 h = hashTableFibHash(key, tbl->bitshift);
+    uint32 cnt = (uint32)tbl->capacity;
+    if (tbl->keys[h] == key) {
+        return h;
+    } else {
+        for (uint32 i = 1; i < cnt; i++) {
+            uint32 index = (h + i) % cnt;
+            if (tbl->keys[index] == key)
+                return index;
+        }
+        
+        return INVALID_INDEX;    // Worst case: Not found!
+    }
+}
+
+void _private::hashtableClear(HashTableData* tbl)
+{
+    memset(tbl->keys, 0x0, sizeof(uint32) * tbl->capacity);
+    tbl->count = 0;
+}
+
+_private::HashTableData* _private::hashtableCreateWithBuffer(uint32 capacity, uint32 valueStride, void* buff, size_t size)
+{
+    ASSERT(capacity > 0);
+    
+    capacity = hashTableNearestPow2(capacity);   
+    
+    MemSingleShotMalloc<HashTableData> hashTableBuff;
+    hashTableBuff.AddMemberArray<uint32>(offsetof(HashTableData, keys), capacity)
+                 .AddMemberArray<uint8>(offsetof(HashTableData, values), valueStride*capacity);
+    HashTableData* tbl = hashTableBuff.Calloc(buff, size);
+    
+    tbl->bitshift = hashTableCalcBitShift(capacity);
+    tbl->valueStride = valueStride;
+    tbl->count = 0;
+    tbl->capacity = capacity;
+    
+    return tbl;
+}
+
+bool _private::hashtableGrowWithBuffer(HashTableData** pTbl, void* buff, size_t size)
+{
+    HashTableData* tbl = *pTbl;
+    HashTableData* newTable = hashtableCreateWithBuffer(tbl->capacity << 1, tbl->valueStride, buff, size);
+    if (!newTable)
+        return false;
+    
+    for (uint32 i = 0, c = tbl->capacity; i < c; i++) {
+        if (tbl->keys[i] > 0) {
+            hashtableAdd(newTable, tbl->keys[i], tbl->values + i * tbl->valueStride);
+        }
+    }
+    
+    *pTbl = newTable;
+    return true;
+}
+
+
+
+#define INI_IMPLEMENTATION
+#define INI_MALLOC(ctx, size)       Mem::Alloc(size, (MemAllocator*)ctx)
+#define INI_FREE(ctx, ptr)          Mem::Free(ptr, (MemAllocator*)ctx)
+#define INI_MEMCPY(dst, src, cnt)   memcpy(dst, src, cnt)
+#define INI_STRLEN(s)               Str::Len(s)
+#define INI_STRNICMP(s1, s2, cnt)   (Str::IsEqualNoCaseCount(s1, s2, cnt) ? 0 : 1)
+
+PRAGMA_DIAGNOSTIC_PUSH()
+PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wsign-compare")
+//----------------------------------------------------------------------------------------------------------------------
+// External/mgustavsson/ini.h
+
+/*
+------------------------------------------------------------------------------
+          Licensing information can be found at the end of the file.
+------------------------------------------------------------------------------
+
+ini.h - v1.2 - Simple ini-file reader for C/C++.
+
+Do this:
+    #define INI_IMPLEMENTATION
+before you include this file in *one* C/C++ file to create the implementation.
+*/
+
+#ifndef ini_h
+#define ini_h
+
+#define INI_GLOBAL_SECTION ( 0 )
+#define INI_NOT_FOUND ( -1 )
+
+typedef struct ini_t ini_t;
+
+ini_t* ini_create( void* memctx );
+ini_t* ini_load( char const* data, void* memctx );
+
+int ini_save( ini_t const* ini, char* data, int size );
+void ini_destroy( ini_t* ini );
+
+int ini_section_count( ini_t const* ini );
+char const* ini_section_name( ini_t const* ini, int section );
+
+int ini_property_count( ini_t const* ini, int section );
+char const* ini_property_name( ini_t const* ini, int section, int property );
+char const* ini_property_value( ini_t const* ini, int section, int property );
+
+int ini_find_section( ini_t const* ini, char const* name, int name_length );
+int ini_find_property( ini_t const* ini, int section, char const* name, int name_length );
+
+int ini_section_add( ini_t* ini, char const* name, int length );
+void ini_property_add( ini_t* ini, int section, char const* name, int name_length, char const* value, int value_length );
+void ini_section_remove( ini_t* ini, int section );
+void ini_property_remove( ini_t* ini, int section, int property );
+
+void ini_section_name_set( ini_t* ini, int section, char const* name, int length );
+void ini_property_name_set( ini_t* ini, int section, int property, char const* name, int length );
+void ini_property_value_set( ini_t* ini, int section, int property, char const* value, int length  );
+
+#endif /* ini_h */
+
+
+/**
+
+ini.h 
+=====
+
+Simple ini-file reader for C/C++.
+
+
+Examples
+--------
+
+#### Loading an ini file and retrieving values
+
+    #define INI_IMPLEMENTATION
+
+    #include <stdio.h>
+    #include <stdlib.h>
+
+    int main()
+        {
+        FILE* fp = fopen( "test.ini", "r" );
+        fseek( fp, 0, SEEK_END );
+        int size = ftell( fp );
+        fseek( fp, 0, SEEK_SET );
+        char* data = (char*) malloc( size + 1 );
+        fread( data, 1, size, fp );
+        data[ size ] = '\0';
+        fclose( fp );
+
+        ini_t* ini = ini_load( data );
+        free( data );
+        int second_index = ini_find_property( ini, INI_GLOBAL_SECTION, "SecondSetting" );
+        char const* second = ini_property_value( ini, INI_GLOBAL_SECTION, second_index );
+        printf( "%s=%s\n", "SecondSetting", second );
+        int section = ini_find_section( ini, "MySection" );
+        int third_index = ini_find_property( ini, section, "ThirdSetting" );
+        char const* third = ini_property_value( ini, section, third_index );
+        printf( "%s=%s\n", "ThirdSetting", third );
+        ini_destroy( ini );
+
+        return 0;
+        }
+
+-----------------------------------------------------------------------------------------------
+
+#### Creating a new ini file
+
+    #define INI_IMPLEMENTATION
+
+    #include <stdio.h>
+    #include <stdlib.h>
+
+    int main()
+        {       
+        ini_t* ini = ini_create();
+        ini_property_add( ini, INI_GLOBAL_SECTION, "FirstSetting", "Test" );
+        ini_property_add( ini, INI_GLOBAL_SECTION, "SecondSetting", "2" );
+        int section = ini_section_add( ini, "MySection" );
+        ini_property_add( ini, section, "ThirdSetting", "Three" );
+
+        int size = ini_save( ini, NULL, 0 ); // Find the size needed
+        char* data = (char*) malloc( size );
+        size = ini_save( ini, data, size ); // Actually save the file
+        ini_destroy( ini );
+
+        FILE* fp = fopen( "test.ini", "w" );
+        fwrite( data, 1, size, fp );
+        fclose( fp );
+        free( data );
+
+        return 0;
+        }
+
+
+
+API Documentation
+-----------------
+
+ini.h is a small library for reading classic .ini files. It is a single-header library, and does not need any .lib files 
+or other binaries, or any build scripts. To use it, you just include ini.h to get the API declarations. To get the 
+definitions, you must include ini.h from *one* single C or C++ file, and #define the symbol `INI_IMPLEMENTATION` before 
+you do. 
+
+
+### Customization
+
+There are a few different things in ini.h which are configurable by #defines. The customizations only affect the 
+implementation, so will only need to be defined in the file where you have the #define INI_IMPLEMENTATION.
+
+Note that if all customizations are utilized, ini.h will include no external files whatsoever, which might be useful
+if you need full control over what code is being built.
+
+
+#### Custom memory allocators
+
+To store the internal data structures, ini.h needs to do dynamic allocation by calling `malloc`. Programs might want to 
+keep track of allocations done, or use custom defined pools to allocate memory from. ini.h allows for specifying custom 
+memory allocation functions for `malloc` and `free`.
+This is done with the following code:
+
+    #define INI_IMPLEMENTATION
+    #define INI_MALLOC( ctx, size ) ( my_custom_malloc( ctx, size ) )
+    #define INI_FREE( ctx, ptr ) ( my_custom_free( ctx, ptr ) )
+
+where `my_custom_malloc` and `my_custom_free` are your own memory allocation/deallocation functions. The `ctx` parameter
+is an optional parameter of type `void*`. When `ini_create` or `ini_load` is called, you can pass in a `memctx` 
+parameter, which can be a pointer to anything you like, and which will be passed through as the `ctx` parameter to every 
+`INI_MALLOC`/`INI_FREE` call. For example, if you are doing memory tracking, you can pass a pointer to your tracking 
+data as `memctx`, and in your custom allocation/deallocation function, you can cast the `ctx` param back to the 
+right type, and access the tracking data.
+
+If no custom allocator is defined, ini.h will default to `malloc` and `free` from the C runtime library.
+
+
+#### Custom C runtime function
+
+The library makes use of three additional functions from the C runtime library, and for full flexibility, it allows you 
+to substitute them for your own. Here's an example:
+
+    #define INI_IMPLEMENTATION
+    #define INI_MEMCPY( dst, src, cnt ) ( my_memcpy_func( dst, src, cnt ) )
+    #define INI_STRLEN( s ) ( my_strlen_func( s ) )
+    #define INI_STRNICMP( s1, s2, cnt ) ( my_strnicmp_func( s1, s2, cnt ) )
+
+If no custom function is defined, ini.h will default to the C runtime library equivalent.
+
+
+ini_create
+----------
+    
+    ini_t* ini_create( void* memctx )
+
+Instantiates a new, empty ini structure, which can be manipulated with other API calls, to fill it with data. To save it
+out to an ini-file string, use `ini_save`. When no longer needed, it can be destroyed by calling `ini_destroy`.
+`memctx` is a pointer to user defined data which will be passed through to the custom INI_MALLOC/INI_FREE calls. It can 
+be NULL if no user defined data is needed.
+
+
+ini_load
+--------
+
+    ini_t* ini_load( char const* data, void* memctx )
+
+Parse the zero-terminated string `data` containing an ini-file, and create a new ini_t instance containing the data. 
+The instance can be manipulated with other API calls to enumerate sections/properties and retrieve values. When no 
+longer needed, it can be destroyed by calling `ini_destroy`. `memctx` is a pointer to user defined data which will be 
+passed through to the custom INI_MALLOC/INI_FREE calls. It can be NULL if no user defined data is needed.
+
+
+ini_save
+--------
+    
+    int ini_save( ini_t const* ini, char* data, int size )
+
+Saves an ini structure as a zero-terminated ini-file string, into the specified buffer. Returns the number of bytes 
+written, including the zero terminator. If `data` is NULL, nothing is written, but `ini_save` still returns the number
+of bytes it would have written. If the size of `data`, as specified in the `size` parameter, is smaller than that 
+required, only part of the ini-file string will be written. `ini_save` still returns the number of bytes it would have
+written had the buffer been large enough.
+
+
+ini_destroy
+-----------
+
+    void ini_destroy( ini_t* ini )
+
+Destroy an `ini_t` instance created by calling `ini_load` or `ini_create`, releasing the memory allocated by it. No
+further API calls are valid on an `ini_t` instance after calling `ini_destroy` on it.
+
+
+ini_section_count
+-----------------
+
+    int ini_section_count( ini_t const* ini )
+
+Returns the number of sections in an ini file. There's at least one section in an ini file (the global section), but 
+there can be many more, each specified in the file by the section name wrapped in square brackets [ ].
+
+
+ini_section_name
+----------------
+
+    char const* ini_section_name( ini_t const* ini, int section )
+
+Returns the name of the section with the specified index. `section` must be non-negative and less than the value 
+returned by `ini_section_count`, or `ini_section_name` will return NULL. The defined constant `INI_GLOBAL_SECTION` can
+be used to indicate the global section.
+
+
+ini_property_count
+------------------
+
+    int ini_property_count( ini_t const* ini, int section )
+
+Returns the number of properties belonging to the section with the specified index. `section` must be non-negative and 
+less than the value returned by `ini_section_count`, or `ini_section_name` will return 0. The defined constant 
+`INI_GLOBAL_SECTION` can be used to indicate the global section. Properties are declared in the ini-file on he format
+`name=value`.
+
+
+ini_property_name
+-----------------
+
+    char const* ini_property_name( ini_t const* ini, int section, int property )
+
+Returns the name of the property with the specified index `property` in the section with the specified index `section`.
+`section` must be non-negative and less than the value returned by `ini_section_count`, and `property` must be 
+non-negative and less than the value returned by `ini_property_count`, or `ini_property_name` will return NULL. The 
+defined constant `INI_GLOBAL_SECTION` can be used to indicate the global section.
+
+
+ini_property_value
+------------------
+
+    char const* ini_property_value( ini_t const* ini, int section, int property )
+
+Returns the value of the property with the specified index `property` in the section with the specified index `section`.
+`section` must be non-negative and less than the value returned by `ini_section_count`, and `property` must be 
+non-negative and less than the value returned by `ini_property_count`, or `ini_property_value` will return NULL. The 
+defined constant `INI_GLOBAL_SECTION` can be used to indicate the global section.
+
+
+ini_find_section
+----------------
+
+    int ini_find_section( ini_t const* ini, char const* name, int name_length )
+
+Finds the section with the specified name, and returns its index. `name_length` specifies the number of characters in
+`name`, which does not have to be zero-terminated. If `name_length` is zero, the length is determined automatically, but
+in this case `name` has to be zero-terminated. If no section with the specified name could be found, the value
+`INI_NOT_FOUND` is returned.
+
+
+ini_find_property
+-----------------
+
+    int ini_find_property( ini_t const* ini, int section, char const* name, int name_length )
+
+Finds the property with the specified name, within the section with the specified index, and returns the index of the 
+property. `name_length` specifies the number of characters in `name`, which does not have to be zero-terminated. If 
+`name_length` is zero, the length is determined automatically, but in this case `name` has to be zero-terminated. If no 
+property with the specified name could be found within the specified section, the value `INI_NOT_FOUND` is  returned.
+`section` must be non-negative and less than the value returned by `ini_section_count`, or `ini_find_property` will 
+return `INI_NOT_FOUND`. The defined constant `INI_GLOBAL_SECTION` can be used to indicate the global section.
+
+
+ini_section_add
+---------------
+
+    int ini_section_add( ini_t* ini, char const* name, int length )
+
+Adds a section with the specified name, and returns the index it was added at. There is no check done to see if a 
+section with the specified name already exists - multiple sections of the same name are allowed. `length` specifies the 
+number of characters in `name`, which does not have to be zero-terminated. If `length` is zero, the length is determined 
+automatically, but in this case `name` has to be zero-terminated.
+
+
+ini_property_add
+----------------
+    
+    void ini_property_add( ini_t* ini, int section, char const* name, int name_length, char const* value, int value_length )
+
+Adds a property with the specified name and value to the specified section, and returns the index it was added at. There 
+is no check done to see if a property with the specified name already exists - multiple properties of the same name are 
+allowed. `name_length` and `value_length` specifies the number of characters in `name` and `value`, which does not have 
+to be zero-terminated. If `name_length` or `value_length` is zero, the length is determined automatically, but in this 
+case `name`/`value` has to be zero-terminated. `section` must be non-negative and less than the value returned by
+`ini_section_count`, or the property will not be added. The defined constant `INI_GLOBAL_SECTION` can be used to 
+indicate the global section.
+
+
+ini_section_remove
+------------------
+
+    void ini_section_remove( ini_t* ini, int section )
+
+Removes the section with the specified index, and all properties within it. `section` must be non-negative and less than 
+the value returned by `ini_section_count`. The defined constant `INI_GLOBAL_SECTION` can be used to indicate the global 
+section. Note that removing a section will shuffle section indices, so that section indices you may have stored will no 
+longer indicate the same section as it did before the remove. Use the find functions to update your indices.
+
+
+ini_property_remove
+-------------------
+
+    void ini_property_remove( ini_t* ini, int section, int property )
+
+Removes the property with the specified index from the specified section. `section` must be non-negative and less than 
+the value returned by `ini_section_count`, and `property` must be non-negative and less than the value returned by 
+`ini_property_count`. The defined constant `INI_GLOBAL_SECTION` can be used to indicate the global section. Note that 
+removing a property will shuffle property indices within the specified section, so that property indices you may have 
+stored will no longer indicate the same property as it did before the remove. Use the find functions to update your 
+indices.
+
+
+ini_section_name_set
+--------------------
+
+    void ini_section_name_set( ini_t* ini, int section, char const* name, int length )
+
+Change the name of the section with the specified index. `section` must be non-negative and less than the value returned 
+by `ini_section_count`. The defined constant `INI_GLOBAL_SECTION` can be used to indicate the global section. `length` 
+specifies the number of characters in `name`, which does not have to be zero-terminated. If `length` is zero, the length 
+is determined automatically, but in this case `name` has to be zero-terminated.
+
+
+ini_property_name_set
+---------------------
+
+    void ini_property_name_set( ini_t* ini, int section, int property, char const* name, int length )
+
+Change the name of the property with the specified index in the specified section. `section` must be non-negative and 
+less than the value returned by `ini_section_count`, and `property` must be non-negative and less than the value 
+returned by `ini_property_count`. The defined constant `INI_GLOBAL_SECTION` can be used to indicate the global section.
+`length` specifies the number of characters in `name`, which does not have to be zero-terminated. If `length` is zero, 
+the length is determined automatically, but in this case `name` has to be zero-terminated.
+
+
+ini_property_value_set
+----------------------
+
+    void ini_property_value_set( ini_t* ini, int section, int property, char const* value, int length  )
+
+Change the value of the property with the specified index in the specified section. `section` must be non-negative and 
+less than the value returned by `ini_section_count`, and `property` must be non-negative and less than the value 
+returned by `ini_property_count`. The defined constant `INI_GLOBAL_SECTION` can be used to indicate the global section.
+`length` specifies the number of characters in `value`, which does not have to be zero-terminated. If `length` is zero, 
+the length is determined automatically, but in this case `value` has to be zero-terminated.
+
+*/
+
+
+/*
+----------------------
+    IMPLEMENTATION
+----------------------
+*/
+
+#ifdef INI_IMPLEMENTATION
+#undef INI_IMPLEMENTATION
+
+#define INITIAL_CAPACITY ( 256 )
+
+#undef _CRT_NONSTDC_NO_DEPRECATE 
+#define _CRT_NONSTDC_NO_DEPRECATE 
+#undef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#include <stddef.h>
+
+#ifndef INI_MALLOC
+    #include <stdlib.h>
+    #define INI_MALLOC( ctx, size ) ( malloc( size ) )
+    #define INI_FREE( ctx, ptr ) ( free( ptr ) )
+#endif
+
+#ifndef INI_MEMCPY
+    #include <string.h>
+    #define INI_MEMCPY( dst, src, cnt ) ( memcpy( dst, src, cnt ) )
+#endif 
+
+#ifndef INI_STRLEN
+    #include <string.h>
+    #define INI_STRLEN( s ) ( strlen( s ) )
+#endif 
+
+#ifndef INI_STRNICMP
+    #ifdef _WIN32
+        #include <string.h>
+        #define INI_STRNICMP( s1, s2, cnt ) ( strnicmp( s1, s2, cnt ) )
+    #else                           
+        #include <string.h>         
+        #define INI_STRNICMP( s1, s2, cnt ) ( strncasecmp( s1, s2, cnt ) )        
+    #endif
+#endif 
+
+
+struct ini_internal_section_t
+    {
+    char name[ 32 ];
+    char* name_large;
+    };
+
+
+struct ini_internal_property_t
+    {
+    int section;
+    char name[ 32 ];
+    char* name_large;
+    char value[ 64 ];
+    char* value_large;
+    };
+
+
+struct ini_t
+    {
+    struct ini_internal_section_t* sections;
+    int section_capacity;
+    int section_count;
+
+    struct ini_internal_property_t* properties;
+    int property_capacity;
+    int property_count;
+
+    void* memctx;
+    };
+
+
+static int ini_internal_property_index( ini_t const* ini, int section, int property )
+    {
+    int i;
+    int p;
+
+    if( ini && section >= 0 && section < ini->section_count )
+        {
+        p = 0;
+        for( i = 0; i < ini->property_count; ++i )
+            {
+            if( ini->properties[ i ].section == section )
+                {
+                if( p == property ) return i;
+                ++p;
+                }
+            }
+        }
+
+    return INI_NOT_FOUND;
+    }
+
+
+ini_t* ini_create( void* memctx )
+    {
+    ini_t* ini;
+
+    ini = (ini_t*) INI_MALLOC( memctx, sizeof( ini_t ) );
+    ini->memctx = memctx;
+    ini->sections = (struct ini_internal_section_t*) INI_MALLOC( ini->memctx, INITIAL_CAPACITY * sizeof( ini->sections[ 0 ] ) );
+    ini->section_capacity = INITIAL_CAPACITY;
+    ini->section_count = 1; /* global section */
+    ini->sections[ 0 ].name[ 0 ] = '\0'; 
+    ini->sections[ 0 ].name_large = 0;
+    ini->properties = (struct ini_internal_property_t*) INI_MALLOC( ini->memctx, INITIAL_CAPACITY * sizeof( ini->properties[ 0 ] ) );
+    ini->property_capacity = INITIAL_CAPACITY;
+    ini->property_count = 0;
+    return ini;
+    }
+
+
+ini_t* ini_load( char const* data, void* memctx )
+    {
+    ini_t* ini;
+    char const* ptr;
+    int s;
+    char const* start;
+    char const* start2;
+    int l;
+
+    ini = ini_create( memctx );
+
+    ptr = data;
+    if( ptr )
+        {
+        s = 0;
+        while( *ptr )
+            {
+            /* trim leading whitespace */
+            while( *ptr && *ptr <=' ' )
+                ++ptr;
+            
+            /* done? */
+            if( !*ptr ) break;
+
+            /* comment */
+            else if( *ptr == ';' || *ptr == '#')
+                {
+                while( *ptr && *ptr !='\n' )
+                    ++ptr;
+                }
+            /* section */
+            else if( *ptr == '[' )
+                {
+                ++ptr;
+                start = ptr;
+                while( *ptr && *ptr !=']' && *ptr != '\n' )
+                    ++ptr;
+
+                if( *ptr == ']' )
+                    {
+                    s = ini_section_add( ini, start, (int)( ptr - start) );
+                    ++ptr;
+                    }
+                }
+            /* property */
+            else
+                {
+                start = ptr;
+                while( *ptr && *ptr !='=' && *ptr != '\n' )
+                    ++ptr;
+
+                if( *ptr == '=' )
+                    {
+                    l = (int)( ptr - start);
+                    ++ptr;
+                    while( *ptr && *ptr <= ' ' && *ptr != '\n' ) 
+                        ptr++;
+                    start2 = ptr;
+                    while( *ptr && *ptr != '\n' )
+                        ++ptr;
+                    while( *(--ptr) <= ' ' ) 
+                        (void)ptr;
+                    ptr++;
+                    ini_property_add( ini, s, start, l, start2, (int)( ptr - start2) );
+                    }
+                }
+            }
+        }   
+
+    return ini;
+    }
+
+
+int ini_save( ini_t const* ini, char* data, int size )
+    {
+    int s;
+    int p;
+    int i;
+    int l;
+    char* n;
+    int pos;
+
+    if( ini )
+        {
+        pos = 0;
+        for( s = 0; s < ini->section_count; ++s )
+            {
+            n = ini->sections[ s ].name_large ? ini->sections[ s ].name_large : ini->sections[ s ].name;
+            l = (int) INI_STRLEN( n );
+            if( l > 0 )
+                {
+                if( data && pos < size ) data[ pos ] = '[';
+                ++pos;
+                for( i = 0; i < l; ++i )
+                    {
+                    if( data && pos < size ) data[ pos ] = n[ i ];
+                    ++pos;
+                    }
+                if( data && pos < size ) data[ pos ] = ']';
+                ++pos;
+                if( data && pos < size ) data[ pos ] = '\n';
+                ++pos;
+                }
+
+            for( p = 0; p < ini->property_count; ++p )
+                {
+                if( ini->properties[ p ].section == s )
+                    {
+                    n = ini->properties[ p ].name_large ? ini->properties[ p ].name_large : ini->properties[ p ].name;
+                    l = (int) INI_STRLEN( n );
+                    for( i = 0; i < l; ++i )
+                        {
+                        if( data && pos < size ) data[ pos ] = n[ i ];
+                        ++pos;
+                        }
+                    if( data && pos < size ) data[ pos ] = '=';
+                    ++pos;
+                    n = ini->properties[ p ].value_large ? ini->properties[ p ].value_large : ini->properties[ p ].value;
+                    l = (int) INI_STRLEN( n );
+                    for( i = 0; i < l; ++i )
+                        {
+                        if( data && pos < size ) data[ pos ] = n[ i ];
+                        ++pos;
+                        }
+                    if( data && pos < size ) data[ pos ] = '\n';
+                    ++pos;
+                    }
+                }
+
+            if( pos > 0 )
+                {
+                if( data && pos < size ) data[ pos ] = '\n';
+                ++pos;
+                }
+            }
+
+        if( data && pos < size ) data[ pos ] = '\0';
+        ++pos;
+
+        return pos;
+        }
+
+    return 0;
+    }
+
+
+void ini_destroy( ini_t* ini )
+    {
+    int i;
+
+    if( ini )
+        {
+        for( i = 0; i < ini->property_count; ++i )
+            {
+            if( ini->properties[ i ].value_large ) INI_FREE( ini->memctx, ini->properties[ i ].value_large );
+            if( ini->properties[ i ].name_large ) INI_FREE( ini->memctx, ini->properties[ i ].name_large );
+            }
+        for( i = 0; i < ini->section_count; ++i )
+            if( ini->sections[ i ].name_large ) INI_FREE( ini->memctx, ini->sections[ i ].name_large );
+        INI_FREE( ini->memctx, ini->properties );
+        INI_FREE( ini->memctx, ini->sections );
+        INI_FREE( ini->memctx, ini );
+        }
+    }
+
+
+int ini_section_count( ini_t const* ini )
+    {
+    if( ini ) return ini->section_count;
+    return 0;
+    }
+
+
+char const* ini_section_name( ini_t const* ini, int section )
+    {
+    if( ini && section >= 0 && section < ini->section_count )
+        return ini->sections[ section ].name_large ? ini->sections[ section ].name_large : ini->sections[ section ].name;
+
+    return NULL;
+    }
+
+
+int ini_property_count( ini_t const* ini, int section )
+    {
+    int i;
+    int count;
+
+    if( ini )
+        {
+        count = 0;
+        for( i = 0; i < ini->property_count; ++i )
+            {
+            if( ini->properties[ i ].section == section ) ++count;
+            }
+        return count;
+        }
+
+    return 0;
+    }
+
+
+char const* ini_property_name( ini_t const* ini, int section, int property )
+    {
+    int p;
+
+    if( ini && section >= 0 && section < ini->section_count )
+        {
+        p = ini_internal_property_index( ini, section, property );
+        if( p != INI_NOT_FOUND )
+            return ini->properties[ p ].name_large ? ini->properties[ p ].name_large : ini->properties[ p ].name;
+        }
+
+    return NULL;
+    }
+
+
+char const* ini_property_value( ini_t const* ini, int section, int property )
+    {
+    int p;
+
+    if( ini && section >= 0 && section < ini->section_count )
+        {
+        p = ini_internal_property_index( ini, section, property );
+        if( p != INI_NOT_FOUND )
+            return ini->properties[ p ].value_large ? ini->properties[ p ].value_large : ini->properties[ p ].value;
+        }
+
+    return NULL;
+    }
+
+
+int ini_find_section( ini_t const* ini, char const* name, int name_length )
+    {
+    int i;
+
+    if( ini && name )
+        {
+        if( name_length <= 0 ) name_length = (int) INI_STRLEN( name );
+        for( i = 0; i < ini->section_count; ++i )
+            {
+            char const* const other = 
+                ini->sections[ i ].name_large ? ini->sections[ i ].name_large : ini->sections[ i ].name;
+            if( INI_STRNICMP( name, other, name_length ) == 0 )
+                return i;
+            }
+        }
+
+    return INI_NOT_FOUND;
+    }
+
+
+int ini_find_property( ini_t const* ini, int section, char const* name, int name_length )
+    {
+    int i;
+    int c;
+
+    if( ini && name && section >= 0 && section < ini->section_count)
+        {
+        if( name_length <= 0 ) name_length = (int) INI_STRLEN( name );
+        c = 0;
+        for( i = 0; i < ini->property_capacity; ++i )
+            {
+            if( ini->properties[ i ].section == section )
+                {
+                char const* const other = 
+                    ini->properties[ i ].name_large ? ini->properties[ i ].name_large : ini->properties[ i ].name;
+                if( INI_STRNICMP( name, other, name_length ) == 0 )
+                    return c;
+                ++c;
+                }
+            }
+        }
+
+    return INI_NOT_FOUND;
+    }
+
+
+int ini_section_add( ini_t* ini, char const* name, int length )
+    {
+    struct ini_internal_section_t* new_sections;
+    
+    if( ini && name )
+        {
+        if( length <= 0 ) length = (int) INI_STRLEN( name );
+        if( ini->section_count >= ini->section_capacity )
+            {
+            ini->section_capacity *= 2;
+            new_sections = (struct ini_internal_section_t*) INI_MALLOC( ini->memctx, 
+                ini->section_capacity * sizeof( ini->sections[ 0 ] ) );
+            INI_MEMCPY( new_sections, ini->sections, ini->section_count * sizeof( ini->sections[ 0 ] ) );
+            INI_FREE( ini->memctx, ini->sections );
+            ini->sections = new_sections;
+            }
+
+        ini->sections[ ini->section_count ].name_large = 0;
+        if( length + 1 >= sizeof( ini->sections[ 0 ].name ) )
+            {
+            ini->sections[ ini->section_count ].name_large = (char*) INI_MALLOC( ini->memctx, (size_t) length + 1 );
+            INI_MEMCPY( ini->sections[ ini->section_count ].name_large, name, (size_t) length );
+            ini->sections[ ini->section_count ].name_large[ length ] = '\0';
+            }
+        else
+            {
+            INI_MEMCPY( ini->sections[ ini->section_count ].name, name, (size_t) length );
+            ini->sections[ ini->section_count ].name[ length ] = '\0';
+            }
+
+        return ini->section_count++;
+        }
+    return INI_NOT_FOUND;
+    }
+
+
+void ini_property_add( ini_t* ini, int section, char const* name, int name_length, char const* value, int value_length )
+    {
+    struct ini_internal_property_t* new_properties;
+
+    if( ini && name && section >= 0 && section < ini->section_count )
+        {
+        if( name_length <= 0 ) name_length = (int) INI_STRLEN( name );
+        if( value_length <= 0 ) value_length = (int) INI_STRLEN( value );
+
+        if( ini->property_count >= ini->property_capacity )
+            {
+
+            ini->property_capacity *= 2;
+            new_properties = (struct ini_internal_property_t*) INI_MALLOC( ini->memctx, 
+                ini->property_capacity * sizeof( ini->properties[ 0 ] ) );
+            INI_MEMCPY( new_properties, ini->properties, ini->property_count * sizeof( ini->properties[ 0 ] ) );
+            INI_FREE( ini->memctx, ini->properties );
+            ini->properties = new_properties;
+            }
+        
+        ini->properties[ ini->property_count ].section = section;
+        ini->properties[ ini->property_count ].name_large = 0;
+        ini->properties[ ini->property_count ].value_large = 0;
+
+        if( name_length + 1 >= sizeof( ini->properties[ 0 ].name ) )
+            {
+            ini->properties[ ini->property_count ].name_large = (char*) INI_MALLOC( ini->memctx, (size_t) name_length + 1 );
+            INI_MEMCPY( ini->properties[ ini->property_count ].name_large, name, (size_t) name_length );
+            ini->properties[ ini->property_count ].name_large[ name_length ] = '\0';
+            }
+        else
+            {
+            INI_MEMCPY( ini->properties[ ini->property_count ].name, name, (size_t) name_length );
+            ini->properties[ ini->property_count ].name[ name_length ] = '\0';
+            }
+
+        if( value_length + 1 >= sizeof( ini->properties[ 0 ].value ) )
+            {
+            ini->properties[ ini->property_count ].value_large = (char*) INI_MALLOC( ini->memctx, (size_t) value_length + 1 );
+            INI_MEMCPY( ini->properties[ ini->property_count ].value_large, value, (size_t) value_length );
+            ini->properties[ ini->property_count ].value_large[ value_length ] = '\0';
+            }
+        else
+            {
+            INI_MEMCPY( ini->properties[ ini->property_count ].value, value, (size_t) value_length );
+            ini->properties[ ini->property_count ].value[ value_length ] = '\0';
+            }
+
+        ++ini->property_count;
+        }
+    }
+
+
+void ini_section_remove( ini_t* ini, int section )
+    {
+    int p;
+
+    if( ini && section >= 0 && section < ini->section_count )
+        {
+        if( ini->sections[ section ].name_large ) INI_FREE( ini->memctx, ini->sections[ section ].name_large );
+        for( p = ini->property_count - 1; p >= 0; --p ) 
+            {
+            if( ini->properties[ p ].section == section )
+                {
+                if( ini->properties[ p ].value_large ) INI_FREE( ini->memctx, ini->properties[ p ].value_large );
+                if( ini->properties[ p ].name_large ) INI_FREE( ini->memctx, ini->properties[ p ].name_large );
+                ini->properties[ p ] = ini->properties[ --ini->property_count ];
+                }
+            }
+
+        ini->sections[ section ] = ini->sections[ --ini->section_count  ];
+        
+        for( p = 0; p < ini->property_count; ++p ) 
+            {
+            if( ini->properties[ p ].section == ini->section_count )
+                ini->properties[ p ].section = section;
+            }
+        }
+    }
+
+
+void ini_property_remove( ini_t* ini, int section, int property )
+    {
+    int p;
+
+    if( ini && section >= 0 && section < ini->section_count )
+        {
+        p = ini_internal_property_index( ini, section, property );
+        if( p != INI_NOT_FOUND )
+            {
+            if( ini->properties[ p ].value_large ) INI_FREE( ini->memctx, ini->properties[ p ].value_large );
+            if( ini->properties[ p ].name_large ) INI_FREE( ini->memctx, ini->properties[ p ].name_large );
+            ini->properties[ p ] = ini->properties[ --ini->property_count  ];
+            return;
+            }
+        }
+    }
+
+
+void ini_section_name_set( ini_t* ini, int section, char const* name, int length )
+    {
+    if( ini && name && section >= 0 && section < ini->section_count )
+        {
+        if( length <= 0 ) length = (int) INI_STRLEN( name );
+        if( ini->sections[ section ].name_large ) INI_FREE( ini->memctx, ini->sections[ section ].name_large );
+        ini->sections[ section ].name_large = 0;
+        
+        if( length + 1 >= sizeof( ini->sections[ 0 ].name ) )
+            {
+            ini->sections[ section ].name_large = (char*) INI_MALLOC( ini->memctx, (size_t) length + 1 );
+            INI_MEMCPY( ini->sections[ section ].name_large, name, (size_t) length );
+            ini->sections[ section ].name_large[ length ] = '\0';
+            }
+        else
+            {
+            INI_MEMCPY( ini->sections[ section ].name, name, (size_t) length );
+            ini->sections[ section ].name[ length ] = '\0';
+            }
+        }
+    }
+
+
+void ini_property_name_set( ini_t* ini, int section, int property, char const* name, int length )
+    {
+    int p;
+
+    if( ini && name && section >= 0 && section < ini->section_count )
+        {
+        if( length <= 0 ) length = (int) INI_STRLEN( name );
+        p = ini_internal_property_index( ini, section, property );
+        if( p != INI_NOT_FOUND )
+            {
+            if( ini->properties[ p ].name_large ) INI_FREE( ini->memctx, ini->properties[ p ].name_large );
+            ini->properties[ ini->property_count ].name_large = 0;
+
+            if( length + 1 >= sizeof( ini->properties[ 0 ].name ) )
+                {
+                ini->properties[ p ].name_large = (char*) INI_MALLOC( ini->memctx, (size_t) length + 1 );
+                INI_MEMCPY( ini->properties[ p ].name_large, name, (size_t) length );
+                ini->properties[ p ].name_large[ length ] = '\0';
+                }
+            else
+                {
+                INI_MEMCPY( ini->properties[ p ].name, name, (size_t) length );
+                ini->properties[ p ].name[ length ] = '\0';
+                }
+            }
+        }
+    }
+
+
+void ini_property_value_set( ini_t* ini, int section, int property, char const* value, int length )
+    {
+    int p;
+
+    if( ini && value && section >= 0 && section < ini->section_count )
+        {
+        if( length <= 0 ) length = (int) INI_STRLEN( value );
+        p = ini_internal_property_index( ini, section, property );
+        if( p != INI_NOT_FOUND )
+            {
+            if( ini->properties[ p ].value_large ) INI_FREE( ini->memctx, ini->properties[ p ].value_large );
+            ini->properties[ ini->property_count ].value_large = 0;
+
+            if( length + 1 >= sizeof( ini->properties[ 0 ].value ) )
+                {
+                ini->properties[ p ].value_large = (char*) INI_MALLOC( ini->memctx, (size_t) length + 1 );
+                INI_MEMCPY( ini->properties[ p ].value_large, value, (size_t) length );
+                ini->properties[ p ].value_large[ length ] = '\0';
+                }
+            else
+                {
+                INI_MEMCPY( ini->properties[ p ].value, value, (size_t) length );
+                ini->properties[ p ].value[ length ] = '\0';
+                }
+            }
+        }
+    }
+
+
+#endif /* INI_IMPLEMENTATION */
+
+/*
+
+contributors:
+    Randy Gaul (copy-paste bug in ini_property_value_set)
+    Branimir Karadzic (INI_STRNICMP bugfix)
+
+revision history:
+    1.2     using strnicmp for correct length compares, fixed copy-paste bug in ini_property_value_set
+    1.1     customization, added documentation, cleanup
+    1.0     first publicly released version
+
+*/
+
+/*
+------------------------------------------------------------------------------
+
+This software is available under 2 licenses - you may choose the one you like.
+
+------------------------------------------------------------------------------
+
+ALTERNATIVE A - MIT License
+
+Copyright (c) 2015 Mattias Gustavsson
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of 
+this software and associated documentation files (the "Software"), to deal in 
+the Software without restriction, including without limitation the rights to 
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies 
+of the Software, and to permit persons to whom the Software is furnished to do 
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all 
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
+SOFTWARE.
+
+------------------------------------------------------------------------------
+
+ALTERNATIVE B - Public Domain (www.unlicense.org)
+
+This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or distribute this 
+software, either in source code form or as a compiled binary, for any purpose, 
+commercial or non-commercial, and by any means.
+
+In jurisdictions that recognize copyright laws, the author or authors of this 
+software dedicate any and all copyright interest in the software to the public 
+domain. We make this dedication for the benefit of the public at large and to 
+the detriment of our heirs and successors. We intend this dedication to be an 
+overt act of relinquishment in perpetuity of all present and future rights to 
+this software under copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
+AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN 
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION 
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+------------------------------------------------------------------------------
+*/
+
+PRAGMA_DIAGNOSTIC_POP()
+
+typedef struct ini_t ini_t;
+
+INIFileContext INIFile::Create(MemAllocator* alloc)
+{
+    return INIFileContext { .ini = ini_create(alloc) };
+}
+
+INIFileContext INIFile::Load(const char* filepath, MemAllocator* alloc)
+{
+    ASSERT_MSG(alloc->GetType() != MemAllocatorType::Temp, "alloc cannot be temp. Because the code below also has temp alloc and breaks the stack");
+
+    File f;
+
+    MemTempAllocator tmpAlloc;
+    Blob blob(&tmpAlloc);
+    if (f.Open(filepath, FileOpenFlags::Read | FileOpenFlags::SeqScan)) {
+        size_t size = f.GetSize();
+        blob.Reserve(size + 1);
+        f.Read(const_cast<void*>(blob.Data()), size);
+        blob.SetSize(size);
+        blob.Write<char>('\0');
+        f.Close();
+    }
+    else {
+        return INIFileContext {};
+    }
+
+    void* data;
+    size_t size;
+    blob.Detach(&data, &size);
+    return INIFileContext { .ini = ini_load((const char*)data, alloc) };
+}
+
+INIFileContext INIFile::LoadFromString(const char* data, MemAllocator* alloc)
+{
+    return INIFileContext { .ini = ini_load(data, alloc) };
+}
+
+bool INIFile::Save(const INIFileContext& ini, const char* filepath)
+{
+    bool saveDone = false;
+    int size = ini_save(ini.ini, nullptr, 0);
+    if (size > 0) {
+        MemTempAllocator tmpAlloc;
+        char* data = tmpAlloc.MallocTyped<char>(size);
+        ini_save(ini.ini, data, size);
+
+        File f;
+        if (f.Open(filepath, FileOpenFlags::Write)) {
+            f.Write(data, size);
+            f.Close();
+            saveDone = true;
+        }
+    }
+    return saveDone;
+}
+
+Blob INIFile::SaveToMem(const INIFileContext& ini, MemAllocator* alloc)
+{
+    int size = ini_save(ini.ini, nullptr, 0);
+    Blob blob(alloc);
+    if (size > 0) {
+        blob.Reserve(size);
+        ini_save(ini.ini, (char*)blob.Data(), (int)blob.Size());
+        return blob;
+    }
+    return blob;
+}
+
+uint32 INIFileContext::GetSectionCount() const
+{
+    ASSERT(this->ini);
+    return static_cast<uint32>(ini_section_count(this->ini));
+}
+
+INIFileSection INIFileContext::GetSection(uint32 index) const
+{
+    ASSERT(this->ini);
+    return INIFileSection { .ini = this->ini, .id = static_cast<int>(index) };
+}
+
+const char* INIFileContext::GetSectionName(uint32 index) const
+{
+    ASSERT(this->ini);
+    return ini_section_name(this->ini, static_cast<int>(index));
+}
+
+INIFileSection INIFileContext::GetRootSection() const
+{
+    ASSERT(this->ini);
+    return INIFileSection { .ini = this->ini, .id = INI_GLOBAL_SECTION };
+}
+
+INIFileSection INIFileContext::NewSection(const char* name) const
+{
+    ASSERT(this->ini);
+    return INIFileSection { .ini = this->ini, .id = ini_section_add(this->ini, name, Str::Len(name)) };
+}
+
+INIFileSection INIFileContext::FindSection(const char* name) const
+{
+    ASSERT(this->ini);
+    return INIFileSection { .ini = this->ini, .id = ini_find_section(this->ini, name, Str::Len(name)) };
+}
+
+void INIFileContext::Destroy()
+{
+    if (this->ini) 
+        ini_destroy(this->ini);
+    this->ini = nullptr;
+}
+
+uint32 INIFileSection::GetPropertyCount()
+{
+    ASSERT(this->id != INI_NOT_FOUND);
+    return static_cast<uint32>(ini_property_count(this->ini, this->id));
+}
+
+INIFileProperty INIFileSection::GetProperty(uint32 index)
+{
+    return { .ini = this->ini, .sectionId = this->id, .id = static_cast<int>(index) };
+}
+
+const char* INIFileSection::GetPropertyName(uint32 index)
+{
+    ASSERT(this->id != INI_NOT_FOUND);
+    return ini_property_name(this->ini, this->id, static_cast<int>(index));
+}
+
+INIFileProperty INIFileSection::NewProperty(const char* name, const char* value)
+{
+    ASSERT(this->id != INI_NOT_FOUND);
+    ini_property_add(this->ini, this->id, name, Str::Len(name), value, Str::Len(value));
+    return INIFileProperty { 
+        .ini = this->ini, 
+        .sectionId = this->id,
+        .id = ini_property_count(this->ini, this->id) - 1 
+    };
+}
+
+INIFileProperty INIFileSection::FindProperty(const char* name)
+{
+    ASSERT(this->id != INI_NOT_FOUND);
+    return INIFileProperty { 
+        .ini = this->ini, 
+        .sectionId = this->id,
+        .id = ini_find_property(this->ini, this->id, name, Str::Len(name)) 
+    };
+}
+
+void INIFileSection::SetName(const char* name)
+{
+    ASSERT(this->id != INI_NOT_FOUND);
+    ini_section_name_set(this->ini, this->id, name, Str::Len(name));
+}
+
+const char* INIFileSection::GetName()
+{
+    ASSERT(this->id != INI_NOT_FOUND);
+    return ini_section_name(this->ini, this->id);
+}
+
+void INIFileSection::Delete()
+{
+    ASSERT(this->id != INI_NOT_FOUND);
+    ini_section_remove(this->ini, this->id);
+}
+
+void INIFileProperty::SetName(const char* name)
+{
+    ASSERT(this->id != INI_NOT_FOUND);
+    ini_property_name_set(this->ini, this->sectionId, this->id, name, (int)Str::Len(name));
+}
+
+void INIFileProperty::SetValue(const char* value)
+{
+    ASSERT(this->id != INI_NOT_FOUND);
+    ini_property_value_set(this->ini, this->sectionId, this->id, value, (int)Str::Len(value));
+}
+
+const char* INIFileProperty::GetName()
+{
+    ASSERT(this->id != INI_NOT_FOUND);
+    return ini_property_name(this->ini, this->sectionId, this->id);
+}
+
+const char* INIFileProperty::GetValue()
+{
+    ASSERT(this->id != INI_NOT_FOUND);
+    return ini_property_value(this->ini, this->sectionId, this->id);
+}
+
+void INIFileProperty::Delete()
+{
+    ASSERT(this->id != INI_NOT_FOUND);
+    ini_property_remove(this->ini, this->sectionId, this->id);
 }
 
 
@@ -9430,964 +9427,3828 @@ bool Jobs::IsRunningOnCurrentThread()
     return data && data->curFiber;
 }
 
-
-#if CPU_X86 && defined(__SSE4_2__)
-#if COMPILER_MSVC
-#include <intrin.h>     // _mm_crc32_u64
-#else
-#include <immintrin.h>
-#endif
-#endif
+#define CJ5_IMPLEMENT
+#define CJ5_ASSERT(e) ASSERT(e)
+#define CJ5_SKIP_ASAN NO_ASAN
+//----------------------------------------------------------------------------------------------------------------------
+// External/cj5/cj5.h
 
 
-/* This file is derived from crc32.c from the zlib-1.1.3 distribution
- * by Jean-loup Gailly and Mark Adler.
- */
+#include <stdbool.h>    // bool
+#include <stdint.h>     // uint32_t, int64_t, etc.
 
-/* crc32.c -- compute the CRC-32 of a data stream
- * Copyright (C) 1995-1998 Mark Adler
- * For conditions of distribution and use, see copyright notice in zlib.h
- */
-
-
-/* ========================================================================
-*  Table of CRC-32's of all single-byte values (made by make_crc_table)
-*/
-static const uint32 HASH_CRC_TABLE[256] = {
-    0x00000000L, 0x77073096L, 0xee0e612cL, 0x990951baL, 0x076dc419L, 0x706af48fL, 0xe963a535L,
-    0x9e6495a3L, 0x0edb8832L, 0x79dcb8a4L, 0xe0d5e91eL, 0x97d2d988L, 0x09b64c2bL, 0x7eb17cbdL,
-    0xe7b82d07L, 0x90bf1d91L, 0x1db71064L, 0x6ab020f2L, 0xf3b97148L, 0x84be41deL, 0x1adad47dL,
-    0x6ddde4ebL, 0xf4d4b551L, 0x83d385c7L, 0x136c9856L, 0x646ba8c0L, 0xfd62f97aL, 0x8a65c9ecL,
-    0x14015c4fL, 0x63066cd9L, 0xfa0f3d63L, 0x8d080df5L, 0x3b6e20c8L, 0x4c69105eL, 0xd56041e4L,
-    0xa2677172L, 0x3c03e4d1L, 0x4b04d447L, 0xd20d85fdL, 0xa50ab56bL, 0x35b5a8faL, 0x42b2986cL,
-    0xdbbbc9d6L, 0xacbcf940L, 0x32d86ce3L, 0x45df5c75L, 0xdcd60dcfL, 0xabd13d59L, 0x26d930acL,
-    0x51de003aL, 0xc8d75180L, 0xbfd06116L, 0x21b4f4b5L, 0x56b3c423L, 0xcfba9599L, 0xb8bda50fL,
-    0x2802b89eL, 0x5f058808L, 0xc60cd9b2L, 0xb10be924L, 0x2f6f7c87L, 0x58684c11L, 0xc1611dabL,
-    0xb6662d3dL, 0x76dc4190L, 0x01db7106L, 0x98d220bcL, 0xefd5102aL, 0x71b18589L, 0x06b6b51fL,
-    0x9fbfe4a5L, 0xe8b8d433L, 0x7807c9a2L, 0x0f00f934L, 0x9609a88eL, 0xe10e9818L, 0x7f6a0dbbL,
-    0x086d3d2dL, 0x91646c97L, 0xe6635c01L, 0x6b6b51f4L, 0x1c6c6162L, 0x856530d8L, 0xf262004eL,
-    0x6c0695edL, 0x1b01a57bL, 0x8208f4c1L, 0xf50fc457L, 0x65b0d9c6L, 0x12b7e950L, 0x8bbeb8eaL,
-    0xfcb9887cL, 0x62dd1ddfL, 0x15da2d49L, 0x8cd37cf3L, 0xfbd44c65L, 0x4db26158L, 0x3ab551ceL,
-    0xa3bc0074L, 0xd4bb30e2L, 0x4adfa541L, 0x3dd895d7L, 0xa4d1c46dL, 0xd3d6f4fbL, 0x4369e96aL,
-    0x346ed9fcL, 0xad678846L, 0xda60b8d0L, 0x44042d73L, 0x33031de5L, 0xaa0a4c5fL, 0xdd0d7cc9L,
-    0x5005713cL, 0x270241aaL, 0xbe0b1010L, 0xc90c2086L, 0x5768b525L, 0x206f85b3L, 0xb966d409L,
-    0xce61e49fL, 0x5edef90eL, 0x29d9c998L, 0xb0d09822L, 0xc7d7a8b4L, 0x59b33d17L, 0x2eb40d81L,
-    0xb7bd5c3bL, 0xc0ba6cadL, 0xedb88320L, 0x9abfb3b6L, 0x03b6e20cL, 0x74b1d29aL, 0xead54739L,
-    0x9dd277afL, 0x04db2615L, 0x73dc1683L, 0xe3630b12L, 0x94643b84L, 0x0d6d6a3eL, 0x7a6a5aa8L,
-    0xe40ecf0bL, 0x9309ff9dL, 0x0a00ae27L, 0x7d079eb1L, 0xf00f9344L, 0x8708a3d2L, 0x1e01f268L,
-    0x6906c2feL, 0xf762575dL, 0x806567cbL, 0x196c3671L, 0x6e6b06e7L, 0xfed41b76L, 0x89d32be0L,
-    0x10da7a5aL, 0x67dd4accL, 0xf9b9df6fL, 0x8ebeeff9L, 0x17b7be43L, 0x60b08ed5L, 0xd6d6a3e8L,
-    0xa1d1937eL, 0x38d8c2c4L, 0x4fdff252L, 0xd1bb67f1L, 0xa6bc5767L, 0x3fb506ddL, 0x48b2364bL,
-    0xd80d2bdaL, 0xaf0a1b4cL, 0x36034af6L, 0x41047a60L, 0xdf60efc3L, 0xa867df55L, 0x316e8eefL,
-    0x4669be79L, 0xcb61b38cL, 0xbc66831aL, 0x256fd2a0L, 0x5268e236L, 0xcc0c7795L, 0xbb0b4703L,
-    0x220216b9L, 0x5505262fL, 0xc5ba3bbeL, 0xb2bd0b28L, 0x2bb45a92L, 0x5cb36a04L, 0xc2d7ffa7L,
-    0xb5d0cf31L, 0x2cd99e8bL, 0x5bdeae1dL, 0x9b64c2b0L, 0xec63f226L, 0x756aa39cL, 0x026d930aL,
-    0x9c0906a9L, 0xeb0e363fL, 0x72076785L, 0x05005713L, 0x95bf4a82L, 0xe2b87a14L, 0x7bb12baeL,
-    0x0cb61b38L, 0x92d28e9bL, 0xe5d5be0dL, 0x7cdcefb7L, 0x0bdbdf21L, 0x86d3d2d4L, 0xf1d4e242L,
-    0x68ddb3f8L, 0x1fda836eL, 0x81be16cdL, 0xf6b9265bL, 0x6fb077e1L, 0x18b74777L, 0x88085ae6L,
-    0xff0f6a70L, 0x66063bcaL, 0x11010b5cL, 0x8f659effL, 0xf862ae69L, 0x616bffd3L, 0x166ccf45L,
-    0xa00ae278L, 0xd70dd2eeL, 0x4e048354L, 0x3903b3c2L, 0xa7672661L, 0xd06016f7L, 0x4969474dL,
-    0x3e6e77dbL, 0xaed16a4aL, 0xd9d65adcL, 0x40df0b66L, 0x37d83bf0L, 0xa9bcae53L, 0xdebb9ec5L,
-    0x47b2cf7fL, 0x30b5ffe9L, 0xbdbdf21cL, 0xcabac28aL, 0x53b39330L, 0x24b4a3a6L, 0xbad03605L,
-    0xcdd70693L, 0x54de5729L, 0x23d967bfL, 0xb3667a2eL, 0xc4614ab8L, 0x5d681b02L, 0x2a6f2b94L,
-    0xb40bbe37L, 0xc30c8ea1L, 0x5a05df1bL, 0x2d02ef8dL
-};
-
-#define DO1(buf) crc = HASH_CRC_TABLE[((int)crc ^ (*buf++)) & 0xff] ^ (crc >> 8);
-#define DO2(buf) \
-    DO1(buf);    \
-    DO1(buf);
-#define DO4(buf) \
-    DO2(buf);    \
-    DO2(buf);
-#define DO8(buf) \
-    DO4(buf);    \
-    DO4(buf);
-
-uint32 Hash::CRC32(const void* data, size_t len, uint32 seed)
-{
-    const uint8* buf = (const uint8*)data;
-    uint32 crc = seed ^ 0xffffffffL;
-
-    while (len >= 8) {
-        DO8(buf);
-        len -= 8;
-    }
-
-    while (len--) {
-        DO1(buf);
-    }
-
-    crc ^= 0xffffffffL;
-
-    return crc;
-}
-
-#if CPU_X86 && defined(__SSE4_2__)
-uint32 Hash::CRC32_x86_Aligned(const void* data, size_t len)
-{
-    ASSERT_MSG(len % 8 == 0, "Data must be aligned to 8 bytes");
-    
-    const uint64* M64 = (const uint64*)data;
-    uint64 hash = 0;
-    len >>= 3;
-    for (uint32 i = 0; i < len; ++i)
-        hash = _mm_crc32_u64(hash, M64[i]);
-    
-    return (uint32)hash;
-}
+#ifndef CJ5_TOKEN_HELPERS
+#    define CJ5_TOKEN_HELPERS 1
 #endif
 
-namespace Hash
-{
-    FORCE_INLINE uint32 rotl32(uint32 x, int8 r)
-    {
-        return (x << r) | (x >> (32 - r));
-    }
+#ifndef CJ5_API
+#    ifdef __cplusplus
+#        define CJ5_API extern "C"
+#    else
+#        define CJ5_API
+#    endif
+#endif
 
-    FORCE_INLINE uint64 rotl64(uint64 x, int8 r)
-    {
-        return (x << r) | (x >> (64 - r));
-    }
+#ifndef CJ5_SKIP_ASAN
+#    define CJ5_SKIP_ASAN
+#endif
 
-    #define	ROTL32(x,y)	rotl32(x,y)
-    #define ROTL64(x,y)	rotl64(x,y)
-    #define BIG_CONSTANT(x) (x##LLU)
-    #define HASH_M 0x5bd1e995
-    #define HASH_R 24
-    #define MMIX(h, k) { k *= HASH_M; k ^= k >> HASH_R; k *= HASH_M; h *= HASH_M; h ^= k; }
+typedef enum cj5_token_type {
+    CJ5_TOKEN_OBJECT = 0,
+    CJ5_TOKEN_ARRAY,
+    CJ5_TOKEN_NUMBER,
+    CJ5_TOKEN_STRING,
+    CJ5_TOKEN_BOOL,
+    CJ5_TOKEN_NULL
+} cj5_token_type;
 
-    #define getblock(p, i) (p[i])
+typedef enum cj5_token_number_type {
+    CJ5_TOKEN_NUMBER_UNKNOWN = 0,
+    CJ5_TOKEN_NUMBER_FLOAT,
+    CJ5_TOKEN_NUMBER_INT,
+    CJ5_TOKEN_NUMBER_HEX
+} cj5_token_number_type;
 
+typedef enum cj5_error_code {
+    CJ5_ERROR_NONE = 0,
+    CJ5_ERROR_INVALID,       // invalid character/syntax
+    CJ5_ERROR_INCOMPLETE,    // incomplete json string
+    CJ5_ERROR_OVERFLOW       // token buffer overflow, need more tokens (see cj5_result.num_tokens)
+} cj5_error_code;
 
-    FORCE_INLINE uint32 MurmurFmix32(uint32 h)
-    {
-        h ^= h >> 16;
-        h *= 0x85ebca6b;
-        h ^= h >> 13;
-        h *= 0xc2b2ae35;
-        h ^= h >> 16;
-    
-        return h;
-    }
-
-    FORCE_INLINE uint64 MurmurFmix64(uint64 k)
-    {
-        k ^= k >> 33;
-        k *= BIG_CONSTANT(0xff51afd7ed558ccd);
-        k ^= k >> 33;
-        k *= BIG_CONSTANT(0xc4ceb9fe1a85ec53);
-        k ^= k >> 33;
-    
-        return k;
-    }
-} // Hash
-
-uint32 Hash::Murmur32(const void * key, uint32 len, uint32 seed)
-{
-    const uint8 * data = (const uint8*)key;
-    const int nblocks = static_cast<int>(len / 4);
-    int i;
-
-    uint32 h1 = seed;
-    constexpr uint32 c1 = 0xcc9e2d51;
-    constexpr uint32 c2 = 0x1b873593;
-
-    auto blocks = reinterpret_cast<const uint32*>(data + nblocks*4);
-
-    for(i = -nblocks; i; i++) {
-        uint32 k1 = getblock(blocks,i);
-    
-        k1 *= c1;
-        k1 = ROTL32(k1,15);
-        k1 *= c2;
-    
-        h1 ^= k1;
-        h1 = ROTL32(h1,13);
-        h1 = h1*5+0xe6546b64;
-    }
-
-    auto tail = reinterpret_cast<const uint8*>(data + nblocks*4);
-    uint32 k1 = 0;
-
-    switch(len & 3) {
-    case 3: k1 ^= tail[2] << 16;
-    case 2: k1 ^= tail[1] << 8;
-    case 1: k1 ^= tail[0];
-        k1 *= c1; k1 = ROTL32(k1,15); k1 *= c2; h1 ^= k1;
-    }
-
-    h1 ^= len;
-    return MurmurFmix32(h1);
-}
-
-HashResult128 Hash::Murmur128(const void * key, size_t len, const uint32 seed)
-{
-    const uint8 * data = (const uint8*)key;
-    const size_t nblocks = len / 16;
-    size_t i;
-
-    uint64 h1 = seed;
-    uint64 h2 = seed;
-
-    uint64 c1 = BIG_CONSTANT(0x87c37b91114253d5);
-    uint64 c2 = BIG_CONSTANT(0x4cf5ad432745937f);
-
-    const uint64 * blocks = (const uint64 *)(data);
-
-    for(i = 0; i < nblocks; i++)
-    {
-        uint64 k1 = getblock(blocks,i*2+0);
-        uint64 k2 = getblock(blocks,i*2+1);
-    
-        k1 *= c1; k1  = ROTL64(k1,31); k1 *= c2; h1 ^= k1;
-        h1 = ROTL64(h1,27); h1 += h2; h1 = h1*5+0x52dce729;
-        k2 *= c2; k2  = ROTL64(k2,33); k2 *= c1; h2 ^= k2;
-        h2 = ROTL64(h2,31); h2 += h1; h2 = h2*5+0x38495ab5;
-    }
-
-    const uint8* tail = reinterpret_cast<const uint8*>(data + nblocks*16);
-
-    uint64 k1 = 0;
-    uint64 k2 = 0;
-
-    switch(len & 15)
-    {
-    case 15: k2 ^= (uint64)(tail[14]) << 48;
-    case 14: k2 ^= (uint64)(tail[13]) << 40;
-    case 13: k2 ^= (uint64)(tail[12]) << 32;
-    case 12: k2 ^= (uint64)(tail[11]) << 24;
-    case 11: k2 ^= (uint64)(tail[10]) << 16;
-    case 10: k2 ^= (uint64)(tail[ 9]) << 8;
-    case  9: k2 ^= (uint64)(tail[ 8]) << 0;
-        k2 *= c2; k2  = ROTL64(k2,33); k2 *= c1; h2 ^= k2;
-    
-    case  8: k1 ^= (uint64)(tail[ 7]) << 56;
-    case  7: k1 ^= (uint64)(tail[ 6]) << 48;
-    case  6: k1 ^= (uint64)(tail[ 5]) << 40;
-    case  5: k1 ^= (uint64)(tail[ 4]) << 32;
-    case  4: k1 ^= (uint64)(tail[ 3]) << 24;
-    case  3: k1 ^= (uint64)(tail[ 2]) << 16;
-    case  2: k1 ^= (uint64)(tail[ 1]) << 8;
-    case  1: k1 ^= (uint64)(tail[ 0]) << 0;
-        k1 *= c1; k1  = ROTL64(k1,31); k1 *= c2; h1 ^= k1;
-    }
-
-    h1 ^= len; h2 ^= len;
-
-    h1 += h2;
-    h2 += h1;
-
-    h1 = MurmurFmix64(h1);
-    h2 = MurmurFmix64(h2);
-
-    h1 += h2;
-    h2 += h1;
-
-    return {
-        .h1 = h1,
-        .h2 = h2
+typedef struct cj5_token {
+    cj5_token_type type;
+    union {
+        cj5_token_number_type num_type;
+        uint32_t key_hash;
     };
-}
+    int key_start;
+    int key_end;
+    int start;
+    int end;
+    int size;
+    int parent_id;      // = -1 if there is no parent
+} cj5_token;
 
-HashMurmur32Incremental::HashMurmur32Incremental(uint32 seed) : 
-    mHash(seed),
-    mTail(0),
-    mCount(0),
-    mSize(0)
+typedef struct cj5_factory {
+    cj5_token* (*create_token)(void* user);
+    cj5_token* (*get_all)(void* user);
+    void* user_data;
+} cj5_factory;
+
+typedef struct cj5_result {
+    cj5_error_code error;
+    int error_line;
+    int error_col;
+    int num_tokens;
+    const cj5_token* tokens;
+    const char* json5;
+} cj5_result;
+
+CJ5_API cj5_result cj5_parse(const char* json5, int len, cj5_token* tokens, int max_tokens);
+CJ5_API cj5_result cj5_parse_with_factory(const char* json5, int len, cj5_factory factory);
+
+#if CJ5_TOKEN_HELPERS
+CJ5_API int cj5_seek(cj5_result* r, int parent_id, const char* key);
+CJ5_API int cj5_seek_hash(cj5_result* r, int parent_id, const uint32_t key_hash);
+CJ5_API int cj5_seek_recursive(cj5_result* r, int parent_id, const char* key);
+CJ5_API const char* cj5_get_string(cj5_result* r, int id, char* str, int max_str);
+CJ5_API double cj5_get_double(cj5_result* r, int id);
+CJ5_API float cj5_get_float(cj5_result* r, int id);
+CJ5_API int cj5_get_int(cj5_result* r, int id);
+CJ5_API uint32_t cj5_get_uint(cj5_result* r, int id);
+CJ5_API uint64_t cj5_get_uint64(cj5_result* r, int id);
+CJ5_API int64_t cj5_get_int64(cj5_result* r, int id);
+CJ5_API bool cj5_get_bool(cj5_result* r, int id);
+CJ5_API double cj5_seekget_double(cj5_result* r, int parent_id, const char* key, double def_val);
+CJ5_API float cj5_seekget_float(cj5_result* r, int parent_id, const char* key, float def_val);
+CJ5_API int cj5_seekget_array_int16(cj5_result* r, int parent_id, const char* key, int16_t* values, int max_values);
+CJ5_API int cj5_seekget_array_uint16(cj5_result* r, int parent_id, const char* key, uint16_t* values, int max_values);
+CJ5_API int cj5_seekget_int(cj5_result* r, int parent_id, const char* key, int def_val);
+CJ5_API uint32_t cj5_seekget_uint(cj5_result* r, int parent_id, const char* key, uint32_t def_val);
+CJ5_API uint64_t cj5_seekget_uint64(cj5_result* r, int parent_id, const char* key, uint64_t def_val);
+CJ5_API int64_t cj5_seekget_int64(cj5_result* r, int parent_id, const char* key, int64_t def_val);
+CJ5_API bool cj5_seekget_bool(cj5_result* r, int parent_id, const char* key, bool def_val);
+CJ5_API const char* cj5_seekget_string(cj5_result* r, int parent_id, const char* key, char* str, int max_str, const char* def_val);
+
+CJ5_API int cj5_seekget_array_double(cj5_result* r, int parent_id, const char* key, double* values, int max_values);
+CJ5_API int cj5_seekget_array_float(cj5_result* r, int parent_id, const char* key, float* values, int max_values);
+CJ5_API int cj5_seekget_array_int(cj5_result* r, int parent_id, const char* key, int* values, int max_values);
+CJ5_API int cj5_seekget_array_uint(cj5_result* r, int parent_id, const char* key, uint32_t* values, int max_values);
+CJ5_API int cj5_seekget_array_uint64(cj5_result* r, int parent_id, const char* key, uint64_t* values, int max_values);
+CJ5_API int cj5_seekget_array_int64(cj5_result* r, int parent_id, const char* key, int64_t* values, int max_values);
+CJ5_API int cj5_seekget_array_bool(cj5_result* r, int parent_id, const char* key, bool* values, int max_values);
+CJ5_API int cj5_seekget_array_string(cj5_result* r, int parent_id, const char* key, char** strs, int max_str, int max_values);
+CJ5_API int cj5_get_array_elem(cj5_result* r, int id, int index);
+CJ5_API int cj5_get_array_elem_incremental(cj5_result* r, int id, int index, int prev_elem);
+#endif
+
+#if defined(CJ5_IMPLEMENT)
+
+#    ifndef CJ5_ASSERT
+#        include <assert.h>
+#        define CJ5_ASSERT(_e) assert(_e)
+#    endif
+
+#    ifndef CJ5_MEMCPY
+#        include <string.h>    // memcpy
+#        define CJ5_MEMCPY(_dst, _src, _n) memcpy((_dst), (_src), (_n))
+#    endif
+
+#    ifndef CJ5_MEMSET
+#        include <string.h>
+#        define CJ5_MEMSET(_dst, _val, _size) memset((_dst), (_val), (_size))
+#    endif
+
+#    define CJ5__ARCH_64BIT 0
+#    define CJ5__ARCH_32BIT 0
+#    if defined(__x86_64__) || defined(_M_X64) || defined(__aarch64__) || defined(__64BIT__) || \
+        defined(__mips64) || defined(__powerpc64__) || defined(__ppc64__) || defined(__LP64__)
+#        undef CJ5__ARCH_64BIT
+#        define CJ5__ARCH_64BIT 64
+#    else
+#        undef CJ5__ARCH_32BIT
+#        define CJ5__ARCH_32BIT 32
+#    endif    //
+
+#    if defined(_MSC_VER)
+#        define CJ5__RESTRICT __restrict
+#    else
+#        define CJ5__RESTRICT __restrict__
+#    endif
+
+#    define CJ5__UNUSED(_a) (void)(_a)
+
+#    define CJ5__FOURCC(_a, _b, _c, _d) \
+        (((uint32_t)(_a) | ((uint32_t)(_b) << 8) | ((uint32_t)(_c) << 16) | ((uint32_t)(_d) << 24)))
+
+static const uint32_t CJ5__NULL_FOURCC = CJ5__FOURCC('n', 'u', 'l', 'l');
+static const uint32_t CJ5__TRUE_FOURCC = CJ5__FOURCC('t', 'r', 'u', 'e');
+static const uint32_t CJ5__FALSE_FOURCC = CJ5__FOURCC('f', 'a', 'l', 's');
+
+static const uint32_t CJ5__FNV1_32_INIT = 0x811c9dc5;
+static const uint32_t CJ5__FNV1_32_PRIME = 0x01000193;
+
+typedef struct cj5__parser {
+    int pos;
+    int next_id;
+    int super_id;
+    int line;
+    cj5_token* tokens;
+    cj5_factory token_factory;
+} cj5__parser;
+
+static inline uint32_t cj5__hash_fnv32(const char* start, const char* end)
 {
-}
+    const char* bp = start;
+    const char* be = end;    // start + len
 
-HashMurmur32Incremental& HashMurmur32Incremental::AddAny(const void* _data, uint32 _size)
-{
-    if (!_data || !_size)
-        return *this;
-
-    const uint8* key = (const uint8*)_data;
-    mSize += _size;
-    
-    Murmur32MixTail(&key, &_size);
-    
-    while (_size >= 4)	{
-        uint32 k = *((const uint32*)key);
-        
-        MMIX(mHash, k);
-        
-        key += 4;
-        _size -= 4;
+    uint32_t hval = CJ5__FNV1_32_INIT;
+    while (bp < be) {
+        hval ^= (uint32_t)*bp++;
+        hval *= CJ5__FNV1_32_PRIME;
     }
-    
-    Murmur32MixTail(&key, &_size);
-    return *this;
+
+    return hval;
 }
 
-HashMurmur32Incremental& HashMurmur32Incremental::AddCStringArray(const char** _strs, uint32 _numStrings)
+static inline bool cj5__isspace(char ch)
 {
-    if (!_strs || !_numStrings) 
-        return *this;
-
-    for (uint32 i = 0; i < _numStrings; i++) 
-        AddAny(_strs[i], Str::Len(_strs[i]));
-
-    return *this;
+    return (uint32_t)(ch - 1) < 32 && ((0x80001F00 >> (uint32_t)(ch - 1)) & 1) == 1;
 }
 
-uint32 HashMurmur32Incremental::Hash()
+static inline bool cj5__isrange(char ch, char from, char to)
 {
-    MMIX(mHash, mTail);
-    MMIX(mHash, mSize);
-    
-    mHash ^= mHash >> 13;
-    mHash *= HASH_M;
-    mHash ^= mHash >> 15;
-    
-    return mHash;
+    return (uint8_t)(ch - from) <= (uint8_t)(to - from);
 }
 
-void HashMurmur32Incremental::Murmur32MixTail(const uint8** pData, uint32* pSize)
+static inline bool cj5__isupperchar(char ch)
 {
-    uint32 size = *pSize;
-    const uint8* data = *pData;
-    
-    while (size && ((size<4) || mCount)) {
-        mTail |= (*data++) << (mCount * 8);
-        
-        mCount++;
-        size--;
-        
-        if (mCount == 4)	{
-            MMIX(mHash, mTail);
-            mTail = 0;
-            mCount = 0;
+    return cj5__isrange(ch, 'A', 'Z');
+}
+
+static inline bool cj5__islowerchar(char ch)
+{
+    return cj5__isrange(ch, 'a', 'z');
+}
+
+static inline bool cj5__isnum(char ch)
+{
+    return cj5__isrange(ch, '0', '9');
+}
+
+static inline char* cj5__strcpy(char* CJ5__RESTRICT dst, int dst_sz, const char* CJ5__RESTRICT src, int num)
+{
+    const int _max = dst_sz - 1;
+    const int _num = (num < _max ? num : _max);
+    if (_num > 0) {
+        CJ5_MEMCPY(dst, src, _num);
+    }
+    dst[_num] = '\0';
+    return dst;
+}
+
+CJ5_SKIP_ASAN static int cj5__strlen(const char* str)
+{
+    const char* char_ptr;
+    const uintptr_t* longword_ptr;
+    uintptr_t longword, himagic, lomagic;
+
+    for (char_ptr = str; ((uintptr_t)char_ptr & (sizeof(longword) - 1)) != 0; ++char_ptr) {
+        if (*char_ptr == '\0')
+            return (int)(intptr_t)(char_ptr - str);
+    }
+    longword_ptr = (uintptr_t*)char_ptr;
+    himagic = 0x80808080L;
+    lomagic = 0x01010101L;
+#    if CJ5__ARCH_64BIT
+    /* 64-bit version of the magic.  */
+    /* Do the shift in two steps to avoid a warning if long has 32 bits.  */
+    himagic = ((himagic << 16) << 16) | himagic;
+    lomagic = ((lomagic << 16) << 16) | lomagic;
+#    endif
+
+    for (;;) {
+        longword = *longword_ptr++;
+
+        if (((longword - lomagic) & ~longword & himagic) != 0) {
+            const char* cp = (const char*)(longword_ptr - 1);
+
+            if (cp[0] == 0)
+                return (int)(intptr_t)(cp - str);
+            if (cp[1] == 0)
+                return (int)(intptr_t)(cp - str + 1);
+            if (cp[2] == 0)
+                return (int)(intptr_t)(cp - str + 2);
+            if (cp[3] == 0)
+                return (int)(intptr_t)(cp - str + 3);
+#    if CJ5__ARCH_64BIT
+            if (cp[4] == 0)
+                return (int)(intptr_t)(cp - str + 4);
+            if (cp[5] == 0)
+                return (int)(intptr_t)(cp - str + 5);
+            if (cp[6] == 0)
+                return (int)(intptr_t)(cp - str + 6);
+            if (cp[7] == 0)
+                return (int)(intptr_t)(cp - str + 7);
+#    endif
         }
     }
-    
-    *pData = data;
-    *pSize = size;
+
+    #ifndef _MSC_VER
+    CJ5_ASSERT(0);
+    return -1;
+    #endif
 }
 
-
-FORCE_INLINE uint32 hashTableFibHash(uint32 h, int bits)
+static inline cj5_token* cj5__alloc_token(cj5__parser* parser)
 {
-    uint64 h64 = static_cast<uint64>(h);
-    h64 ^= (h64 >> bits);
-    return static_cast<uint32>((h64 * 11400714819323198485llu) >> bits);
+    cj5_token* token = parser->token_factory.create_token(parser->token_factory.user_data);
+    if (!token)
+        return NULL;
+    CJ5_MEMSET(token, 0x0, sizeof(cj5_token));
+
+    ++parser->next_id;
+    parser->tokens = parser->token_factory.get_all(parser->token_factory.user_data);
+
+    token->start = -1;
+    token->end = -1;
+    token->parent_id = -1;
+    return token;
 }
 
-FORCE_INLINE uint32 hashTableCalcBitShift(uint32 n)
+static inline void cj5__set_error(cj5_result* r, cj5_error_code code, int line, int col)
 {
-    uint32 c = 0;
-    uint32 un = n;
-    while (un > 1) {
-        c++;
-        un >>= 1;
-    }
-    return 64 - c;
+    r->error = code;
+    r->error_line = line + 1;
+    r->error_col = col + 1;
 }
 
-FORCE_INLINE constexpr int hashTableNearestPow2(int n)
+static bool cj5__parse_primitive(cj5__parser* parser, cj5_result* r, const char* json5, int len)
 {
-    n--;
-    n |= n >> 1;
-    n |= n >> 2;
-    n |= n >> 4;
-    n |= n >> 8;
-    n |= n >> 16;
-    n++;
-    return n;
-}
+    cj5_token* token;
+    int start = parser->pos;
+    int line_start = start;
+    bool keyname = false;
+    bool new_line = false;
 
-_private::HashTableData* _private::hashtableCreate(uint32 capacity, uint32 valueStride, MemAllocator* alloc)
-{
-    ASSERT(capacity > 0);
-    
-    capacity = hashTableNearestPow2(capacity);   
-    
-    MemSingleShotMalloc<HashTableData> mallocator;
-    mallocator.AddMemberArray<uint32>(offsetof(HashTableData, keys), capacity)
-              .AddMemberArray<uint8>(offsetof(HashTableData, values), valueStride*capacity);
-    HashTableData* tbl = mallocator.Calloc(alloc);
-    
-    tbl->bitshift = hashTableCalcBitShift(capacity);
-    tbl->valueStride = valueStride;
-    tbl->count = 0;
-    tbl->capacity = capacity;
-    
-    return tbl;
-}
+    for (; parser->pos < len; parser->pos++) {
+        switch (json5[parser->pos]) {
+        case '\n':
+            line_start = parser->pos;
+            new_line = true;
+            goto found;
+        case ':':
+            keyname = true;
+            goto found;
+        case '\t':
+        case '\r':
+        case ' ':
+        case ',':
+        case ']':
+        case '}':
+            goto found;
+        default:
+            break;
+        }
 
-size_t _private::hashtableGetMemoryRequirement(uint32 capacity, uint32 valueStride)
-{
-    ASSERT(capacity > 0);
-    
-    capacity = hashTableNearestPow2(capacity);
-    MemSingleShotMalloc<HashTableData> mallocator;
-    return mallocator.AddMemberArray<uint32>(offsetof(HashTableData, keys), capacity)
-                     .AddMemberArray<uint8>(offsetof(HashTableData, values), valueStride*capacity)
-                     .GetMemoryRequirement();        
-}
-
-void _private::hashtableDestroy(HashTableData* tbl, MemAllocator* alloc)
-{
-    ASSERT(tbl);
-    tbl->count = tbl->capacity = 0;
-
-    MemSingleShotMalloc<HashTableData>::Free(tbl, alloc);
-}
-
-bool _private::hashtableGrow(HashTableData** pTbl, MemAllocator* alloc)
-{
-    HashTableData* tbl = *pTbl;
-    HashTableData* newTable = hashtableCreate(tbl->capacity << 1, tbl->valueStride, alloc);
-    if (!newTable)
-        return false;
-    
-    for (uint32 i = 0, c = tbl->capacity; i < c; i++) {
-        if (tbl->keys[i] > 0) {
-            hashtableAdd(newTable, tbl->keys[i], tbl->values + i * tbl->valueStride);
+        if (json5[parser->pos] < 32 || json5[parser->pos] >= 127) {
+            cj5__set_error(r, CJ5_ERROR_INVALID, parser->line, parser->pos - line_start);
+            parser->pos = start;
+            return false;
         }
     }
-    
-    hashtableDestroy(tbl, alloc);
-    *pTbl = newTable;
+
+    cj5__set_error(r, CJ5_ERROR_INCOMPLETE, parser->line, parser->pos - line_start);
+    parser->pos = start;
+    return false;
+
+found:
+    token = cj5__alloc_token(parser);
+    if (token == NULL) {
+        r->error = CJ5_ERROR_OVERFLOW;
+        --parser->pos;
+        return true;
+    }
+
+    cj5_token_type type;
+    cj5_token_number_type num_type = CJ5_TOKEN_NUMBER_UNKNOWN;
+    if (keyname) {
+        for (int i = start; i < parser->pos; i++) {
+            if (cj5__islowerchar(json5[i]) || cj5__isupperchar(json5[i]) || json5[i] == '_') {
+                continue;
+            }
+
+            if (cj5__isnum(json5[i])) {
+                if (i == start) {
+                    cj5__set_error(r, CJ5_ERROR_INVALID, parser->line, parser->pos - line_start);
+                    parser->pos = start;
+                    return false;
+                }
+                continue;
+            }
+
+            cj5__set_error(r, CJ5_ERROR_INVALID, parser->line, parser->pos - line_start);
+            parser->pos = start;
+            return false;
+        }
+
+        type = CJ5_TOKEN_STRING;
+    } else {
+        uint32_t fourcc_;
+        CJ5_MEMCPY(&fourcc_, &json5[start], 4);
+        uint32_t* fourcc = &fourcc_;
+ 
+        if (*fourcc == CJ5__NULL_FOURCC) {
+            type = CJ5_TOKEN_NULL;
+        } else if (*fourcc == CJ5__TRUE_FOURCC) {
+            type = CJ5_TOKEN_BOOL;
+        } else if (*fourcc == CJ5__FALSE_FOURCC) {
+            type = CJ5_TOKEN_BOOL;
+        } else {
+            num_type = CJ5_TOKEN_NUMBER_INT;
+            if (json5[start] == '0' && start < parser->pos + 1 && json5[start + 1] == 'x') {
+                start = start + 2;
+                for (int i = start; i < parser->pos; i++) {
+                    if (!(cj5__isrange(json5[i], '0', '9') || cj5__isrange(json5[i], 'A', 'F') ||
+                          cj5__isrange(json5[i], 'a', 'f'))) {
+                        cj5__set_error(r, CJ5_ERROR_INVALID, parser->line,
+                                       parser->pos - line_start);
+                        parser->pos = start;
+                        return false;
+                    }
+                }
+                num_type = CJ5_TOKEN_NUMBER_HEX;
+            } else {
+                int start_index = start;
+                if (json5[start] == '+') {
+                    ++start_index;
+                    ++start;
+                } else if (json5[start] == '-') {
+                    ++start_index;
+                }
+
+                for (int i = start_index; i < parser->pos; i++) {
+                    if (json5[i] == '.') {
+                        if (num_type == CJ5_TOKEN_NUMBER_FLOAT) {
+                            cj5__set_error(r, CJ5_ERROR_INVALID, parser->line,
+                                           parser->pos - line_start);
+                            parser->pos = start;
+                            return false;
+                        }
+                        num_type = CJ5_TOKEN_NUMBER_FLOAT;
+                        continue;
+                    }
+
+                    if (!cj5__isnum(json5[i])) {
+                        cj5__set_error(r, CJ5_ERROR_INVALID, parser->line,
+                                       parser->pos - line_start);
+                        parser->pos = start;
+                        return false;
+                    }
+                }
+            }
+
+            type = CJ5_TOKEN_NUMBER;
+        }
+    }
+
+    if (new_line) {
+        ++parser->line;
+    }
+
+    token->type = type;
+    if (type == CJ5_TOKEN_STRING) {
+        token->key_hash = cj5__hash_fnv32(&json5[start], &json5[parser->pos]);
+        token->key_start = start;
+        token->key_end = parser->pos;
+    } else {
+        token->num_type = num_type;
+    }
+    token->start = start;
+    token->end = parser->pos;
+    token->parent_id = parser->super_id;
+    --parser->pos;
     return true;
 }
 
-uint32 _private::hashtableAdd(HashTableData* tbl, uint32 key, const void* value)
+static bool cj5__parse_string(cj5__parser* parser, cj5_result* r, const char* json5, int len)
 {
-    uint32 h = _private::hashtableAddKey(tbl, key);
-    memcpy(tbl->values + tbl->valueStride * h, value, tbl->valueStride);
-    return h;
-}
+    cj5_token* token;
+    int start = parser->pos;
+    int line_start = start;
+    char str_open = json5[start];
+    ++parser->pos;
 
-uint32 _private::hashtableAddKey(HashTableData* tbl, uint32 key)
-{
-    ASSERT(tbl->count < tbl->capacity);
-    
-    uint32 h = hashTableFibHash(key, tbl->bitshift);
-    uint32 cnt = (uint32)tbl->capacity;
+    for (; parser->pos < len; parser->pos++) {
+        char c = json5[parser->pos];
 
-    if (tbl->keys[h]) {
-        for (uint32 i = 1; i < cnt; i++) {
-            uint32 index = (h + i) % cnt;
-            if (tbl->keys[index] == 0) {
-                h = index;
+        if (str_open == c) {
+            token = cj5__alloc_token(parser);
+            if (token == NULL) {
+                r->error = CJ5_ERROR_OVERFLOW;
+                return true;
+            }
+
+            token->type = CJ5_TOKEN_STRING;
+            token->start = start + 1;
+            token->end = parser->pos;
+            token->parent_id = parser->super_id;
+
+            return true;
+        }
+
+        if (c == '\\' && parser->pos + 1 < len) {
+            ++parser->pos;
+            switch (json5[parser->pos]) {
+            case '\"':
+            case '/':
+            case '\\':
+            case 'b':
+            case 'f':
+            case 'r':
+            case 'n':
+            case 't':
                 break;
+            case 'u':
+                ++parser->pos;
+                for (int i = 0; i < 4 && parser->pos < len; i++) {
+                    /* If it isn't a hex character we have an error */
+                    if (!((json5[parser->pos] >= 48 && json5[parser->pos] <= 57) ||   /* 0-9 */
+                          (json5[parser->pos] >= 65 && json5[parser->pos] <= 70) ||   /* A-F */
+                          (json5[parser->pos] >= 97 && json5[parser->pos] <= 102))) { /* a-f */
+                        cj5__set_error(r, CJ5_ERROR_INVALID, parser->line,
+                                       parser->pos - line_start);
+                        parser->pos = start;
+                        return false;
+                    }
+                    parser->pos++;
+                }
+
+                --parser->pos;
+                break;
+            case '\n':
+                line_start = parser->pos;
+                ++parser->line;
+                break;
+            default:
+                cj5__set_error(r, CJ5_ERROR_INVALID, parser->line, parser->pos - line_start);
+                parser->pos = start;
+                return false;
             }
         }
     }
-    
-    ASSERT_MSG(tbl->keys[h] == 0, "No free slot found in the hash-table");
-    tbl->keys[h] = key;
-    ++tbl->count;
-    return h;
+
+    parser->pos = start;
+    return true;
 }
 
-uint32 _private::hashtableFind(const HashTableData* tbl, uint32 key)
+static void cj5__skip_comment(cj5__parser* parser, const char* json5, int len)
 {
-    uint32 h = hashTableFibHash(key, tbl->bitshift);
-    uint32 cnt = (uint32)tbl->capacity;
-    if (tbl->keys[h] == key) {
-        return h;
-    } else {
-        for (uint32 i = 1; i < cnt; i++) {
-            uint32 index = (h + i) % cnt;
-            if (tbl->keys[index] == key)
-                return index;
+    for (; parser->pos < len; parser->pos++) {
+        if (json5[parser->pos] == '\n' || json5[parser->pos] == '\r') {
+            return;
         }
-        
-        return INVALID_INDEX;    // Worst case: Not found!
     }
 }
 
-void _private::hashtableClear(HashTableData* tbl)
+static void cj5__skip_multiline_comment(cj5__parser* parser, const char* json5, int len)
 {
-    memset(tbl->keys, 0x0, sizeof(uint32) * tbl->capacity);
-    tbl->count = 0;
+    for (; parser->pos < len; parser->pos++) {
+        if (json5[parser->pos] == '*' && parser->pos < (len - 1) && json5[parser->pos+1] == '/') {
+            return;
+        }
+    }
 }
 
-_private::HashTableData* _private::hashtableCreateWithBuffer(uint32 capacity, uint32 valueStride, void* buff, size_t size)
+cj5_result cj5_parse_with_factory(const char* json5, int len, cj5_factory factory)
 {
-    ASSERT(capacity > 0);
+    CJ5_ASSERT(json5);
+
+    cj5__parser parser;
+    CJ5_MEMSET(&parser, 0x0, sizeof(parser));
+    parser.super_id = -1;
+    parser.token_factory = factory;
+
+    cj5_result r;
+    CJ5_MEMSET(&r, 0x0, sizeof(r));
+
+    cj5_token* token;
+    int count = parser.next_id;
+    bool can_comment = false;
+
+    for (; parser.pos < len; parser.pos++) {
+        char c;
+        cj5_token_type type;
+
+        c = json5[parser.pos];
+        switch (c) {
+        case '{':
+        case '[':
+            can_comment = false;
+            count++;
+            token = cj5__alloc_token(&parser);
+            if (token == NULL) {
+                r.error = CJ5_ERROR_OVERFLOW;
+                break;
+            }
+
+            if (parser.super_id != -1) {
+                cj5_token* super_token = &parser.tokens[parser.super_id];
+                token->parent_id = parser.super_id;
+                if (++super_token->size == 1 && super_token->type == CJ5_TOKEN_STRING) {
+                    super_token->key_hash =
+                        cj5__hash_fnv32(&json5[super_token->start], &json5[super_token->end]);
+                    super_token->key_start = super_token->start;
+                    super_token->key_end = super_token->end;
+                }
+            }
+
+            token->type = (c == '{' ? CJ5_TOKEN_OBJECT : CJ5_TOKEN_ARRAY);
+            token->start = parser.pos;
+            parser.super_id = parser.next_id - 1;
+            break;
+
+        case '}':
+        case ']':
+            can_comment = false;
+            if (r.error == CJ5_ERROR_OVERFLOW) {
+                break;
+            }
+            type = (c == '}' ? CJ5_TOKEN_OBJECT : CJ5_TOKEN_ARRAY);
+
+            if (parser.next_id < 1) {
+                cj5__set_error(&r, CJ5_ERROR_INVALID, parser.line, parser.pos - parser.line);
+                return r;
+            }
+
+            token = &parser.tokens[parser.next_id - 1];
+            for (;;) {
+                if (token->start != -1 && token->end == -1) {
+                    if (token->type != type) {
+                        cj5__set_error(&r, CJ5_ERROR_INVALID, parser.line,
+                                       parser.pos - parser.line);
+                        return r;
+                    }
+                    token->end = parser.pos + 1;
+                    parser.super_id = token->parent_id;
+                    break;
+                }
+
+                if (token->parent_id == -1) {
+                    if (token->type != type || parser.super_id == -1) {
+                        cj5__set_error(&r, CJ5_ERROR_INVALID, parser.line,
+                                       parser.pos - parser.line);
+                        return r;
+                    }
+                    break;
+                }
+
+                token = &parser.tokens[token->parent_id];
+            }
+            break;
+
+        case '\"':
+        case '\'':
+            can_comment = false;
+            cj5__parse_string(&parser, &r, json5, len);
+            if (r.error && r.error != CJ5_ERROR_OVERFLOW) {
+                return r;
+            }
+            count++;
+            if (parser.super_id != -1 && r.error != CJ5_ERROR_OVERFLOW) {
+                if (++parser.tokens[parser.super_id].size == 1 &&
+                    parser.tokens[parser.super_id].type == CJ5_TOKEN_STRING) {
+                    parser.tokens[parser.super_id].key_hash = cj5__hash_fnv32(
+                        &json5[parser.tokens[parser.super_id].start], &json5[parser.tokens[parser.super_id].end]);
+                    parser.tokens[parser.super_id].key_start = parser.tokens[parser.super_id].start;
+                    parser.tokens[parser.super_id].key_end = parser.tokens[parser.super_id].end;
+                }
+            }
+            break;
+
+        case '\r':
+            can_comment = true;
+            break;
+        case '\n':
+            ++parser.line;
+            can_comment = true;
+            break;
+        case '\t':
+        case ' ':
+            break;
+
+        case ':':
+            can_comment = false;
+            parser.super_id = parser.next_id - 1;
+            break;
+
+        case ',':
+            can_comment = false;
+            if (parser.super_id != -1 && r.error != CJ5_ERROR_OVERFLOW &&
+                parser.tokens[parser.super_id].type != CJ5_TOKEN_ARRAY &&
+                parser.tokens[parser.super_id].type != CJ5_TOKEN_OBJECT) {
+                parser.super_id = parser.tokens[parser.super_id].parent_id;
+            }
+            break;
+        case '/':
+            if (can_comment && parser.pos < len - 1) {
+                if (json5[parser.pos + 1] == '/') {
+                    cj5__skip_comment(&parser, json5, len);
+                } else if (json5[parser.pos + 1] == '*') {
+                    cj5__skip_multiline_comment(&parser, json5, len);
+                }
+            } 
+            break;
+
+        default:
+            cj5__parse_primitive(&parser, &r, json5, len);
+            if (r.error && r.error != CJ5_ERROR_OVERFLOW) {
+                return r;
+            }
+            can_comment = false;
+            count++;
+            if (parser.super_id != -1 && r.error != CJ5_ERROR_OVERFLOW) {
+                if (++parser.tokens[parser.super_id].size == 1 &&
+                    parser.tokens[parser.super_id].type == CJ5_TOKEN_STRING) {
+                    parser.tokens[parser.super_id].key_hash = cj5__hash_fnv32(
+                        &json5[parser.tokens[parser.super_id].start], &json5[parser.tokens[parser.super_id].end]);
+                    parser.tokens[parser.super_id].key_start = parser.tokens[parser.super_id].start;
+                    parser.tokens[parser.super_id].key_end = parser.tokens[parser.super_id].end;
+                }
+            }
+            break;
+        }
+    }
+
+    if (r.error != CJ5_ERROR_OVERFLOW) {
+        for (int i = parser.next_id - 1; i >= 0; i--) {
+            if (parser.tokens[i].start != -1 && parser.tokens[i].end == -1) {
+                cj5__set_error(&r, CJ5_ERROR_INCOMPLETE, parser.line, parser.pos - parser.line);
+                return r;
+            }
+        }
+    }
+
+    r.num_tokens = count;
+    r.tokens = parser.tokens;
+    r.json5 = json5;
+    return r;
+}
+
+typedef struct cj5_factory_default {
+    cj5_token* tokens;
+    int max_tokens;
+    int index;
+} cj5_factory_default;
+
+static cj5_token* cj5_factory_default_create_fn(void* user)
+{
+    cj5_factory_default* factory = (cj5_factory_default*)user;
+
+    if (factory->index < factory->max_tokens)
+        return &factory->tokens[factory->index++];
+    else
+        return NULL;
+}
+
+static cj5_token* cj5_factory_default_getall_fn(void* user)
+{
+    cj5_factory_default* factory = (cj5_factory_default*)user;
+    return factory->tokens;
+}
+
+cj5_result cj5_parse(const char* json5, int len, cj5_token* tokens, int max_tokens)
+{
+    CJ5_ASSERT(json5);
+    CJ5_ASSERT(tokens);
+    CJ5_ASSERT(max_tokens > 0);
+
+    cj5_factory factory;
+    cj5_factory_default factory_data;
+    factory_data.tokens = tokens;
+    factory_data.max_tokens = max_tokens;
+    factory_data.index = 0;
+
+    factory.create_token = cj5_factory_default_create_fn;
+    factory.get_all = cj5_factory_default_getall_fn;
+    factory.user_data = &factory_data;
+
+    return cj5_parse_with_factory(json5, len, factory);
+}
+
+#    if CJ5_TOKEN_HELPERS
+#        include <stdlib.h>
+
+static int cj5__seek_recursive(cj5_result* r, int parent_id, uint32_t key_hash)
+{
+    const cj5_token* parent_tok = &r->tokens[parent_id];
+
+    for (int i = parent_id + 1, count = 0; i < r->num_tokens && count < parent_tok->size; i++) {
+        const cj5_token* tok = &r->tokens[i];
+
+        if (tok->size != 1 || tok->type != CJ5_TOKEN_STRING) {
+            continue;
+        }
+
+        if (parent_id == tok->parent_id) {
+            CJ5_ASSERT((i + 1) < r->num_tokens);
+            if (key_hash == tok->key_hash) {
+                return i + 1;    // return next "value" token (array/objects and primitive values)
+            } else if (r->tokens[i + 1].size) {
+                int found_id = cj5__seek_recursive(r, i + 1, key_hash);
+                if (found_id != -1) {
+                    return found_id;
+                }
+            }
+            count++;
+        }
+    }
+
+    return -1;
+}
+
+static bool cj5__tofloat(const char* str, double* ofloat)
+{
+    while (*str && cj5__isspace(*str)) {
+        str++;
+    }
+    int sign = 1;
+
+    const char* pC = str;
+    if (*pC == '-') {
+        sign = -1;
+        pC++;
+    }
+
+    int64_t tmp = 0;
+    while (*pC >= '0' && *pC <= '9') {
+        tmp *= 10;
+        tmp += *pC - '0';
+        pC++;
+    }
+
+    if (*pC == 0) {
+        *ofloat = (double)(sign >= 0 ? tmp : -tmp);
+        return true;
+    }
+
+    if (*pC == '.') {
+        pC++;
+
+        int64_t divisor = sign;
+        while (*pC >= '0' && *pC <= '9') {
+            divisor *= 10;
+            tmp *= 10;
+            tmp += *pC - '0';
+            pC++;
+        }
+
+        while (*pC && cj5__isspace(*pC)) {
+            pC++;
+        }
+
+        if (*pC == 0) {
+            *ofloat = (double)tmp / (double)divisor;
+            return true;
+        }
+    }
+
+    *ofloat = strtod(str, NULL);
+    return true;
+}
+
+int cj5_seek_recursive(cj5_result* r, int parent_id, const char* key)
+{
+    CJ5_ASSERT(parent_id >= 0 && parent_id < r->num_tokens);
+
+    uint32_t key_hash = cj5__hash_fnv32(key, key + cj5__strlen(key));
+    return cj5__seek_recursive(r, parent_id, key_hash);
+}
+
+int cj5_seek_hash(cj5_result* r, int parent_id, const uint32_t key_hash)
+{
+    CJ5_ASSERT(parent_id >= 0 && parent_id < r->num_tokens);
+    const cj5_token* parent_tok = &r->tokens[parent_id];
+
+    for (int i = parent_id + 1, count = 0; i < r->num_tokens && count < parent_tok->size; i++) {
+        const cj5_token* tok = &r->tokens[i];
+
+        if (tok->size != 1 || tok->type != CJ5_TOKEN_STRING) {
+            continue;
+        }
+
+        if (parent_id == tok->parent_id) {
+            if (key_hash == tok->key_hash) {
+                CJ5_ASSERT((i + 1) < r->num_tokens);
+                return i + 1;    // return next "value" token (array/objects and primitive values)
+            }
+            count++;
+        }
+    }
+
+    return -1;
+}
+
+int cj5_seek(cj5_result* r, int parent_id, const char* key)
+{
+    CJ5_ASSERT(parent_id >= 0 && parent_id < r->num_tokens);
+
+    uint32_t key_hash = cj5__hash_fnv32(key, key + cj5__strlen(key));
+
+    return cj5_seek_hash(r, parent_id, key_hash);
+}
+
+const char* cj5_get_string(cj5_result* r, int id, char* str, int max_str)
+{
+    CJ5_ASSERT(id >= 0 && id < r->num_tokens);
+    const cj5_token* tok = &r->tokens[id];
+    CJ5_ASSERT(tok->type == CJ5_TOKEN_STRING);
+    return cj5__strcpy(str, max_str, &r->json5[tok->start], tok->end - tok->start);
+}
+
+double cj5_get_double(cj5_result* r, int id)
+{
+    CJ5_ASSERT(id >= 0 && id < r->num_tokens);
+    const cj5_token* tok = &r->tokens[id];
+    CJ5_ASSERT(tok->type == CJ5_TOKEN_NUMBER);
+    char snum[32];
+    double num;
+    cj5__strcpy(snum, sizeof(snum), &r->json5[tok->start], tok->end - tok->start);
+    bool valid = cj5__tofloat(snum, &num);
+    CJ5__UNUSED(valid);
+    CJ5_ASSERT(valid);
+    return num;
+}
+
+float cj5_get_float(cj5_result* r, int id)
+{
+    return (float)cj5_get_double(r, id);
+}
+
+int cj5_get_int(cj5_result* r, int id)
+{
+    CJ5_ASSERT(id >= 0 && id < r->num_tokens);
+    const cj5_token* tok = &r->tokens[id];
+    CJ5_ASSERT(tok->type == CJ5_TOKEN_NUMBER);
+    char snum[32];
+    cj5__strcpy(snum, sizeof(snum), &r->json5[tok->start], tok->end - tok->start);
+    return (int)strtol(snum, NULL, tok->num_type != CJ5_TOKEN_NUMBER_HEX ? 10 : 16);
+}
+
+uint32_t cj5_get_uint(cj5_result* r, int id)
+{
+    CJ5_ASSERT(id >= 0 && id < r->num_tokens);
+    const cj5_token* tok = &r->tokens[id];
+    CJ5_ASSERT(tok->type == CJ5_TOKEN_NUMBER);
+    char snum[32];
+    cj5__strcpy(snum, sizeof(snum), &r->json5[tok->start], tok->end - tok->start);
+    return (uint32_t)strtoul(snum, NULL, tok->num_type != CJ5_TOKEN_NUMBER_HEX ? 10 : 16);
+}
+
+uint64_t cj5_get_uint64(cj5_result* r, int id)
+{
+    CJ5_ASSERT(id >= 0 && id < r->num_tokens);
+    const cj5_token* tok = &r->tokens[id];
+    CJ5_ASSERT(tok->type == CJ5_TOKEN_NUMBER);
+    char snum[64];
+    cj5__strcpy(snum, sizeof(snum), &r->json5[tok->start], tok->end - tok->start);
+    return strtoull(snum, NULL, tok->num_type != CJ5_TOKEN_NUMBER_HEX ? 10 : 16);
+}
+
+int64_t cj5_get_int64(cj5_result* r, int id)
+{
+    CJ5_ASSERT(id >= 0 && id < r->num_tokens);
+    const cj5_token* tok = &r->tokens[id];
+    CJ5_ASSERT(tok->type == CJ5_TOKEN_NUMBER);
+    char snum[64];
+    cj5__strcpy(snum, sizeof(snum), &r->json5[tok->start], tok->end - tok->start);
+    return strtoll(snum, NULL, tok->num_type != CJ5_TOKEN_NUMBER_HEX ? 10 : 16);
+}
+
+bool cj5_get_bool(cj5_result* r, int id)
+{
+    CJ5_ASSERT(id >= 0 && id < r->num_tokens);
+    const cj5_token* tok = &r->tokens[id];
+    CJ5_ASSERT(tok->type == CJ5_TOKEN_BOOL);
+    CJ5_ASSERT((tok->end - tok->start) >= 4);
+
+    uint32_t fourcc = *((const uint32_t*)&r->json5[tok->start]);
+    if (fourcc == CJ5__TRUE_FOURCC) {
+        return true;
+    } else if (fourcc == CJ5__FALSE_FOURCC) {
+        return false;
+    } else {
+        CJ5_ASSERT(0);
+        return false;
+    }
+}
+
+double cj5_seekget_double(cj5_result* r, int parent_id, const char* key, double def_val)
+{
+    int id = cj5_seek(r, parent_id, key);
+    return id > -1 ? cj5_get_double(r, id) : def_val;
+}
+
+float cj5_seekget_float(cj5_result* r, int parent_id, const char* key, float def_val)
+{
+    int id = cj5_seek(r, parent_id, key);
+    return id > -1 ? cj5_get_float(r, id) : def_val;
+}
+
+int cj5_seekget_int(cj5_result* r, int parent_id, const char* key, int def_val)
+{
+    int id = cj5_seek(r, parent_id, key);
+    return id > -1 ? cj5_get_int(r, id) : def_val;
+}
+
+uint32_t cj5_seekget_uint(cj5_result* r, int parent_id, const char* key, uint32_t def_val)
+{
+    int id = cj5_seek(r, parent_id, key);
+    return id > -1 ? cj5_get_uint(r, id) : def_val;
+}
+
+uint64_t cj5_seekget_uint64(cj5_result* r, int parent_id, const char* key, uint64_t def_val)
+{
+    int id = cj5_seek(r, parent_id, key);
+    return id > -1 ? cj5_get_uint64(r, id) : def_val;
+}
+
+int64_t cj5_seekget_int64(cj5_result* r, int parent_id, const char* key, int64_t def_val)
+{
+    int id = cj5_seek(r, parent_id, key);
+    return id > -1 ? cj5_get_int64(r, id) : def_val;
+}
+
+bool cj5_seekget_bool(cj5_result* r, int parent_id, const char* key, bool def_val)
+{
+    int id = cj5_seek(r, parent_id, key);
+    return id > -1 ? cj5_get_bool(r, id) : def_val;
+}
+
+const char* cj5_seekget_string(cj5_result* r, int parent_id, const char* key, char* str,
+                               int max_str, const char* def_val)
+{
+    int id = cj5_seek(r, parent_id, key);
+    return id > -1 ? cj5_get_string(r, id, str, max_str) : def_val;
+}
+
+int cj5_seekget_array_double(cj5_result* r, int parent_id, const char* key, double* values,
+                             int max_values)
+{
+    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
+    if (id != -1) {
+        const cj5_token* tok = &r->tokens[id];
+        CJ5__UNUSED(tok);
+        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
+        int count = 0;
+        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
+            values[count++] = cj5_get_double(r, i);
+        }
+        return count;
+    } else {
+        return 0;
+    }
+}
+
+int cj5_seekget_array_float(cj5_result* r, int parent_id, const char* key, float* values,
+                            int max_values)
+{
+    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
+    if (id != -1) {
+        const cj5_token* tok = &r->tokens[id];
+        CJ5__UNUSED(tok);
+        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
+        int count = 0;
+        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
+            values[count++] = cj5_get_float(r, i);
+        }
+        return count;
+    } else {
+        return 0;
+    }
+}
+
+int cj5_seekget_array_int16(cj5_result* r, int parent_id, const char* key, int16_t* values,
+                            int max_values)
+{
+    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
+    if (id != -1) {
+        const cj5_token* tok = &r->tokens[id];
+        CJ5__UNUSED(tok);
+        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
+        int count = 0;
+        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
+            values[count++] = (int16_t)cj5_get_int(r, i);
+        }
+        return count;
+    } else {
+        return 0;
+    }
+}
+
+int cj5_seekget_array_uint16(cj5_result* r, int parent_id, const char* key, uint16_t* values,
+                             int max_values)
+{
+    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
+    if (id != -1) {
+        const cj5_token* tok = &r->tokens[id];
+        CJ5__UNUSED(tok);
+        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
+        int count = 0;
+        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
+            values[count++] = (uint16_t)cj5_get_int(r, i);
+        }
+        return count;
+    } else {
+        return 0;
+    }
+}
+
+
+int cj5_seekget_array_int(cj5_result* r, int parent_id, const char* key, int* values,
+                          int max_values)
+{
+    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
+    if (id != -1) {
+        const cj5_token* tok = &r->tokens[id];
+        CJ5__UNUSED(tok);
+        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
+        int count = 0;
+        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
+            values[count++] = cj5_get_int(r, i);
+        }
+        return count;
+    } else {
+        return 0;
+    }
+}
+
+int cj5_seekget_array_uint(cj5_result* r, int parent_id, const char* key, uint32_t* values,
+                           int max_values)
+{
+    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
+    if (id != -1) {
+        const cj5_token* tok = &r->tokens[id];
+        CJ5__UNUSED(tok);
+        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
+        int count = 0;
+        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
+            values[count++] = cj5_get_uint(r, i);
+        }
+        return count;
+    } else {
+        return 0;
+    }
+}
+
+int cj5_seekget_array_uint64(cj5_result* r, int parent_id, const char* key, uint64_t* values,
+                             int max_values)
+{
+    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
+    if (id != -1) {
+        const cj5_token* tok = &r->tokens[id];
+        CJ5__UNUSED(tok);
+        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
+        int count = 0;
+        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
+            values[count++] = cj5_get_uint64(r, i);
+        }
+        return count;
+    } else {
+        return 0;
+    }
+}
+
+int cj5_seekget_array_int64(cj5_result* r, int parent_id, const char* key, int64_t* values,
+                            int max_values)
+{
+    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
+    if (id != -1) {
+        const cj5_token* tok = &r->tokens[id];
+        CJ5__UNUSED(tok);
+        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
+        int count = 0;
+        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
+            values[count++] = cj5_get_int64(r, i);
+        }
+        return count;
+    } else {
+        return 0;
+    }
+}
+
+int cj5_seekget_array_bool(cj5_result* r, int parent_id, const char* key, bool* values,
+                           int max_values)
+{
+    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
+    if (id != -1) {
+        const cj5_token* tok = &r->tokens[id];
+        CJ5__UNUSED(tok);
+        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
+        int count = 0;
+        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
+            values[count++] = cj5_get_bool(r, i);
+        }
+        return count;
+    } else {
+        return 0;
+    }
+}
+
+int cj5_seekget_array_string(cj5_result* r, int parent_id, const char* key, char** strs,
+                             int max_str, int max_values)
+{
+    int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
+    if (id != -1) {
+        const cj5_token* tok = &r->tokens[id];
+        CJ5__UNUSED(tok);
+        CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
+        int count = 0;
+        for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
+            cj5_get_string(r, i, strs[count++], max_str);
+        }
+        return count;
+    } else {
+        return 0;
+    }
+}
+
+int cj5_get_array_elem(cj5_result* r, int id, int index)
+{
+    const cj5_token* tok = &r->tokens[id];
+    CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
+    CJ5_ASSERT(index < tok->size);
+    for (int i = id + 1, count = 0, ic = r->num_tokens; i < ic && count < tok->size; i++) {
+        if (r->tokens[i].parent_id == id) {
+            if (count == index) {
+                return i;
+            }
+            count++;
+        }
+    }
+    return -1;
+}
+
+int cj5_get_array_elem_incremental(cj5_result* r, int id, int index, int prev_elem)
+{
+    const cj5_token* tok = &r->tokens[id];
+    CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
+    CJ5_ASSERT(index < tok->size);
+    int start = prev_elem <= 0 ? (id + 1) : (prev_elem + 1);
+    for (int i = start, count = index, ic = r->num_tokens; i < ic && count < tok->size; i++) {
+        if (r->tokens[i].parent_id == id) {
+            if (count == index) {
+                return i;
+            }
+            count++;
+        }
+    }
+    return -1;
+}
+
+#    endif    // CJ5_TOKEN_HELPERS
+#endif        // CJ5_IMPLEMENT
+
+#undef CJ5_IMPLEMENT
+
+
+struct JsonContext
+{
+    cj5_result r;       // This should always come first, because the wrapper API casts JsonContext to cj5_result*
+    uint32 numTokens;
+    MemAllocator* alloc;
+    cj5_token* tokens;
+};
+
+JsonContext* Json::Parse(const char* json5, uint32 json5Len, JsonErrorLocation* outErrLoc, MemAllocator* alloc)
+{
+    ASSERT(json5);
+    ASSERT(json5Len < INT32_MAX);
+    ASSERT(alloc);
+
+    bool mainAllocIsTemp = alloc->GetType() == MemAllocatorType::Temp;
+    MemTempAllocator::ID tempMemId = mainAllocIsTemp ? ((MemTempAllocator*)alloc)->GetId() : MemTempAllocator::PushId();
+    MemTempAllocator tmpAlloc(tempMemId);
+    Array<cj5_token> tokens(&tmpAlloc);
+    tokens.Reserve(64);
+
+    auto CreateToken = [](void* user)->cj5_token* { return ((Array<cj5_token>*)user)->Push(); };
+    auto GetAll = [](void* user)->cj5_token* { return ((Array<cj5_token>*)user)->Ptr(); };
+    cj5_factory factory {
+        .create_token = CreateToken,
+        .get_all = GetAll,
+        .user_data = &tokens
+    };
+
+    json5Len = json5Len == 0 ? json5Len : Str::Len(json5);
+    cj5_result r = cj5_parse_with_factory(json5, (int)json5Len, factory);
+
+    if (r.error == CJ5_ERROR_NONE) {
+        ASSERT(tokens.Count());
+
+        MemSingleShotMalloc<JsonContext> mallocator;
+        mallocator.AddMemberArray<cj5_token>(offsetof(JsonContext, tokens), tokens.Count());
+        JsonContext* ctx = mallocator.Malloc(alloc);
+
+        ctx->numTokens = tokens.Count();
+        memcpy(ctx->tokens, r.tokens, tokens.Count());
+        ctx->r.tokens = ctx->tokens;
+
+        ctx->r = r;
+        ctx->alloc = alloc;
+
+        if (!mainAllocIsTemp)
+            MemTempAllocator::PopId(tempMemId);
+        return ctx;
+    }
+    else {
+        if (outErrLoc) {
+            *outErrLoc = JsonErrorLocation {
+                .line = (uint32)r.error_line,
+                .col = (uint32)r.error_col
+            };
+        }
+        if (!mainAllocIsTemp)
+            MemTempAllocator::PopId(tempMemId);
+        return nullptr;
+    }
+}
+
+void Json::Destroy(JsonContext* ctx)
+{
+    if (ctx && ctx->alloc) 
+        MemSingleShotMalloc<JsonContext>::Free(ctx, ctx->alloc);
+}
+
+uint32 JsonNode::GetChildCount() const
+{
+    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
+
+    const cj5_token* tok = &r->tokens[mTokenId];
+    if (tok->parent_id != -1) {
+        const cj5_token* parent = &r->tokens[tok->parent_id];
+        if (parent->type == CJ5_TOKEN_STRING) {     // this would be the key
+            return r->tokens[parent->parent_id].type == CJ5_TOKEN_OBJECT ? r->tokens[parent->parent_id].size : 0;
+        }
+        else {
+            return 0;
+        }
+    }
+    else {
+        return tok->type == CJ5_TOKEN_OBJECT ? tok->size : 0;
+    }
+}
+
+uint32 JsonNode::GetArrayCount() const
+{
+    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
+    const cj5_token* tok = &r->tokens[mTokenId];
+    ASSERT(tok->type == CJ5_TOKEN_ARRAY);
+    return tok->size;
+}
+
+bool JsonNode::IsArray() const
+{
+    return mCtx->r.tokens[mTokenId].type == CJ5_TOKEN_ARRAY;
+}
+
+bool JsonNode::IsObject() const
+{
+    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
     
-    capacity = hashTableNearestPow2(capacity);   
+    const cj5_token* tok = &r->tokens[mTokenId];
+    if (tok->type == CJ5_TOKEN_OBJECT)
+        return true;
+
+    if (tok->parent_id != -1)
+        return r->tokens[tok->parent_id].type == CJ5_TOKEN_OBJECT;
+
+    return false;
+}
+
+const char* JsonNode::GetKey(char* outKey, uint32 keySize) const
+{
+    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
+    ASSERT(mTokenId > 0 && mTokenId < r->num_tokens);
+    ASSERT(r->tokens[mTokenId].parent_id != -1);
+    const cj5_token* tok = &r->tokens[r->tokens[mTokenId].parent_id];   // get the 'key' token (parent)
+    ASSERT(tok->type == CJ5_TOKEN_STRING);
+    return cj5__strcpy(outKey, keySize, &r->json5[tok->start], tok->end - tok->start);
+}
+
+const char* JsonNode::GetValue(char* outValue, uint32 valueSize) const
+{
+    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
+    CJ5_ASSERT(mTokenId >= 0 && mTokenId < r->num_tokens);
+    const cj5_token* tok = &r->tokens[mTokenId];
+    return cj5__strcpy(outValue, valueSize, &r->json5[tok->start], tok->end - tok->start);
+
+}
+
+JsonNode JsonNode::GetChildItem(uint32 _index) const
+{
+    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
+    const cj5_token* tok = &r->tokens[mTokenId];
+    int index = (int)_index;
+
+    ASSERT(tok->type == CJ5_TOKEN_OBJECT);
+    ASSERT(index < tok->size);
     
-    MemSingleShotMalloc<HashTableData> hashTableBuff;
-    hashTableBuff.AddMemberArray<uint32>(offsetof(HashTableData, keys), capacity)
-                 .AddMemberArray<uint8>(offsetof(HashTableData, values), valueStride*capacity);
-    HashTableData* tbl = hashTableBuff.Calloc(buff, size);
+    for (int i = mTokenId + 1, count = 0, ic = r->num_tokens; i < ic && count < tok->size; i+=2) {
+        ASSERT(r->tokens[i].type == CJ5_TOKEN_STRING);
+        if (r->tokens[i].parent_id == mTokenId) {
+            if (count == index)
+                return JsonNode(mCtx, i + 1, index);       // get next 'value' token
+            count++;
+        }
+    }
+    return JsonNode(mCtx, -1);
+}
+
+JsonNode JsonNode::GetNextChildItem(const JsonNode& curChildItem) const
+{
+    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
+    const cj5_token* tok = &r->tokens[mTokenId];
+
+    ASSERT(curChildItem.mItemIndex < tok->size);
+
+    int nextIndex = curChildItem.mItemIndex + 1;
+    if (nextIndex == tok->size) 
+        return JsonNode(mCtx, -1);
+
+    for (int i = curChildItem.mTokenId + 1, ic = r->num_tokens; i < ic; i+=2) {
+        if (r->tokens[i].parent_id == mTokenId)
+            return JsonNode(mCtx, i + 1, nextIndex);
+    }
+
+    return JsonNode(mCtx, -1);
+}
+
+JsonNode JsonNode::GetArrayItem(uint32 _index) const
+{
+    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
+    const cj5_token* tok = &r->tokens[mTokenId];
+    int index = (int)_index;
+    ASSERT(tok->type == CJ5_TOKEN_ARRAY);
+    ASSERT(index < tok->size);
+    for (int i = mTokenId + 1, count = 0, ic = r->num_tokens; i < ic && count < tok->size; i++) {
+        if (r->tokens[i].parent_id == mTokenId) {
+            if (count == index)
+                return JsonNode(mCtx, i, _index);
+            count++;
+        }
+    }
+    return JsonNode(mCtx, -1);
+}
+
+JsonNode JsonNode::GetNextArrayItem(const JsonNode& curItem) const
+{
+    cj5_result* r = reinterpret_cast<cj5_result*>(mCtx);
+    const cj5_token* tok = &r->tokens[mTokenId];
+    int index = curItem.mItemIndex + 1;
+    ASSERT(tok->type == CJ5_TOKEN_ARRAY);
+
+    if (index == tok->size) 
+        return JsonNode(mCtx, -1);
+
+    int startId = curItem.mTokenId <= 0 ? (mTokenId + 1) : (curItem.mTokenId + 1);
+    for (int i = startId, ic = r->num_tokens; i < ic; i++) {
+        if (r->tokens[i].parent_id == mTokenId)
+            return JsonNode(mCtx, i, index);
+    }
+    return JsonNode(mCtx, -1);
+}
+
+
+#include <stdarg.h> // va_list
+#include <stdio.h>  // puts
+
+
+#if PLATFORM_MOBILE || PLATFORM_OSX
+    #define TERM_COLOR_RESET     ""
+    #define TERM_COLOR_RED       ""
+    #define TERM_COLOR_YELLOW    ""
+    #define TERM_COLOR_GREEN     ""
+    #define TERM_COLOR_CYAN      ""
+    #define TERM_COLOR_WHITE     ""
+#else
+    #define TERM_COLOR_RESET     "\033[0m"
+    #define TERM_COLOR_RED       "\033[31m"
+    #define TERM_COLOR_YELLOW    "\033[33m"
+    #define TERM_COLOR_GREEN     "\033[32m"
+    #define TERM_COLOR_CYAN      "\033[36m"
+    #define TERM_COLOR_WHITE     "\033[97m"
+#endif
+
+#ifndef DEFAULT_LOG_LEVEL
+    #if CONFIG_DEV_MODE
+        #define DEFAULT_LOG_LEVEL LogLevel::Debug
+    #else
+        #define DEFAULT_LOG_LEVEL LogLevel::Info
+    #endif
+#endif
+
+struct LogContext
+{
+    StaticArray<Pair<LogCallback, void*>, 8> callbacks;
+    LogLevel logLevel = DEFAULT_LOG_LEVEL;
+    bool breakOnErrors;
+    bool treatWarningsAsErrors;
+};
+
+static LogContext gLog;
+
+static const char* LOG_ENTRY_TYPES[static_cast<uint32>(LogLevel::_Count)] = { 
+    "", 
+    "[ERR] ",
+    "[WRN] ",
+    "", 
+    "", 
+    "[DBG] "
+};
+
+namespace Log
+{
+    void SetSettings(LogLevel logLevel, bool breakOnErrors, bool treatWarningsAsErrors)
+    {
+        ASSERT(logLevel != LogLevel::Default);
+
+        gLog.logLevel = logLevel;
+        gLog.breakOnErrors = breakOnErrors;
+        gLog.treatWarningsAsErrors = treatWarningsAsErrors;
+    }
+
+    static void _PrintToTerminal(const LogEntry& entry)
+    {
+        uint32 newSize = entry.textLen + 128;
+
+        MemTempAllocator tmp;
+        char* text = tmp.MallocTyped<char>(newSize);
+
+        if (text) {
+            const char* openFmt = "";
+            const char* closeFmt = "";
+
+            switch (entry.type) {
+            case LogLevel::Info:    openFmt = TERM_COLOR_WHITE; closeFmt = TERM_COLOR_WHITE; break;
+            case LogLevel::Debug:	openFmt = TERM_COLOR_CYAN; closeFmt = TERM_COLOR_RESET; break;
+            case LogLevel::Verbose:	openFmt = TERM_COLOR_RESET; closeFmt = TERM_COLOR_RESET; break;
+            case LogLevel::Warning:	openFmt = TERM_COLOR_YELLOW; closeFmt = TERM_COLOR_RESET; break;
+            case LogLevel::Error:	openFmt = TERM_COLOR_RED; closeFmt = TERM_COLOR_RESET; break;
+            default:			    break;
+            }
+
+            Str::PrintFmt(text, newSize, "%s%s%s%s", 
+                openFmt, 
+                LOG_ENTRY_TYPES[static_cast<uint32>(entry.type)], 
+                entry.text, closeFmt);
+        
+            puts(text);
+        }
+        else {
+            ASSERT_ALWAYS(0, "Not enough stack memory: %u bytes", newSize);
+        }
+    }
+
+    #if PLATFORM_ANDROID
+    static void _PrintToAndroidLog(const LogEntry& entry)
+    {
+        OSAndroidLogType androidLogType;
+        switch (entry.type) {
+        case LogLevel::Info:	androidLogType = OSAndroidLogType::Info;        break;
+        case LogLevel::Debug:	androidLogType = OSAndroidLogType::Debug;       break;
+        case LogLevel::Verbose:	androidLogType = OSAndroidLogType::Verbose;     break;
+        case LogLevel::Warning:	androidLogType = OSAndroidLogType::Warn;        break;
+        case LogLevel::Error:	androidLogType = OSAndroidLogType::Error;       break;
+        default:			    androidLogType = OSAndroidLogType::Unknown;
+        }
+        
+        OS::AndroidPrintToLog(androidLogType, CONFIG_APP_NAME, entry.text);
+    }
+    #endif // PLATFORM_ANDROID
+
+    static void _PrintToDebugger(const LogEntry& entry)
+    {
+        #if PLATFORM_WINDOWS
+            uint32 newSize = entry.textLen + 128;
+            MemTempAllocator tmp;
+            char* text = tmp.MallocTyped<char>(newSize);
+
+            if (text) {
+                char source[PATH_CHARS_MAX];
+                if (entry.sourceFile)
+                    Str::PrintFmt(source, sizeof(source), "%s(%d): ", entry.sourceFile, entry.line);
+                else 
+                    source[0] = '\0';
+                Str::PrintFmt(text, newSize, "%s%s%s\n", source, LOG_ENTRY_TYPES[static_cast<uint32>(entry.type)], entry.text);
+                Debug::Print(text);
+            }
+            else {
+                ASSERT_ALWAYS(0, "Not enough stack memory: %u bytes", newSize);
+            }
+        #else
+            UNUSED(entry);
+        #endif
+    }
+
+    #ifdef TRACY_ENABLE
+    static void _PrintToTracy(const LogEntry& entry)
+    {
+        uint32 color;
+        switch (entry.type) {
+        case LogLevel::Info:	color = 0xFFFFFF; break;
+        case LogLevel::Debug:	color = 0xC8C8C8; break;
+        case LogLevel::Verbose:	color = 0x808080; break;
+        case LogLevel::Warning:	color = 0xFFFF00; break;
+        case LogLevel::Error:	color = 0xFF0000; break;
+        default:			    color = 0xFFFFFF; break;
+        }
+
+        TracyCMessageC(entry.text, entry.textLen, color);
+    }
+    #endif
+
+    static void _DispatchLogEntry(const LogEntry& entry)
+    {
+        _PrintToTerminal(entry); 
+        _PrintToDebugger(entry);
+        #ifdef TRACY_ENABLE
+            _PrintToTracy(entry);
+        #endif
+        #if PLATFORM_ANDROID
+            _PrintToAndroidLog(entry);
+        #endif
+
+        for (Pair<LogCallback, void*> c : gLog.callbacks)
+            c.first(entry, c.second);
+
+        if (entry.type == LogLevel::Error && gLog.breakOnErrors) {
+            ASSERT_MSG(0, "Breaking on error");
+        }
+    }
+
+    void _private::PrintInfo(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
+    {
+        if (gLog.logLevel < LogLevel::Info)
+            return;
+
+        MemTempAllocator tmp;
+        uint32 fmtLen = Str::Len(fmt) + 1024;
+        char* text = tmp.MallocTyped<char>(fmtLen);
+
+        va_list args;
+        va_start(args, fmt);
+        Str::PrintFmtArgs(text, fmtLen, fmt, args);
+        va_end(args);
+
+        _DispatchLogEntry({
+            .type = LogLevel::Info,
+            .channels = channels,
+            .textLen = Str::Len(text),
+            .sourceFileLen = sourceFile ? Str::Len(sourceFile) : 0,
+            .line = line,
+            .text = text,
+            .sourceFile = sourceFile
+        });
+    }
+
+    void _private::PrintDebug(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
+    {
+        #if !CONFIG_FINAL_BUILD
+            if (gLog.logLevel < LogLevel::Debug)
+                return;
+        
+            MemTempAllocator tmp;
+            uint32 fmtLen = Str::Len(fmt) + 1024;
+            char* text = tmp.MallocTyped<char>(fmtLen);
+
+            va_list args;
+            va_start(args, fmt);
+            Str::PrintFmtArgs(text, fmtLen, fmt, args);
+            va_end(args);
+
+            _DispatchLogEntry({
+                .type = LogLevel::Debug,
+                .channels = channels,
+                .textLen = Str::Len(text),
+                .sourceFileLen = sourceFile ? Str::Len(sourceFile) : 0,
+                .line = line,
+                .text = text,
+                .sourceFile = sourceFile
+            });
+        #else
+            UNUSED(channels);
+            UNUSED(sourceFile);
+            UNUSED(line);
+            UNUSED(fmt);
+        #endif
+    }
+
+    void _private::PrintVerbose(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
+    {
+        if (gLog.logLevel < LogLevel::Verbose)
+            return;
+
+        MemTempAllocator tmp;
+        uint32 fmtLen = Str::Len(fmt) + 1024;
+        char* text = tmp.MallocTyped<char>(fmtLen);
+
+        va_list args;
+        va_start(args, fmt);
+        Str::PrintFmtArgs(text, fmtLen, fmt, args);
+        va_end(args);
+
+        _DispatchLogEntry({
+            .type = LogLevel::Verbose,
+            .channels = channels,
+            .textLen = Str::Len(text),
+            .sourceFileLen = sourceFile ? Str::Len(sourceFile) : 0,
+            .line = line,
+            .text = text,
+            .sourceFile = sourceFile
+        });
+    }
+
+    void _private::PrintWarning(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
+    {
+        if (gLog.logLevel < LogLevel::Warning)
+            return;
+
+        MemTempAllocator tmp;
+        uint32 fmtLen = Str::Len(fmt) + 1024;
+        char* text = tmp.MallocTyped<char>(fmtLen);
+
+        va_list args;
+        va_start(args, fmt);
+        Str::PrintFmtArgs(text, fmtLen, fmt, args);
+        va_end(args);
+
+        _DispatchLogEntry({
+            .type = !gLog.treatWarningsAsErrors ? LogLevel::Warning : LogLevel::Error,
+            .channels = channels,
+            .textLen = Str::Len(text),
+            .sourceFileLen = sourceFile ? Str::Len(sourceFile) : 0,
+            .line = line,
+            .text = text,
+            .sourceFile = sourceFile
+        });
+    }
+
+    void _private::PrintError(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
+    {
+        if (gLog.logLevel < LogLevel::Error)
+            return;
+
+        MemTempAllocator tmp;
+        uint32 fmtLen = Str::Len(fmt) + 1024;
+        char* text = tmp.MallocTyped<char>(fmtLen);
+
+        va_list args;
+        va_start(args, fmt);
+        Str::PrintFmtArgs(text, fmtLen, fmt, args);
+        va_end(args);
+
+        _DispatchLogEntry({
+            .type = LogLevel::Error,
+            .channels = channels,
+            .textLen = Str::Len(text),
+            .sourceFileLen = sourceFile ? Str::Len(sourceFile) : 0,
+            .line = line,
+            .text = text,
+            .sourceFile = sourceFile        
+        });
+    }
+
+    void RegisterCallback(LogCallback callback, void* userData)
+    {
+        ASSERT(callback);
+        ASSERT_MSG(gLog.callbacks.FindIf([callback](const Pair<LogCallback, void*>& p) { return p.first == callback; }) == UINT32_MAX, "Callback already added");
+        gLog.callbacks.Push(Pair<LogCallback, void*>(callback, userData));
+    }
+
+    void UnregisterCallback(LogCallback callback)
+    {
+        uint32 index = gLog.callbacks.FindIf([callback](const Pair<LogCallback, void*>& p) { return p.first == callback; });
+        if (index != UINT32_MAX)
+            gLog.callbacks.RemoveAndSwap(index);
+    }
+} // Log
+
+
+#include <math.h>
+
+float M::CopySign(float _x, float _y)
+{
+    return ::copysignf(_x, _y);
+}
+
+float M::Floor(float _f)
+{
+    return ::floorf(_f);
+}
+
+float M::Cos(float _a)
+{
+    return ::cosf(_a);
+}
+
+float M::ACos(float _a)
+{
+    return ::acosf(_a);
+}
+
+float M::Sin(float _a)
+{
+    return ::sinf(_a);
+}
+
+float M::ASin(float _a)
+{
+    return ::asinf(_a);
+}
+
+float M::ATan2(float _y, float _x)
+{
+    return ::atan2f(_y, _x);
+}
+
+float M::Exp(float _a)
+{
+    return ::expf(_a);
+}
+
+float M::Log(float _a)
+{
+    return ::logf(_a);
+}
+
+#if !(defined(__SSE2__) || (COMPILER_MSVC && (ARCH_64BIT || _M_IX86_FP >= 2)))
+    float M::Sqrt(float _a)
+    {
+        return ::sqrtf(_a);
+    }
+
+    float M::Rsqrt(float _a)
+    {
+        return 1.0f / ::sqrtf(_a);
+    }
+#endif // if not __SSE2__
+
     
-    tbl->bitshift = hashTableCalcBitShift(capacity);
-    tbl->valueStride = valueStride;
-    tbl->count = 0;
+                                        
+Mat4 Mat4::ViewLookAt(Float3 eye, Float3 target, Float3 up)
+{
+    Float3 zaxis = Float3::Norm(Float3::Sub(target, eye));
+    Float3 xaxis = Float3::Norm(Float3::Cross(zaxis, up));
+    Float3 yaxis = Float3::Cross(xaxis, zaxis);
+    
+    return Mat4(xaxis.x,    xaxis.y,    xaxis.z,    -Float3::Dot(xaxis, eye), 
+                yaxis.x,    yaxis.y,    yaxis.z,    -Float3::Dot(yaxis, eye), 
+                -zaxis.x,   -zaxis.y,   -zaxis.z,    Float3::Dot(zaxis, eye),
+                0,          0,          0,           1.0f);
+}
+
+Mat4 Mat4::ViewLookAtLH(Float3 eye, Float3 target, Float3 up)
+{
+    Float3 zaxis = Float3::Norm(Float3::Sub(target, eye));
+    Float3 xaxis = Float3::Norm(Float3::Cross(up, zaxis));
+    Float3 yaxis = Float3::Cross(zaxis, xaxis);
+    
+    return Mat4(xaxis.x, xaxis.y, xaxis.z, -Float3::Dot(xaxis, eye), 
+                yaxis.x, yaxis.y, yaxis.z, -Float3::Dot(yaxis, eye), 
+                zaxis.x, zaxis.y, zaxis.z, -Float3::Dot(zaxis, eye),
+                0,       0,       0,        1.0f);
+}
+
+Mat4 Mat4::ViewFPS(Float3 eye, float pitch, float yaw)
+{
+    float cos_pitch = M::Cos(pitch);
+    float sin_pitch = M::Sin(pitch);
+    float cos_yaw = M::Cos(yaw);
+    float sin_yaw = M::Sin(yaw);
+    
+    Float3 xaxis = Float3(cos_yaw, 0, -sin_yaw);
+    Float3 yaxis = Float3(sin_yaw * sin_pitch, cos_pitch, cos_yaw * sin_pitch);
+    Float3 zaxis = Float3(sin_yaw * cos_pitch, -sin_pitch, cos_pitch * cos_yaw);
+    
+    return Mat4(xaxis.x, xaxis.y, xaxis.z, -Float3::Dot(xaxis, eye), yaxis.x, yaxis.y, yaxis.z,
+                -Float3::Dot(yaxis, eye), zaxis.x, zaxis.y, zaxis.z, -Float3::Dot(zaxis, eye),
+                0, 0, 0, 1.0f);
+}
+
+Mat4 Mat4::ViewArcBall(Float3 move, Quat rot, Float3 target_pos)
+{
+    Mat4 translateInv = Mat4::Translate(-move.x, -move.y, -move.z);
+    Mat4 rotateInv = Mat4::FromQuat(Quat::Inverse(rot));
+    Mat4 translateObjInv = Mat4::Translate(-target_pos.x, -target_pos.y, -target_pos.z);
+    Mat4 TR = Mat4::Mul(translateObjInv, rotateInv);
+    return Mat4::Mul(TR, translateInv);
+}
+
+
+Mat4 Mat4::Perspective(float width, float height, float zn, float zf, bool d3dNdc)
+{
+    const float d = zf - zn;
+    const float aa = zf / d;
+    const float bb = zn * aa;
+    const float invY = !d3dNdc ? -1.0f : 1.0f;
+    return Mat4(width,  0,              0,      0, 
+                0,      height*invY,    0,      0, 
+                0,      0,              -aa,    -bb, 
+                0,      0,              -1.0f,  0);
+}
+
+Mat4 Mat4::PerspectiveLH(float width, float height, float zn, float zf, bool d3dNdc)
+{
+    const float d = zf - zn;
+    const float aa = zf / d;
+    const float bb = zn * aa;
+    const float invY = !d3dNdc ? -1.0f : 1.0f;
+    return Mat4(width,  0,              0,      0, 
+                0,      height*invY,    0,      0, 
+                0,      0,              aa,     -bb, 
+                0,      0,              1.0f,   0);
+}
+
+Mat4 Mat4::PerspectiveOffCenter(float xmin, float ymin, float xmax, float ymax, float zn, float zf, bool d3dNdc)
+{
+    const float d = zf - zn;
+    const float aa = zf / d;
+    const float bb = zn * aa;
+    const float width = xmax - xmin;
+    const float height = ymax - ymin;
+    const float invY = !d3dNdc ? -1.0f : 1.0f;
+    return Mat4(width,  0,              xmin,   0, 
+                0,      height*invY,    ymin,   0, 
+                0,      0,              -aa,    -bb, 
+                0,      0,              -1.0f,  0);
+}
+
+Mat4 Mat4::PerspectiveOffCenterLH(float xmin, float ymin, float xmax, float ymax, float zn, float zf, bool d3dNdc)
+{
+    const float d = zf - zn;
+    const float aa = zf / d;
+    const float bb = zn * aa;
+    const float width = xmax - xmin;
+    const float height = ymax - ymin;
+    const float invY = !d3dNdc ? -1.0f : 1.0f;
+    return Mat4(width,  0,              -xmin,  0, 
+                0,      height*invY,    -ymin,  0, 
+                0,      0,              aa,     -bb, 
+                0,      0,              1.0f,   0);
+}
+
+Mat4 Mat4::PerspectiveFOV(float fov_y, float aspect, float zn, float zf, bool d3dNdc)
+{
+    const float height = 1.0f / M::Tan(fov_y * 0.5f);
+    const float width = height / aspect;
+    return Mat4::Perspective(width, height, zn, zf, d3dNdc);
+}
+
+Mat4 Mat4::PerspectiveFOVLH(float fov_y, float aspect, float zn, float zf, bool d3dNdc)
+{
+    const float height = 1.0f / M::Tan(fov_y * 0.5f);
+    const float width = height / aspect;
+    return Mat4::PerspectiveLH(width, height, zn, zf, d3dNdc);
+}
+
+Mat4 Mat4::Ortho(float width, float height, float zn, float zf, float offset, bool d3dNdc)
+{
+    const float d = zf - zn;
+    const float cc = 1.0f / d;
+    const float ff = -zn / d;
+    const float ym = !d3dNdc ? -1.0f : 1.0f;
+    
+    return Mat4(2.0f / width,   0,                      0,      offset, 
+                0,              (2.0f / height)*ym,     0,      0, 
+                0,              0,                      -cc,    ff, 
+                0,              0,                      0,      1.0f);
+}
+
+Mat4 Mat4::OrthoLH(float width, float height, float zn, float zf, float offset, bool d3dNdc)
+{
+    const float d = zf - zn;
+    const float cc = 1.0f / d;
+    const float ff = -zn / d;
+    const float ym = !d3dNdc ? -1.0f : 1.0f;
+    
+    return Mat4(2.0f / width,   0,                      0,      offset, 
+                0,              (2.0f / height)*ym,     0,      0, 
+                0,              0,                      cc,     ff, 
+                0,              0,                      0,      1.0f);
+}
+
+Mat4 Mat4::OrthoOffCenter(float xmin, float ymin, float xmax, float ymax, float zn, float zf, float offset, bool d3dNdc)
+{
+    const float width = xmax - xmin;
+    const float height = ymax - ymin;
+    const float d = zf - zn;
+    const float cc = 1.0f / d;
+    const float dd = (xmin + xmax) / (xmin - xmax);
+    const float ee = (ymin + ymax) / (ymin - ymax);
+    const float ff = -zn / d;
+    const float ym = !d3dNdc ? -1.0f : 1.0f;
+    
+    return Mat4(2.0f / width,   0,                  0,      dd + offset, 
+                0,              (2.0f / height)*ym, 0,      ee*ym, 
+                0,              0,                  -cc,    ff,
+                0,              0,                  0,      1.0f);
+}
+
+Mat4 Mat4::OrthoOffCenterLH(float xmin, float ymin, float xmax, float ymax, float zn, float zf, float offset, bool d3dNdc)
+{
+    const float width = xmax - xmin;
+    const float height = ymax - ymin;
+    const float d = zf - zn;
+    const float cc = 1.0f / d;
+    const float dd = (xmin + xmax) / (xmin - xmax);
+    const float ee = (ymin + ymax) / (ymin - ymax);
+    const float ff = -zn / d;
+    const float ym = !d3dNdc ? -1.0f : 1.0f;
+    
+    return Mat4(2.0f / width,   0,                      0,      dd + offset, 
+                0,              (2.0f / height)*ym,     0,      ee*ym, 
+                0,              0,                      cc,     ff, 
+                0,              0,                      0,      1.0f);
+}
+
+Mat4 Mat4::ScaleRotateTranslate(float _sx, float _sy, float _sz, float _ax, float _ay, float _az, float _tx, float _ty, float _tz)
+{
+    float sx, cx, sy, cy, sz, cz;
+    
+    if (_ax != 0) {
+        sx = M::Sin(_ax);
+        cx = M::Cos(_ax);
+    } else {
+        sx = 0;
+        cx = 1.0f;
+    }
+    
+    if (_ay != 0) {
+        sy = M::Sin(_ay);
+        cy = M::Cos(_ay);
+    } else {
+        sy = 0;
+        cy = 1.0f;
+    }
+    
+    if (_az != 0) {
+        sz = M::Sin(_az);
+        cz = M::Cos(_az);
+    } else {
+        sz = 0;
+        cz = 1.0f;
+    }
+    
+    const float sxsz = sx * sz;
+    const float cycz = cy * cz;
+    
+    return Mat4(_sx * (cycz - sxsz * sy),       _sx * -cx * sz, _sx * (cz * sy + cy * sxsz),    _tx,
+                    _sy * (cz * sx * sy + cy * sz), _sy * cx * cz,  _sy * (sy * sz - cycz * sx),    _ty,
+                    _sz * -cx * sy,                 _sz * sx,       _sz * cx * cy,                  _tz, 
+                    0.0f,                           0.0f,           0.0f,                           1.0f);
+}
+
+Mat4 Mat4::FromNormal(Float3 _normal, float _scale, Float3 _pos)
+{
+    Float3 tangent;
+    Float3 bitangent;
+    Float3::Tangent(&tangent, &bitangent, _normal);
+    
+    Float4 row1 = Float4(Float3::Mul(bitangent, _scale), 0.0f);
+    Float4 row2 = Float4(Float3::Mul(_normal, _scale), 0.0f);
+    Float4 row3 = Float4(Float3::Mul(tangent, _scale), 0.0f);
+    
+    return Mat4(row1.f, row2.f, row3.f, Float4(_pos, 1.0f).f);
+}
+
+Mat4 Mat4::Inverse(const Mat4& _a)
+{
+    float xx = _a.f[0];
+    float xy = _a.f[1];
+    float xz = _a.f[2];
+    float xw = _a.f[3];
+    float yx = _a.f[4];
+    float yy = _a.f[5];
+    float yz = _a.f[6];
+    float yw = _a.f[7];
+    float zx = _a.f[8];
+    float zy = _a.f[9];
+    float zz = _a.f[10];
+    float zw = _a.f[11];
+    float wx = _a.f[12];
+    float wy = _a.f[13];
+    float wz = _a.f[14];
+    float ww = _a.f[15];
+    
+    float det = 0.0f;
+    det += xx * (yy * (zz * ww - zw * wz) - yz * (zy * ww - zw * wy) + yw * (zy * wz - zz * wy));
+    det -= xy * (yx * (zz * ww - zw * wz) - yz * (zx * ww - zw * wx) + yw * (zx * wz - zz * wx));
+    det += xz * (yx * (zy * ww - zw * wy) - yy * (zx * ww - zw * wx) + yw * (zx * wy - zy * wx));
+    det -= xw * (yx * (zy * wz - zz * wy) - yy * (zx * wz - zz * wx) + yz * (zx * wy - zy * wx));
+    
+    float det_rcp = 1.0f / det;
+    
+    return Mat4(
+        Float4(
+            +(yy * (zz*ww - wz*zw) - yz * (zy * ww - wy * zw) + yw * (zy * wz - wy * zz))*det_rcp,
+            -(xy * (zz * ww - wz * zw) - xz * (zy * ww - wy * zw) + xw * (zy * wz - wy * zz))*det_rcp,
+            +(xy * (yz * ww - wz * yw) - xz * (yy * ww - wy * yw) + xw * (yy * wz - wy * yz))*det_rcp,
+            -(xy * (yz * zw - zz * yw) - xz * (yy * zw - zy * yw) + xw * (yy * zz - zy * yz))*det_rcp),
+        Float4(
+            -(yx * (zz * ww - wz * zw) - yz * (zx * ww - wx * zw) + yw * (zx * wz - wx * zz))*det_rcp,
+            +(xx * (zz * ww - wz * zw) - xz * (zx * ww - wx * zw) + xw * (zx * wz - wx * zz))*det_rcp,
+            -(xx * (yz * ww - wz * yw) - xz * (yx * ww - wx * yw) + xw * (yx * wz - wx * yz))*det_rcp,
+            +(xx * (yz * zw - zz * yw) - xz * (yx * zw - zx * yw) + xw * (yx * zz - zx * yz))*det_rcp),
+        Float4(
+            +(yx * (zy * ww - wy * zw) - yy * (zx * ww - wx * zw) + yw * (zx * wy - wx * zy))*det_rcp,
+            -(xx * (zy * ww - wy * zw) - xy * (zx * ww - wx * zw) + xw * (zx * wy - wx * zy))*det_rcp,
+            +(xx * (yy * ww - wy * yw) - xy * (yx * ww - wx * yw) + xw * (yx * wy - wx * yy))*det_rcp,
+            -(xx * (yy * zw - zy * yw) - xy * (yx * zw - zx * yw) + xw * (yx * zy - zx * yy))*det_rcp),
+        Float4(
+            -(yx * (zy * wz - wy * zz) - yy * (zx * wz - wx * zz) + yz * (zx * wy - wx * zy))*det_rcp,
+            +(xx * (zy * wz - wy * zz) - xy * (zx * wz - wx * zz) + xz * (zx * wy - wx * zy))*det_rcp,
+            -(xx * (yy * wz - wy * yz) - xy * (yx * wz - wx * yz) + xz * (yx * wy - wx * yy))*det_rcp,
+            +(xx * (yy * zz - zy * yz) - xy * (yx * zz - zx * yz) + xz * (yx * zy - zx * yy))*det_rcp));
+}
+
+Mat4 Mat4::InverseTransformMat(const Mat4& _mat)
+{
+    ASSERT((_mat.m41 + _mat.m42 + _mat.m43) == 0 && _mat.m44 == 1.0f);
+
+    float det = (_mat.m11 * (_mat.m22 * _mat.m33 - _mat.m23 * _mat.m32) +
+        _mat.m12 * (_mat.m23 * _mat.m31 - _mat.m21 * _mat.m33) +
+        _mat.m13 * (_mat.m21 * _mat.m32 - _mat.m22 * _mat.m31));
+    float det_rcp = 1.0f / det;
+    float tx = _mat.m14;
+    float ty = _mat.m24;
+    float tz = _mat.m34;
+    
+    Mat4 r = Mat4((_mat.m22 * _mat.m33 - _mat.m23 * _mat.m32) * det_rcp,
+                  (_mat.m13 * _mat.m32 - _mat.m12 * _mat.m33) * det_rcp,
+                  (_mat.m12 * _mat.m23 - _mat.m13 * _mat.m22) * det_rcp, 0.0f,
+                  (_mat.m23 * _mat.m31 - _mat.m21 * _mat.m33) * det_rcp,
+                  (_mat.m11 * _mat.m33 - _mat.m13 * _mat.m31) * det_rcp,
+                  (_mat.m13 * _mat.m21 - _mat.m11 * _mat.m23) * det_rcp, 0,
+                  (_mat.m21 * _mat.m32 - _mat.m22 * _mat.m31) * det_rcp,
+                  (_mat.m12 * _mat.m31 - _mat.m11 * _mat.m32) * det_rcp,
+                  (_mat.m11 * _mat.m22 - _mat.m12 * _mat.m21) * det_rcp, 0, 0.0f,
+                  0.0f, 0.0f, 1.0f);
+    
+    r.f[12] = -(tx * r.m11 + ty * r.m12 + tz * r.m13);
+    r.f[13] = -(tx * r.m21 + ty * r.m22 + tz * r.m23);
+    r.f[14] = -(tx * r.m31 + ty * r.m32 + tz * r.m33);
+    return r;
+}
+
+Quat Mat4::ToQuat(const Mat4& m)
+{
+    float trace, r, rinv;
+    Quat q;
+    
+    trace = m.m11 + m.m22 + m.m33;
+    if (trace >= 0.0f) {
+        r = M::Sqrt(1.0f + trace);
+        rinv = 0.5f / r;
+        
+        q.x = rinv * (m.m32 - m.m23);
+        q.y = rinv * (m.m13 - m.m31);
+        q.z = rinv * (m.m21 - m.m12);
+        q.w = r * 0.5f;
+    } 
+    else if (m.m11 >= m.m22 && m.m11 >= m.m33) {
+        r = M::Sqrt(1.0f - m.m22 - m.m33 + m.m11);
+        rinv = 0.5f / r;
+        
+        q.x = r * 0.5f;
+        q.y = rinv * (m.m21 + m.m12);
+        q.z = rinv * (m.m31 + m.m13);
+        q.w = rinv * (m.m32 - m.m23);
+    } 
+    else if (m.m22 >= m.m33) {
+        r = M::Sqrt(1.0f - m.m11 - m.m33 + m.m22);
+        rinv = 0.5f / r;
+        
+        q.x = rinv * (m.m21 + m.m12);
+        q.y = r * 0.5f;
+        q.z = rinv * (m.m32 + m.m23);
+        q.w = rinv * (m.m13 - m.m31);
+    } 
+    else {
+        r = M::Sqrt(1.0f - m.m11 - m.m22 + m.m33);
+        rinv = 0.5f / r;
+        
+        q.x = rinv * (m.m31 + m.m13);
+        q.y = rinv * (m.m32 + m.m23);
+        q.z = r * 0.5f;
+        q.w = rinv * (m.m21 - m.m12);
+    }
+    
+    return q;
+}
+
+Mat4 Mat4::FromQuat(Quat q)
+{
+    float norm = M::Sqrt(Quat::Dot(q, q));
+    float s = norm > 0.0f ? (2.0f / norm) : 0.0f;
+    
+    float x = q.x;
+    float y = q.y;
+    float z = q.z;
+    float w = q.w;
+    
+    float xx = s * x * x;
+    float xy = s * x * y;
+    float wx = s * w * x;
+    float yy = s * y * y;
+    float yz = s * y * z;
+    float wy = s * w * y;
+    float zz = s * z * z;
+    float xz = s * x * z;
+    float wz = s * w * z;
+    
+    return Mat4(1.0f - yy - zz,     xy - wz,            xz + wy,        0.0f,
+                xy + wz,            1.0f - xx - zz,     yz - wx,        0.0f,
+                xz - wy,            yz + wx,            1.0f - xx - yy, 0.0f,
+                0.0f,               0.0f,               0.0f,           1.0f);
+}
+
+Mat4 Mat4::FromNormalAngle(Float3 _normal, float _scale, Float3 _pos, float _angle)
+{
+    Float3 tangent;
+    Float3 bitangent;
+    Float3::TangentAngle(&tangent, &bitangent, _normal, _angle);
+    
+    Float4 row1 = Float4(Float3::Mul(bitangent, _scale), 0.0f);
+    Float4 row2 = Float4(Float3::Mul(_normal, _scale), 0.0f);
+    Float4 row3 = Float4(Float3::Mul(tangent, _scale), 0.0f);
+    
+    return Mat4(row1.f, row2.f, row3.f, Float4(_pos, 1.0f).f);
+}
+
+Mat4 Mat4::ProjectPlane(Float3 planeNormal)
+{
+    float xx = planeNormal.x * planeNormal.x;
+    float yy = planeNormal.y * planeNormal.y;
+    float zz = planeNormal.z * planeNormal.z;
+    float xy = planeNormal.x * planeNormal.y;
+    float xz = planeNormal.x * planeNormal.z;
+    float yz = planeNormal.y * planeNormal.z;
+    
+    return Mat4(1.0f - xx,      -xy,        -xz,        0.0f,
+                -xy,            1.0f - yy,  -yz,        0.0f,
+                -xz,            -yz,        1.0f - zz,  0.0f,
+                0.0f,           0.0f,       0.0f,       1.0f);
+}
+
+Mat4 Mat4::Mul(const Mat4& _a, const Mat4& _b)
+{
+    return Mat4(
+        Mat4::MulFloat4(_a, Float4(_b.fc1)).f, 
+        Mat4::MulFloat4(_a, Float4(_b.fc2)).f,
+        Mat4::MulFloat4(_a, Float4(_b.fc3)).f, 
+        Mat4::MulFloat4(_a, Float4(_b.fc4)).f);
+}
+
+Mat3 Mat3::Inverse(const Mat3& _a)
+{
+    float xx = _a.f[0];
+    float xy = _a.f[3];
+    float xz = _a.f[6];
+    float yx = _a.f[1];
+    float yy = _a.f[4];
+    float yz = _a.f[7];
+    float zx = _a.f[2];
+    float zy = _a.f[5];
+    float zz = _a.f[8];
+    
+    float det = 0.0f;
+    det += xx * (yy * zz - yz * zy);
+    det -= xy * (yx * zz - yz * zx);
+    det += xz * (yx * zy - yy * zx);
+    
+    float det_rcp = 1.0f / det;
+    
+    return Mat3(+(yy * zz - yz * zy) * det_rcp, -(xy * zz - xz * zy) * det_rcp,
+        +(xy * yz - xz * yy) * det_rcp, -(yx * zz - yz * zx) * det_rcp,
+        +(xx * zz - xz * zx) * det_rcp, -(xx * yz - xz * yx) * det_rcp,
+        +(yx * zy - yy * zx) * det_rcp, -(xx * zy - xy * zx) * det_rcp,
+        +(xx * yy - xy * yx) * det_rcp);
+}
+
+Mat3 Mat3::Mul(const Mat3& _a, const Mat3& _b)
+{
+    return Mat3(
+        Mat3::MulFloat3(_a, Float3(_b.fc1)), 
+        Mat3::MulFloat3(_a, Float3(_b.fc2)),
+        Mat3::MulFloat3(_a, Float3(_b.fc3)));
+}
+
+Mat3 Mat3::Abs(const Mat3& m)
+{
+    return Mat3(
+        M::Abs(m.m11), M::Abs(m.m12), M::Abs(m.m13), 
+        M::Abs(m.m21), M::Abs(m.m22), M::Abs(m.m23), 
+        M::Abs(m.m31), M::Abs(m.m32), M::Abs(m.m33));
+}
+
+Mat3 Mat3::FromQuat(Quat q)
+{
+    float norm = M::Sqrt(Quat::Dot(q, q));
+    float s = norm > 0.0f ? (2.0f / norm) : 0.0f;
+    
+    float x = q.x;
+    float y = q.y;
+    float z = q.z;
+    float w = q.w;
+    
+    float xx = s * x * x;
+    float xy = s * x * y;
+    float wx = s * w * x;
+    float yy = s * y * y;
+    float yz = s * y * z;
+    float wy = s * w * y;
+    float zz = s * z * z;
+    float xz = s * x * z;
+    float wz = s * w * z;
+    
+    return Mat3(1.0f - yy - zz,     xy - wz,            xz + wy,
+                xy + wz,            1.0f - xx - zz,     yz - wx,
+                xz - wy,            yz + wx,            1.0f - xx - yy);
+}
+
+Float2 float2CalcLinearFit2D(const Float2* _points, int _num)
+{
+    float sumX = 0.0f;
+    float sumY = 0.0f;
+    float sumXX = 0.0f;
+    float sumXY = 0.0f;
+    
+    for (int ii = 0; ii < _num; ++ii) {
+        float xx = _points[ii].f[0];
+        float yy = _points[ii].f[1];
+        sumX += xx;
+        sumY += yy;
+        sumXX += xx * xx;
+        sumXY += xx * yy;
+    }
+    
+    
+    float det = (sumXX * _num - sumX * sumX);
+    float invDet = 1.0f / det;
+    
+    return Float2((-sumX * sumY + _num * sumXY) * invDet, (sumXX * sumY - sumX * sumXY) * invDet);
+}
+
+
+Float3 Float3::CalcLinearFit3D(const Float3* _points, int _num)
+{
+    float sumX = 0.0f;
+    float sumY = 0.0f;
+    float sumZ = 0.0f;
+    float sumXX = 0.0f;
+    float sumXY = 0.0f;
+    float sumXZ = 0.0f;
+    float sumYY = 0.0f;
+    float sumYZ = 0.0f;
+    
+    for (int ii = 0; ii < _num; ++ii) {
+        float xx = _points[ii].f[0];
+        float yy = _points[ii].f[1];
+        float zz = _points[ii].f[2];
+        
+        sumX += xx;
+        sumY += yy;
+        sumZ += zz;
+        sumXX += xx * xx;
+        sumXY += xx * yy;
+        sumXZ += xx * zz;
+        sumYY += yy * yy;
+        sumYZ += yy * zz;
+    }
+    
+    
+    Mat3 mat(sumXX, sumXY, sumX, sumXY, sumYY, sumY, sumX, sumY, (float)(_num));
+    Mat3 matInv = Mat3::Inverse(mat);
+    
+    return Float3(matInv.f[0] * sumXZ + matInv.f[1] * sumYZ + matInv.f[2] * sumZ,
+                  matInv.f[3] * sumXZ + matInv.f[4] * sumYZ + matInv.f[5] * sumZ,
+                  matInv.f[6] * sumXZ + matInv.f[7] * sumYZ + matInv.f[8] * sumZ);
+}
+
+
+Float3 Color4u::RGBtoHSV(Float3 rgb)
+{
+    float K = 0.f;
+    float r = rgb.f[0];
+    float g = rgb.f[1];
+    float b = rgb.f[2];
+    
+    if (g < b)
+    {
+        Swap(g, b);
+        K = -1.f;
+    }
+    
+    if (r < g)
+    {
+        Swap(r, g);
+        K = -2.f / 6.f - K;
+    }
+    
+    float chroma = r - Min(g, b);
+    return Float3(M::Abs(K + (g - b) / (6.f * chroma + 1e-20f)),
+                  chroma / (r + 1e-20f),
+                  r);
+}
+
+Float3 Color4u::HSVtoRGB(Float3 hsv)
+{
+    const float hh = hsv.f[0];
+    const float ss = hsv.f[1];
+    const float vv = hsv.f[2];
+    
+    const float px = M::Abs(M::Fract(hh + 1.0f) * 6.0f - 3.0f);
+    const float py = M::Abs(M::Fract(hh + 2.0f / 3.0f) * 6.0f - 3.0f);
+    const float pz = M::Abs(M::Fract(hh + 1.0f / 3.0f) * 6.0f - 3.0f);
+    
+    return Float3(vv * M::Lerp(1.0f, M::Saturate(px - 1.0f), ss), 
+                  vv * M::Lerp(1.0f, M::Saturate(py - 1.0f), ss),
+                  vv * M::Lerp(1.0f, M::Saturate(pz - 1.0f), ss));
+}
+
+Color4u Color4u::Blend(Color4u _a, Color4u _b, float _t)
+{
+    Float4 c1 = Color4u::ToFloat4(_a);
+    Float4 c2 = Color4u::ToFloat4(_b);
+    
+    return Color4u(
+        M::Lerp(c1.x, c2.x, _t),
+        M::Lerp(c1.y, c2.y, _t),
+        M::Lerp(c1.z, c2.z, _t),
+        M::Lerp(c1.w, c2.w, _t)
+    );
+}
+
+Float4 Color4u::ToFloat4Linear(Float4 c)
+{
+    for (int i = 0; i < 3; i++) {
+        c.f[i] = c.f[i] < 0.04045f ? c.f[i]/12.92f : M::Pow((c.f[i] + 0.055f)/1.055f, 2.4f);
+    }
+    return c;
+}
+
+Float4 Color4u::ToFloat4SRGB(Float4 cf) 
+{
+    for (int i = 0; i < 3; i++) {
+        cf.f[i] = cf.f[i] <= 0.0031308 ? 
+            (12.92f*cf.f[i]) : 
+            1.055f*M::Pow(cf.f[i], 0.416666f) - 0.055f;
+    }
+    return cf;
+}
+
+Quat Quat::Lerp(Quat _a, Quat _b, float t)
+{
+    float tinv = 1.0f - t;
+    float dot = Quat::Dot(_a, _b);
+    Quat r;
+    if (dot >= 0.0f) {
+        r = Quat(tinv * _a.x + t * _b.x, 
+                 tinv * _a.y + t * _b.y, 
+                 tinv * _a.z + t * _b.z, 
+                 tinv * _a.w + t * _b.w);
+    } else {
+        r = Quat(tinv * _a.x - t * _b.x, 
+                 tinv * _a.y - t * _b.y, 
+                 tinv * _a.z - t * _b.z, 
+                 tinv * _a.w - t * _b.w);
+    }
+    return Quat::Norm(r);
+}
+
+Quat Quat::Slerp(Quat _a, Quat _b, float t)
+{
+    const float epsilon = 1e-6f;
+    
+    float dot = Quat::Dot(_a, _b);
+    bool flip = false;
+    if (dot < 0.0f) {
+        flip = true;
+        dot *= -1.0f;
+    }
+    
+    float s1, s2;
+    if (dot > (1.0f - epsilon)) {
+        s1 = 1.0f - t;
+        s2 = t;
+        if (flip)
+            s2 *= -1.0f;
+    } else {
+        float omega = M::ACos(dot);
+        float inv_omega_sin = 1.0f / M::Sin(omega);
+        s1 = M::Sin((1.0f - t) * omega) * inv_omega_sin;
+        s2 = M::Sin(t * omega) * inv_omega_sin;
+        if (flip)
+            s2 *= -1.0f;
+    }
+
+    return Quat(s1 * _a.x + s2 * _b.x, 
+                s1 * _a.y + s2 * _b.y, 
+                s1 * _a.z + s2 * _b.z,
+                s1 * _a.w + s2 * _b.w);
+}
+
+Float3 Quat::ToEuler(Quat q)
+{
+    float sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
+    float cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
+    float x = M::ATan2(sinr_cosp, cosr_cosp);
+    
+    float sinp = 2 * (q.w * q.y - q.z * q.x);
+    float y;
+    if (M::Abs(sinp) >= 1)
+        y = M::CopySign(M_HALFPI, sinp);
+    else
+        y = M::ASin(sinp);
+    
+    float siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+    float cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+    float z = M::ATan2(siny_cosp, cosy_cosp);
+    
+    return Float3(x, y, z);
+}
+
+Quat Quat::FromEuler(Float3 _vec3)
+{
+    float z = _vec3.z;
+    float x = _vec3.x;
+    float y = _vec3.y;
+    
+    float cy = M::Cos(z * 0.5f);
+    float sy = M::Sin(z * 0.5f);
+    float cp = M::Cos(y * 0.5f);
+    float sp = M::Sin(y * 0.5f);
+    float cr = M::Cos(x * 0.5f);
+    float sr = M::Sin(x * 0.5f);
+    
+    Quat q;
+    q.w = cr * cp * cy + sr * sp * sy;
+    q.x = sr * cp * cy - cr * sp * sy;
+    q.y = cr * sp * cy + sr * cp * sy;
+    q.z = cr * cp * sy - sr * sp * cy;
+    
+    return q;
+}
+
+
+Float3 Plane::CalcNormal(Float3 _va, Float3 _vb, Float3 _vc)
+{
+    Float3 ba = Float3::Sub(_vb, _va);
+    Float3 ca = Float3::Sub(_vc, _va);
+    Float3 baca = Float3::Cross(ca, ba);
+    
+    return Float3::Norm(baca);
+}
+
+Plane Plane::From3Points(Float3 _va, Float3 _vb, Float3 _vc)
+{
+    Float3 normal = Plane::CalcNormal(_va, _vb, _vc);
+    return Plane(normal, -Float3::Dot(normal, _va));
+}
+
+Plane Plane::FromNormalPoint(Float3 _normal, Float3 _p)
+{
+    Float3 normal = Float3::Norm(_normal);
+    float d = Float3::Dot(_normal, _p);
+    return Plane(normal, -d);
+}
+
+float Plane::Distance(Plane _plane, Float3 _p)
+{
+    return Float3::Dot(Float3(_plane.normal), _p) + _plane.dist;
+}
+
+Float3 Plane::ProjectPoint(Plane _plane, Float3 _p)
+{
+    return Float3::Sub(_p, Float3::Mul(Float3(_plane.normal), Distance(_plane, _p)));
+}
+
+Float3 Plane::Origin(Plane _plane)
+{
+    return Float3::Mul(Float3(_plane.normal), -_plane.dist);
+}
+
+AABB AABB::Transform(const AABB& aabb, const Mat4& mat)
+{
+    Float3 center = aabb.Center();
+    Float3 extents = aabb.Extents();
+    
+    Mat3 rotMat = Mat3(mat.fc1, mat.fc2, mat.fc3);
+    Mat3 absMat  = Mat3::Abs(rotMat);
+    Float3 newCenter = Mat4::MulFloat3(mat, center);
+    Float3 newExtents = Mat3::MulFloat3(absMat, extents);
+    
+    return AABB(Float3::Sub(newCenter, newExtents), Float3::Add(newCenter, newExtents));
+}
+
+AABB Box::ToAABB(const Box& box)
+{
+    Float3 center = box.tx.pos;
+    Mat3 absMat = Mat3::Abs(box.tx.rot);
+    Float3 extents = Mat3::MulFloat3(absMat, box.e);
+    return AABB(Float3::Sub(center, extents), Float3::Add(center, extents));
+}
+
+
+
+
+DEFINE_HANDLE(HandleDummy);
+
+_private::HandlePoolTable* _private::handleCreatePoolTable(uint32 capacity, MemAllocator* alloc)
+{
+    uint32 maxSize = AlignValue(capacity, 16u);
+
+    MemSingleShotMalloc<HandlePoolTable> buff;
+    HandlePoolTable* tbl = buff.AddMemberArray<uint32>(offsetof(HandlePoolTable, dense), maxSize)
+    .AddMemberArray<uint32>(offsetof(HandlePoolTable, sparse), maxSize)
+    .Calloc(alloc);
     tbl->capacity = capacity;
+    handleResetPoolTable(tbl);
+
+    return tbl;
+}
+
+void _private::handleDestroyPoolTable(HandlePoolTable* tbl, MemAllocator* alloc)
+{
+    MemSingleShotMalloc<HandlePoolTable>::Free(tbl, alloc);
+}
+
+bool _private::handleGrowPoolTable(HandlePoolTable** pTbl, MemAllocator* alloc)
+{
+    HandlePoolTable* tbl = *pTbl;
+    uint32 newCapacity = tbl->capacity << 1;
+
+    HandlePoolTable* newTable = handleCreatePoolTable(newCapacity, alloc);
+    if (!newTable)
+        return false;
+    newTable->count = tbl->count;
+    memcpy(newTable->dense, tbl->dense, sizeof(uint32) * tbl->capacity);
+    memcpy(newTable->sparse, tbl->sparse, sizeof(uint32) * tbl->capacity);
+
+    handleDestroyPoolTable(tbl, alloc);
+    *pTbl = newTable;
+    return true;
+}
+
+_private::HandlePoolTable* _private::handleClone(HandlePoolTable* tbl, MemAllocator* alloc)
+{
+    ASSERT(tbl->capacity);
+    HandlePoolTable* newTable = handleCreatePoolTable(tbl->capacity, alloc);
+    if (!newTable)
+        return nullptr;
+
+    newTable->count = tbl->count;
+    memcpy(newTable->dense, tbl->dense, sizeof(uint32) * tbl->capacity);
+    memcpy(newTable->sparse, tbl->sparse, sizeof(uint32) * tbl->capacity);
+
+    return newTable;
+}
+
+uint32 _private::handleNew(HandlePoolTable* tbl)
+{
+    if (tbl->count < tbl->capacity) {
+        uint32 index = tbl->count++;
+        HandleDummy handle(tbl->dense[index]);
+
+        uint32 gen = handle.GetGen();
+        uint32 sparseIndex = handle.GetSparseIndex();
+        HandleDummy newHandle;
+        newHandle.Set(++gen, sparseIndex);
+
+        tbl->dense[index] = static_cast<uint32>(newHandle);
+        tbl->sparse[sparseIndex] = index;
+        return static_cast<uint32>(newHandle);
+    } else {
+        ASSERT_MSG(0, "handle pool table is full");
+    }
+
+    return UINT32_MAX;
+}
+
+void _private::handleDel(HandlePoolTable* tbl, uint32 handle)
+{
+    ASSERT(tbl->count > 0);
+    ASSERT(handleIsValid(tbl, handle));
+
+    HandleDummy h(handle);
+
+    uint32 index = tbl->sparse[h.GetSparseIndex()];
+    HandleDummy lastHandle = HandleDummy(tbl->dense[--tbl->count]);
+
+    tbl->dense[tbl->count] = handle;
+    tbl->sparse[lastHandle.GetSparseIndex()] = index;
+    tbl->dense[index] = static_cast<uint32>(lastHandle);
+}
+
+void _private::handleResetPoolTable(HandlePoolTable* tbl)
+{
+    tbl->count = 0;
+    uint32* dense = tbl->dense;
+    for (uint32 i = 0, c = tbl->capacity; i < c; i++) {
+        HandleDummy h;
+        h.Set(0, i);
+        dense[i] = static_cast<uint32>(h);
+    }
+}
+
+bool _private::handleIsValid(const HandlePoolTable* tbl, uint32 handle)
+{
+    ASSERT(handle);
+    HandleDummy h(handle);
+
+    uint32 index = tbl->sparse[h.GetSparseIndex()];
+    return index < tbl->count && tbl->dense[index] == handle;
+}
+
+uint32 _private::handleAt(const HandlePoolTable* tbl, uint32 index)
+{
+    ASSERT(index < tbl->count);
+    return tbl->dense[index];
+}
+
+bool _private::handleFull(const HandlePoolTable* tbl)
+{
+    return tbl->count == tbl->capacity;
+}
+
+size_t _private::handleGetMemoryRequirement(uint32 capacity)
+{
+    uint32 maxSize = AlignValue(capacity, 16u);
+    
+    MemSingleShotMalloc<HandlePoolTable> mallocator;
+    return mallocator.AddMemberArray<uint32>(offsetof(HandlePoolTable, dense), maxSize)
+        .AddMemberArray<uint32>(offsetof(HandlePoolTable, sparse), maxSize)
+        .GetMemoryRequirement();
+}
+
+_private::HandlePoolTable* _private::handleCreatePoolTableWithBuffer(uint32 capacity, void* data, size_t size)
+{
+    uint32 maxSize = AlignValue(capacity, 16u);
+    
+    MemSingleShotMalloc<HandlePoolTable> mallocator;
+    HandlePoolTable* tbl = mallocator.AddMemberArray<uint32>(offsetof(HandlePoolTable, dense), maxSize)
+        .AddMemberArray<uint32>(offsetof(HandlePoolTable, sparse), maxSize)
+        .Calloc(data, size);
+    tbl->capacity = capacity;
+    handleResetPoolTable(tbl);
     
     return tbl;
 }
 
-bool _private::hashtableGrowWithBuffer(HashTableData** pTbl, void* buff, size_t size)
+bool _private::handleGrowPoolTableWithBuffer(HandlePoolTable** pTbl, void* buff, size_t size)
 {
-    HashTableData* tbl = *pTbl;
-    HashTableData* newTable = hashtableCreateWithBuffer(tbl->capacity << 1, tbl->valueStride, buff, size);
+    HandlePoolTable* tbl = *pTbl;
+    uint32 newCapacity = tbl->capacity << 1;
+    
+    HandlePoolTable* newTable = handleCreatePoolTableWithBuffer(newCapacity, buff, size);
     if (!newTable)
         return false;
-    
-    for (uint32 i = 0, c = tbl->capacity; i < c; i++) {
-        if (tbl->keys[i] > 0) {
-            hashtableAdd(newTable, tbl->keys[i], tbl->values + i * tbl->valueStride);
-        }
-    }
+    newTable->count = tbl->count;
+    memcpy(newTable->dense, tbl->dense, sizeof(uint32) * tbl->capacity);
+    memcpy(newTable->sparse, tbl->sparse, sizeof(uint32) * tbl->capacity);
     
     *pTbl = newTable;
     return true;
 }
 
-#define __STDC_WANT_LIB_EXT1__ 1
-
-#if MEMPRO_ENABLED
-    #define OVERRIDE_NEW_DELETE
-    #define WAIT_FOR_CONNECT true
-    #define MEMPRO_BACKTRACE(_stackframes, _maxStackframes, _hashPtr) Debug::CaptureStacktrace(_stackframes, _maxStackframes, 3, _hashPtr)
-    #include "External/mempro/MemPro.cpp"
-    #define MEMPRO_TRACK_REALLOC(oldPtr, ptr, size) do { if (oldPtr)  { MEMPRO_TRACK_FREE(oldPtr); } MEMPRO_TRACK_ALLOC(ptr, size);} while(0)
-#else
-    #define MEMPRO_TRACK_ALLOC(ptr, size) 
-    #define MEMPRO_TRACK_REALLOC(oldPtr, ptr, size)
-    #define MEMPRO_TRACK_FREE(ptr)
-#endif
-
-#if PLATFORM_APPLE
-    #define strcpy_s(dest, size, src)  strlcpy(dest, src, size)
-    #define strcat_s(dest, size, src)  strlcat(dest, src, size)
-#elif PLATFORM_ANDROID || PLATFORM_LINUX
-    static size_t strcpy_s(char *dest, size_t size, const char *src);
-    static size_t strcat_s(char *dst, size_t size, const char *src);
-#elif PLATFORM_WINDOWS
-    #if !MEMPRO_ENABLED
-    extern "C" __declspec(dllimport) void __stdcall OutputDebugStringA(const char* lpOutputString);
-    #endif
-#else
-    #define __STDC_WANT_LIB_EXT1__ 1
-#endif
-
-#include <time.h>   // time
-#include <stdio.h>  // puts
-#include <string.h>
-#include <stdarg.h>
-
-#if PLATFORM_ANDROID
-    #include <android/log.h>
-#endif
-
-#if PLATFORM_POSIX
-    #include <stdlib.h>
-#else
-    #include <malloc.h>
-#endif
 
 
-struct RandomContextCtor
-{
-    RandomContext ctx;
 
-    RandomContextCtor() 
-    {
-        ctx = Random::CreateContext();
-    }
-};
-
-namespace Random
-{
-
-NO_INLINE static RandomContextCtor& RandomCtx() 
-{ 
-    static thread_local RandomContextCtor randomCtx;
-    return randomCtx; 
-}
-
+#define SOKOL_ARGS_IMPL
+#define SOKOL_ASSERT(c)     ASSERT(c)
+#define SOKOL_LOG(msg)      LOG_DEBUG(msg)
+#define SOKOL_CALLOC(n,s)   Mem::AllocZero((n)*(s))
+#define SOKOL_FREE(p)       Mem::Free(p)
+#define SOKOL_ARGS_API_DECL 
+#define SOKOL_API_IMPL      
 PRAGMA_DIAGNOSTIC_PUSH()
-PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wstrict-aliasing")
-static inline float FloatNormalized(uint32 value)
-{
-    uint32 exponent = 127;
-    uint32 mantissa = value >> 9;
-    uint32 result = (exponent << 23) | mantissa;
-    float fresult = *(float*)(&result);
-    return fresult - 1.0f;
+PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4505)
+PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
+//----------------------------------------------------------------------------------------------------------------------
+// External/sokol/sokol_args.h
+
+#if defined(SOKOL_IMPL) && !defined(SOKOL_ARGS_IMPL)
+#define SOKOL_ARGS_IMPL
+#endif
+#ifndef SOKOL_ARGS_INCLUDED
+/*
+    sokol_args.h    -- cross-platform key/value arg-parsing for web and native
+
+    Project URL: https://github.com/floooh/sokol
+
+    Do this:
+        #define SOKOL_IMPL or
+        #define SOKOL_ARGS_IMPL
+    before you include this file in *one* C or C++ file to create the
+    implementation.
+
+    Optionally provide the following defines with your own implementations:
+
+    SOKOL_ASSERT(c)     - your own assert macro (default: assert(c))
+    SOKOL_LOG(msg)      - your own logging functions (default: puts(msg))
+    SOKOL_CALLOC(n,s)   - your own calloc() implementation (default: calloc(n,s))
+    SOKOL_FREE(p)       - your own free() implementation (default: free(p))
+    SOKOL_ARGS_API_DECL - public function declaration prefix (default: extern)
+    SOKOL_API_DECL      - same as SOKOL_ARGS_API_DECL
+    SOKOL_API_IMPL      - public function implementation prefix (default: -)
+
+    If sokol_args.h is compiled as a DLL, define the following before
+    including the declaration or implementation:
+
+    SOKOL_DLL
+
+    On Windows, SOKOL_DLL will define SOKOL_ARGS_API_DECL as __declspec(dllexport)
+    or __declspec(dllimport) as needed.
+
+    OVERVIEW
+    ========
+    sokol_args.h provides a simple unified argument parsing API for WebAssembly and
+    native apps.
+
+    When running as WebAssembly app, arguments are taken from the page URL:
+
+    https://floooh.github.io/tiny8bit/kc85.html?type=kc85_3&mod=m022&snapshot=kc85/jungle.kcc
+
+    The same arguments provided to a command line app:
+
+    kc85 type=kc85_3 mod=m022 snapshot=kc85/jungle.kcc
+
+    ARGUMENT FORMATTING
+    ===================
+    On the web platform, arguments must be formatted as a valid URL query string
+    with 'percent encoding' used for special characters.
+
+    Strings are expected to be UTF-8 encoded (although sokol_args.h doesn't
+    contain any special UTF-8 handling). See below on how to obtain
+    UTF-8 encoded argc/argv values on Windows when using WinMain() as
+    entry point.
+
+    On native platforms the following rules must be followed:
+
+    Arguments have the general form
+
+        key=value
+
+    Key/value pairs are separated by 'whitespace', valid whitespace
+    characters are space and tab.
+
+    Whitespace characters in front and after the separating '=' character
+    are ignored:
+
+        key = value
+
+    ...is the same as
+
+        key=value
+
+    The 'key' string must be a simple string without escape sequences or whitespace.
+
+    Currently 'single keys' without values are not allowed, but may be
+    in the future.
+
+    The 'value' string can be quoted, and quoted value strings can contain
+    whitespace:
+
+        key = 'single-quoted value'
+        key = "double-quoted value"
+
+    Single-quoted value strings can contain double quotes, and vice-versa:
+
+        key = 'single-quoted value "can contain double-quotes"'
+        key = "double-quoted value 'can contain single-quotes'"
+
+    Note that correct quoting can be tricky on some shells, since command
+    shells may remove quotes, unless they're escaped.
+
+    Value strings can contain a small selection of escape sequences:
+
+        \n  - newline
+        \r  - carriage return
+        \t  - tab
+        \\  - escaped backslash
+
+    (more escape codes may be added in the future).
+
+    CODE EXAMPLE
+    ============
+
+        int main(int argc, char* argv[]) {
+            sargs_setup(&(sargs_desc){
+                .argc = argc,
+                .argv = argv
+            });
+
+            if (sargs_exists("bla")) {
+                ...
+            }
+
+            const char* val0 = sargs_value("bla");
+
+            const char* val1 = sargs_value_def("bla", "default_value");
+
+            if (sargs_equals("type", "kc85_4")) {
+                ...
+            }
+
+            if (sargs_boolean("joystick_enabled")) {
+                ...
+            }
+
+            for (int i = 0; i < sargs_num_args(); i++) {
+                printf("key: %s, value: %s\n", sargs_key_at(i), sargs_value_at(i));
+            }
+
+            int index = sargs_find("bla");
+            printf("key: %s, value: %s\n", sargs_key_at(index), sargs_value_at(index));
+
+            sargs_shutdown();
+        }
+
+    WINMAIN AND ARGC / ARGV
+    =======================
+    On Windows with WinMain() based apps, getting UTF8-encoded command line
+    arguments is a bit more complicated:
+
+    First call GetCommandLineW(), this returns the entire command line
+    as UTF-16 string. Then call CommandLineToArgvW(), this parses the
+    command line string into the usual argc/argv format (but in UTF-16).
+    Finally convert the UTF-16 strings in argv[] into UTF-8 via
+    WideCharToMultiByte().
+
+    See the function _sapp_win32_command_line_to_utf8_argv() in sokol_app.h
+    for example code how to do this (if you're using sokol_app.h, it will
+    already convert the command line arguments to UTF-8 for you of course,
+    so you can plug them directly into sokol_app.h).
+
+    API DOCUMENTATION
+    =================
+    void sargs_setup(const sargs_desc* desc)
+        Initialize sokol_args, desc contains the following configuration
+        parameters:
+            int argc        - the main function's argc parameter
+            char** argv     - the main function's argv parameter
+            int max_args    - max number of key/value pairs, default is 16
+            int buf_size    - size of the internal string buffer, default is 16384
+
+        Note that on the web, argc and argv will be ignored and the arguments
+        will be taken from the page URL instead.
+
+        sargs_setup() will allocate 2 memory chunks: one for keeping track
+        of the key/value args of size 'max_args*8', and a string buffer
+        of size 'buf_size'.
+
+    void sargs_shutdown(void)
+        Shutdown sokol-args and free any allocated memory.
+
+    bool sargs_isvalid(void)
+        Return true between sargs_setup() and sargs_shutdown()
+
+    bool sargs_exists(const char* key)
+        Test if a key arg exists.
+
+    const char* sargs_value(const char* key)
+        Return value associated with key. Returns an empty
+        string ("") if the key doesn't exist.
+
+    const char* sargs_value_def(const char* key, const char* default)
+        Return value associated with key, or the provided default
+        value if the value doesn't exist.
+
+    bool sargs_equals(const char* key, const char* val);
+        Return true if the value associated with key matches
+        the 'val' argument.
+
+    bool sargs_boolean(const char* key)
+        Return true if the value string of 'key' is one
+        of 'true', 'yes', 'on'.
+
+    int sargs_find(const char* key)
+        Find argument by key name and return its index, or -1 if not found.
+
+    int sargs_num_args(void)
+        Return number of key/value pairs.
+
+    const char* sargs_key_at(int index)
+        Return the key name of argument at index. Returns empty string if
+        is index is outside range.
+
+    const char* sargs_value_at(int index)
+        Return the value of argument at index. Returns empty string
+        if index is outside range.
+
+    TODO
+    ====
+    - parsing errors?
+
+    LICENSE
+    =======
+
+    zlib/libpng license
+
+    Copyright (c) 2018 Andre Weissflog
+
+    This software is provided 'as-is', without any express or implied warranty.
+    In no event will the authors be held liable for any damages arising from the
+    use of this software.
+
+    Permission is granted to anyone to use this software for any purpose,
+    including commercial applications, and to alter it and redistribute it
+    freely, subject to the following restrictions:
+
+        1. The origin of this software must not be misrepresented; you must not
+        claim that you wrote the original software. If you use this software in a
+        product, an acknowledgment in the product documentation would be
+        appreciated but is not required.
+
+        2. Altered source versions must be plainly marked as such, and must not
+        be misrepresented as being the original software.
+
+        3. This notice may not be removed or altered from any source
+        distribution.
+*/
+#define SOKOL_ARGS_INCLUDED (1)
+#include <stdint.h>
+#include <stdbool.h>
+
+#if defined(SOKOL_API_DECL) && !defined(SOKOL_ARGS_API_DECL)
+#define SOKOL_ARGS_API_DECL SOKOL_API_DECL
+#endif
+#ifndef SOKOL_ARGS_API_DECL
+#if defined(_WIN32) && defined(SOKOL_DLL) && defined(SOKOL_ARGS_IMPL)
+#define SOKOL_ARGS_API_DECL __declspec(dllexport)
+#elif defined(_WIN32) && defined(SOKOL_DLL)
+#define SOKOL_ARGS_API_DECL __declspec(dllimport)
+#else
+#define SOKOL_ARGS_API_DECL extern
+#endif
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct sargs_desc {
+    int argc;
+    char** argv;
+    int max_args;
+    int buf_size;
+} sargs_desc;
+
+typedef struct sargs_state sargs_state;
+
+/* setup sokol-args */
+SOKOL_ARGS_API_DECL sargs_state* sargs_create(const sargs_desc* desc);
+/* shutdown sokol-args */
+SOKOL_ARGS_API_DECL void sargs_destroy(sargs_state* state);
+/* true between sargs_create() and sargs_destroy() */
+SOKOL_ARGS_API_DECL bool sargs_isvalid(const sargs_state* state);
+/* test if an argument exists by key name */
+SOKOL_ARGS_API_DECL bool sargs_exists(const sargs_state* state, const char* key);
+/* get value by key name, return empty string if key doesn't exist */
+SOKOL_ARGS_API_DECL const char* sargs_value(const sargs_state* state, const char* key);
+/* get value by key name, return provided default if key doesn't exist */
+SOKOL_ARGS_API_DECL const char* sargs_value_def(const sargs_state* state, const char* key, const char* def);
+/* return true if val arg matches the value associated with key */
+SOKOL_ARGS_API_DECL bool sargs_equals(const sargs_state* state, const char* key, const char* val);
+/* return true if key's value is "true", "yes" or "on" */
+SOKOL_ARGS_API_DECL bool sargs_boolean(const sargs_state* state, const char* key);
+/* get index of arg by key name, return -1 if not exists */
+SOKOL_ARGS_API_DECL int sargs_find(const sargs_state* state, const char* key);
+/* get number of parsed arguments */
+SOKOL_ARGS_API_DECL int sargs_num_args(const sargs_state* state);
+/* get key name of argument at index, or empty string */
+SOKOL_ARGS_API_DECL const char* sargs_key_at(const sargs_state* state, int index);
+/* get value string of argument at index, or empty string */
+SOKOL_ARGS_API_DECL const char* sargs_value_at(const sargs_state* state, int index);
+
+#ifdef __cplusplus
+} /* extern "C" */
+
+/* reference-based equivalents for c++ */
+inline sargs_state* sargs_create(const sargs_desc& desc) { return sargs_create(&desc); }
+
+#endif
+#endif // SOKOL_ARGS_INCLUDED
+
+/*--- IMPLEMENTATION ---------------------------------------------------------*/
+#ifdef SOKOL_ARGS_IMPL
+#define SOKOL_ARGS_IMPL_INCLUDED (1)
+#include <string.h> /* memset, strcmp */
+
+#if defined(__EMSCRIPTEN__)
+#include <emscripten/emscripten.h>
+#endif
+
+#ifndef SOKOL_API_IMPL
+    #define SOKOL_API_IMPL
+#endif
+#ifndef SOKOL_DEBUG
+    #ifndef NDEBUG
+        #define SOKOL_DEBUG (1)
+    #endif
+#endif
+#ifndef SOKOL_ASSERT
+    #include <assert.h>
+    #define SOKOL_ASSERT(c) assert(c)
+#endif
+#if !defined(SOKOL_CALLOC) && !defined(SOKOL_FREE)
+    #include <stdlib.h>
+#endif
+#if !defined(SOKOL_CALLOC)
+    #define SOKOL_CALLOC(n,s) calloc(n,s)
+#endif
+#if !defined(SOKOL_FREE)
+    #define SOKOL_FREE(p) free(p)
+#endif
+#ifndef SOKOL_LOG
+    #ifdef SOKOL_DEBUG
+        #include <stdio.h>
+        #define SOKOL_LOG(s) { SOKOL_ASSERT(s); puts(s); }
+    #else
+        #define SOKOL_LOG(s)
+    #endif
+#endif
+
+#ifndef _SOKOL_PRIVATE
+    #if defined(__GNUC__) || defined(__clang__)
+        #define _SOKOL_PRIVATE __attribute__((unused)) static
+    #else
+        #define _SOKOL_PRIVATE static
+    #endif
+#endif
+
+#define _sargs_def(val, def) (((val) == 0) ? (def) : (val))
+
+#define _SARGS_MAX_ARGS_DEF (16)
+#define _SARGS_BUF_SIZE_DEF (16*1024)
+
+/* parser state */
+#define _SARGS_EXPECT_KEY (1<<0)
+#define _SARGS_EXPECT_SEP (1<<1)
+#define _SARGS_EXPECT_VAL (1<<2)
+#define _SARGS_PARSING_KEY (1<<3)
+#define _SARGS_PARSING_VAL (1<<4)
+#define _SARGS_ERROR (1<<5)
+
+/* a key/value pair struct */
+typedef struct {
+    int key;        /* index to start of key string in buf */
+    int val;        /* index to start of value string in buf */
+} _sargs_kvp_t;
+
+/* sokol-args state */
+typedef struct sargs_state {
+    int max_args;       /* number of key/value pairs in args array */
+    int num_args;       /* number of valid items in args array */
+    _sargs_kvp_t* args;   /* key/value pair array */
+    int buf_size;       /* size of buffer in bytes */
+    int buf_pos;        /* current buffer position */
+    char* buf;          /* character buffer, first char is reserved and zero for 'empty string' */
+    bool valid;
+    uint32_t parse_state;
+    char quote;         /* current quote char, 0 if not in a quote */
+    bool in_escape;     /* currently in an escape sequence */
+} sargs_state;
+
+/*== PRIVATE IMPLEMENTATION FUNCTIONS ========================================*/
+
+_SOKOL_PRIVATE void _sargs_putc(sargs_state* state, char c) {
+    if ((state->buf_pos+2) < state->buf_size) {
+        state->buf[state->buf_pos++] = c;
+    }
 }
+
+_SOKOL_PRIVATE const char* _sargs_str(const sargs_state* state, int index) {
+    SOKOL_ASSERT((index >= 0) && (index < state->buf_size));
+    return &state->buf[index];
+}
+
+/*-- argument parser functions ------------------*/
+_SOKOL_PRIVATE void _sargs_expect_key(sargs_state* state) {
+    state->parse_state = _SARGS_EXPECT_KEY;
+}
+
+_SOKOL_PRIVATE bool _sargs_key_expected(sargs_state* state) {
+    return 0 != (state->parse_state & _SARGS_EXPECT_KEY);
+}
+
+_SOKOL_PRIVATE void _sargs_expect_val(sargs_state* state) {
+    state->parse_state = _SARGS_EXPECT_VAL;
+}
+
+_SOKOL_PRIVATE bool _sargs_val_expected(const sargs_state* state) {
+    return 0 != (state->parse_state & _SARGS_EXPECT_VAL);
+}
+
+_SOKOL_PRIVATE void _sargs_expect_sep(sargs_state* state) {
+    state->parse_state = _SARGS_EXPECT_SEP;
+}
+
+_SOKOL_PRIVATE bool _sargs_any_expected(const sargs_state* state) {
+    return 0 != (state->parse_state & (_SARGS_EXPECT_KEY | _SARGS_EXPECT_VAL | _SARGS_EXPECT_SEP));
+}
+
+_SOKOL_PRIVATE bool _sargs_is_separator(char c) {
+    return c == '=';
+}
+
+_SOKOL_PRIVATE bool _sargs_is_quote(const sargs_state* state, char c) {
+    if (0 == state->quote) {
+        return (c == '\'') || (c == '"');
+    }
+    else {
+        return c == state->quote;
+    }
+}
+
+_SOKOL_PRIVATE void _sargs_begin_quote(sargs_state* state, char c) {
+    state->quote = c;
+}
+
+_SOKOL_PRIVATE void _sargs_end_quote(sargs_state* state) {
+    state->quote = 0;
+}
+
+_SOKOL_PRIVATE bool _sargs_in_quotes(const sargs_state* state) {
+    return 0 != state->quote;
+}
+
+_SOKOL_PRIVATE bool _sargs_is_whitespace(const sargs_state* state, char c) {
+    return !_sargs_in_quotes(state) && ((c == ' ') || (c == '\t'));
+}
+
+_SOKOL_PRIVATE void _sargs_start_key(sargs_state* state) {
+    SOKOL_ASSERT(state->num_args < state->max_args);
+    state->parse_state = _SARGS_PARSING_KEY;
+    state->args[state->num_args].key = state->buf_pos;
+}
+
+_SOKOL_PRIVATE void _sargs_end_key(sargs_state* state) {
+    SOKOL_ASSERT(state->num_args < state->max_args);
+    _sargs_putc(state, 0);
+    state->parse_state = 0;
+}
+
+_SOKOL_PRIVATE bool _sargs_parsing_key(const sargs_state* state) {
+    return 0 != (state->parse_state & _SARGS_PARSING_KEY);
+}
+
+_SOKOL_PRIVATE void _sargs_start_val(sargs_state* state) {
+    SOKOL_ASSERT(state->num_args < state->max_args);
+    state->parse_state = _SARGS_PARSING_VAL;
+    state->args[state->num_args].val = state->buf_pos;
+}
+
+_SOKOL_PRIVATE void _sargs_end_val(sargs_state* state) {
+    SOKOL_ASSERT(state->num_args < state->max_args);
+    _sargs_putc(state, 0);
+    state->num_args++;
+    state->parse_state = 0;
+}
+
+_SOKOL_PRIVATE bool _sargs_is_escape(char c) {
+    return '\\' == c;
+}
+
+_SOKOL_PRIVATE void _sargs_start_escape(sargs_state* state) {
+    state->in_escape = true;
+}
+
+_SOKOL_PRIVATE bool _sargs_in_escape(const sargs_state* state) {
+    return state->in_escape;
+}
+
+_SOKOL_PRIVATE char _sargs_escape(char c) {
+    switch (c) {
+        case 'n':   return '\n';
+        case 't':   return '\t';
+        case 'r':   return '\r';
+        case '\\':  return '\\';
+        default:    return c;
+    }
+}
+
+_SOKOL_PRIVATE void _sargs_end_escape(sargs_state* state) {
+    state->in_escape = false;
+}
+
+_SOKOL_PRIVATE bool _sargs_parsing_val(const sargs_state* state) {
+    return 0 != (state->parse_state & _SARGS_PARSING_VAL);
+}
+
+_SOKOL_PRIVATE bool _sargs_parse_carg(sargs_state* state, const char* src) {
+    char c;
+    while (0 != (c = *src++)) {
+        if (_sargs_in_escape(state)) {
+            c = _sargs_escape(c);
+            _sargs_end_escape(state);
+        }
+        else if (_sargs_is_escape(c)) {
+            _sargs_start_escape(state);
+            continue;
+        }
+        if (_sargs_any_expected(state)) {
+            if (!_sargs_is_whitespace(state, c)) {
+                /* start of key, value or separator */
+                if (_sargs_key_expected(state)) {
+                    /* start of new key */
+                    _sargs_start_key(state);
+                }
+                else if (_sargs_val_expected(state)) {
+                    /* start of value */
+                    if (_sargs_is_quote(state, c)) {
+                        _sargs_begin_quote(state, c);
+                        continue;
+                    }
+                    _sargs_start_val(state);
+                }
+                else {
+                    /* separator */
+                    if (_sargs_is_separator(c)) {
+                        _sargs_expect_val(state);
+                        continue;
+                    }
+                }
+            }
+            else {
+                /* skip white space */
+                continue;
+            }
+        }
+        else if (_sargs_parsing_key(state)) {
+            if (_sargs_is_whitespace(state, c) || _sargs_is_separator(c)) {
+                /* end of key string */
+                _sargs_end_key(state);
+                if (_sargs_is_separator(c)) {
+                    _sargs_expect_val(state);
+                }
+                else {
+                    _sargs_expect_sep(state);
+                }
+                continue;
+            }
+        }
+        else if (_sargs_parsing_val(state)) {
+            if (_sargs_in_quotes(state)) {
+                /* when in quotes, whitespace is a normal character
+                   and a matching quote ends the value string
+                */
+                if (_sargs_is_quote(state, c)) {
+                    _sargs_end_quote(state);
+                    _sargs_end_val(state);
+                    _sargs_expect_key(state);
+                    continue;
+                }
+            }
+            else if (_sargs_is_whitespace(state, c)) {
+                /* end of value string (no quotes) */
+                _sargs_end_val(state);
+                _sargs_expect_key(state);
+                continue;
+            }
+        }
+        _sargs_putc(state, c);
+    }
+    if (_sargs_parsing_key(state)) {
+        _sargs_end_key(state);
+        _sargs_expect_sep(state);
+    }
+    else if (_sargs_parsing_val(state) && !_sargs_in_quotes(state)) {
+        _sargs_end_val(state);
+        _sargs_expect_key(state);
+    }
+    return true;
+}
+
+_SOKOL_PRIVATE bool _sargs_parse_cargs(sargs_state* state, int argc, const char** argv) {
+    _sargs_expect_key(state);
+    bool retval = true;
+    for (int i = 1; i < argc; i++) {
+        retval &= _sargs_parse_carg(state, argv[i]);
+    }
+    state->parse_state = 0;
+    return retval;
+}
+
+/*-- EMSCRIPTEN IMPLEMENTATION -----------------------------------------------*/
+#if defined(__EMSCRIPTEN__)
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+EMSCRIPTEN_KEEPALIVE void _sargs_add_kvp(sargs_state* state, const char* key, const char* val) {
+    SOKOL_ASSERT(state->valid && key && val);
+    if (state->num_args >= state->max_args) {
+        return;
+    }
+
+    /* copy key string */
+    char c;
+    state->args[state->num_args].key = state->buf_pos;
+    const char* ptr = key;
+    while (0 != (c = *ptr++)) {
+        _sargs_putc(state, c);
+    }
+    _sargs_putc(state, 0);
+
+    /* copy value string */
+    state->args[state->num_args].val = state->buf_pos;
+    ptr = val;
+    while (0 != (c = *ptr++)) {
+        _sargs_putc(state, c);
+    }
+    _sargs_putc(state, 0);
+
+    state->num_args++;
+}
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
+/* JS function to extract arguments from the page URL */
+EM_JS(void, sargs_js_parse_url, (void), {
+    var params = new URLSearchParams(window.location.search).entries();
+    for (var p = params.next(); !p.done; p = params.next()) {
+        var key = p.value[0];
+        var val = p.value[1];
+        var res = ccall('_sargs_add_kvp', 'void', ['string','string'], [key,val]);
+    }
+});
+
+#endif /* EMSCRIPTEN */
+
+/*== PUBLIC IMPLEMENTATION FUNCTIONS =========================================*/
+SOKOL_API_IMPL sargs_state* sargs_create(const sargs_desc* desc) {
+    SOKOL_ASSERT(desc);
+    sargs_state* state = (sargs_state*)SOKOL_CALLOC(1, sizeof(sargs_state));
+    memset(state, 0, sizeof(*state));
+    state->max_args = _sargs_def(desc->max_args, _SARGS_MAX_ARGS_DEF);
+    state->buf_size = _sargs_def(desc->buf_size, _SARGS_BUF_SIZE_DEF);
+    SOKOL_ASSERT(state->buf_size > 8);
+    state->args = (_sargs_kvp_t*) SOKOL_CALLOC((size_t)state->max_args, sizeof(_sargs_kvp_t));
+    state->buf = (char*) SOKOL_CALLOC((size_t)state->buf_size, sizeof(char));
+    /* the first character in buf is reserved and always zero, this is the 'empty string' */
+    state->buf_pos = 1;
+    state->valid = true;
+
+    /* parse argc/argv */
+    _sargs_parse_cargs(state, desc->argc, (const char**) desc->argv);
+
+    #if defined(__EMSCRIPTEN__)
+        /* on emscripten, also parse the page URL*/
+        sargs_js_parse_url(state);
+    #endif
+    return state;
+}
+
+SOKOL_API_IMPL void sargs_destroy(sargs_state* state) {
+    if (state) {
+        SOKOL_ASSERT(state->valid);
+        if (state->args) {
+            SOKOL_FREE(state->args);
+            state->args = 0;
+        }
+        if (state->buf) {
+            SOKOL_FREE(state->buf);
+            state->buf = 0;
+        }
+        state->valid = false;
+        SOKOL_FREE(state);
+    }
+}
+
+SOKOL_API_IMPL bool sargs_isvalid(const sargs_state* state) {
+    return state->valid;
+}
+
+SOKOL_API_IMPL int sargs_find(const sargs_state* state, const char* key) {
+    SOKOL_ASSERT(state->valid && key);
+    for (int i = 0; i < state->num_args; i++) {
+        if (0 == strcmp(_sargs_str(state, state->args[i].key), key)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+SOKOL_API_IMPL int sargs_num_args(const sargs_state* state) {
+    SOKOL_ASSERT(state->valid);
+    return state->num_args;
+}
+
+SOKOL_API_IMPL const char* sargs_key_at(const sargs_state* state, int index) {
+    SOKOL_ASSERT(state->valid);
+    if ((index >= 0) && (index < state->num_args)) {
+        return _sargs_str(state, state->args[index].key);
+    }
+    else {
+        /* index 0 is always the empty string */
+        return _sargs_str(state, 0);
+    }
+}
+
+SOKOL_API_IMPL const char* sargs_value_at(const sargs_state* state, int index) {
+    SOKOL_ASSERT(state->valid);
+    if ((index >= 0) && (index < state->num_args)) {
+        return _sargs_str(state, state->args[index].val);
+    }
+    else {
+        /* index 0 is always the empty string */
+        return _sargs_str(state, 0);
+    }
+}
+
+SOKOL_API_IMPL bool sargs_exists(const sargs_state* state, const char* key) {
+    SOKOL_ASSERT(state->valid && key);
+    return -1 != sargs_find(state, key);
+}
+
+SOKOL_API_IMPL const char* sargs_value(const sargs_state* state, const char* key) {
+    SOKOL_ASSERT(state->valid && key);
+    return sargs_value_at(state, sargs_find(state, key));
+}
+
+SOKOL_API_IMPL const char* sargs_value_def(const sargs_state* state, const char* key, const char* def) {
+    SOKOL_ASSERT(state->valid && key && def);
+    int arg_index = sargs_find(state, key);
+    if (-1 != arg_index) {
+        return sargs_value_at(state, arg_index);
+    }
+    else {
+        return def;
+    }
+}
+
+SOKOL_API_IMPL bool sargs_equals(const sargs_state* state, const char* key, const char* val) {
+    SOKOL_ASSERT(state->valid && key && val);
+    return 0 == strcmp(sargs_value(state, key), val);
+}
+
+SOKOL_API_IMPL bool sargs_boolean(const sargs_state* state, const char* key) {
+    const char* val = sargs_value(state, key);
+    return (0 == strcmp("true", val)) ||
+           (0 == strcmp("yes", val)) ||
+           (0 == strcmp("on", val));
+}
+
+#endif /* SOKOL_ARGS_IMPL */
+
 PRAGMA_DIAGNOSTIC_POP()
 
-INLINE uint64 Avalanche64(uint64 h)
-{
-    h ^= h >> 33;
-    h *= 0xff51afd7ed558ccd;
-    h ^= h >> 33;
-    h *= 0xc4ceb9fe1a85ec53;
-    h ^= h >> 33;
-    return h;
-}
-
-uint32 Seed()
-{
-    return static_cast<uint32>(time(nullptr));
-}
-
-RandomContext CreateContext(uint32 seed)
-{
-    RandomContext ctx = {{0, 0}};
-    uint64 value = (((uint64)seed) << 1ull) | 1ull;    // make it odd
-    value = Avalanche64(value);
-    ctx.state[0] = 0ull;
-    ctx.state[1] = (value << 1ull) | 1ull;
-    Int(&ctx);
-    ctx.state[0] += Avalanche64(value);
-    Int(&ctx);
-    return ctx;
-}
-
-uint32 Int(RandomContext* ctx)
-{
-    uint64 oldstate = ctx->state[0];
-    ctx->state[0] = oldstate * 0x5851f42d4c957f2dull + ctx->state[1];
-    uint32 xorshifted = uint32(((oldstate >> 18ull) ^ oldstate) >> 27ull);
-    uint32 rot = uint32(oldstate >> 59ull);
-    return (xorshifted >> rot) | (xorshifted << ((-(int)rot) & 31));
-}
-
-float Float(RandomContext* ctx)
-{
-    return FloatNormalized(Int(ctx));
-}
-
-float Float(RandomContext* ctx, float _min, float _max)
-{
-    ASSERT(_min <= _max);
-    
-    float r = Float(ctx);
-    return _min + r*(_max - _min);
-}
-
-int Int(RandomContext* ctx, int _min, int _max)
-{
-    ASSERT(_min <= _max);
-    
-    uint32 range = static_cast<uint32>(_max - _min) + 1;
-    return _min + static_cast<int>(Int(ctx) % range);
-}
-
-uint32 Int()
-{
-    return Int(&RandomCtx().ctx);
-}
-
-float Float()
-{
-    return Float(&RandomCtx().ctx);
-}
-
-float Float(float _min, float _max)
-{
-    return Float(&RandomCtx().ctx, _min, _max);
-}
-
-int Int(int _min, int _max)
-{
-    return Int(&RandomCtx().ctx, _min, _max);
-}
-} // Random
-
-static AssertFailCallback gAssertFailCallback;
-static void* gAssertFailUserData;
-
-void Assert::DebugMessage(const char* fmt, ...)
-{
-    char msgFmt[4972];
-    char msg[4972];
-    
-    va_list args;
-    va_start(args, fmt);
-    vsnprintf(msgFmt, sizeof(msgFmt), fmt, args);
-    va_end(args);
-
-    strcpy_s(msg, sizeof(msg), "[ASSERT_FAIL] ");
-    strcat_s(msg, sizeof(msg), msgFmt);
-    
-    puts(msg);
-
-    #if PLATFORM_WINDOWS
-    strcat_s(msg, sizeof(msg), "\n");
-    OutputDebugStringA(msg);
-    #elif PLATFORM_ANDROID
-    __android_log_write(ANDROID_LOG_FATAL, CONFIG_APP_NAME, msg);
-    #endif
-}
-
-void Assert::SetFailCallback(AssertFailCallback callback, void* userdata)
-{
-    gAssertFailCallback = callback;
-    gAssertFailUserData = userdata;
-}
-
-void Assert::RunFailCallback()
-{
-    if (gAssertFailCallback)
-        gAssertFailCallback(gAssertFailUserData);
-}
-
-struct MemHeapAllocator final : MemAllocator 
-{
-    void* Malloc(size_t size, uint32 align) override;
-    void* Realloc(void* ptr, size_t size, uint32 align) override;
-    void  Free(void* ptr, uint32 align) override;
-    MemAllocatorType GetType() const override { return MemAllocatorType::Heap; }
-};
-
-struct MemBaseContext
-{
-    MemFailCallback  memFailFn;
-    void* 			 memFailUserdata;
-    MemAllocator*		 defaultAlloc = &heapAlloc;
-    MemHeapAllocator heapAlloc;
-    bool             enableMemPro;
-};
-
-static MemBaseContext gMemBase;
-
-#if PLATFORM_WINDOWS
-    #define aligned_malloc(_align, _size) _aligned_malloc(_size, _align)
-    #define aligned_realloc(_ptr, _align, _size) _aligned_realloc(_ptr, _size, _align)
-    #define aligned_free(_ptr) _aligned_free(_ptr)
-#else
-    INLINE void* aligned_malloc(uint32 align, size_t size);
-    INLINE void* aligned_realloc(void*, uint32, size_t);
-    INLINE void  aligned_free(void* ptr);
+#if PLATFORM_ANDROID
+#include <android/asset_manager.h>
 #endif
 
-void Mem::SetFailCallback(MemFailCallback callback, void* userdata)
+#define SETTINGS_NONE_PREDEFINED "_UNKNOWN_"
+
+struct SettingsContext
 {
-    gMemBase.memFailFn = callback;
-    gMemBase.memFailUserdata = userdata;
+    Array<SettingsKeyValue> keyValuePairs;  // Container to save none-predefined settings
+    StaticArray<SettingsCustomCallbacks*, 8> customCallbacks;
+};
+
+static SettingsContext gSettings;
+
+namespace Settings
+{
+
+void AddCustomCallbacks(SettingsCustomCallbacks* callbacks)
+{
+    ASSERT(callbacks);
+
+    uint32 index = gSettings.customCallbacks.Find(callbacks);
+    if (index == UINT32_MAX) 
+        gSettings.customCallbacks.Push(callbacks);
 }
 
-void Mem::RunFailCallback()
+void RemoveCustomCallbacks(SettingsCustomCallbacks* callbacks)
 {
-    if (gMemBase.memFailFn) {
-        gMemBase.memFailFn(gMemBase.memFailUserdata);
-    }
+    ASSERT(callbacks);
+
+    uint32 index = gSettings.customCallbacks.Find(callbacks);
+    if (index != UINT32_MAX) 
+        gSettings.customCallbacks.RemoveAndSwap(index);
 }
 
-void* Mem::AlignPointer(void* ptr, size_t extra, uint32 align)
+static bool settingsLoadFromINIInternal(const Blob& blob)
 {
-    union {
-        void* ptr;
-        uintptr_t addr;
-    } un;
-    un.ptr = ptr;
-    uintptr_t unaligned = un.addr + extra;    // space for header
-    uintptr_t aligned = AlignValue<uintptr_t>(unaligned, align);
-    un.addr = aligned;
-    return un.ptr;
-}
+    ASSERT(blob.IsValid());
 
-MemAllocator* Mem::GetDefaultAlloc()
-{
-    return static_cast<MemAllocator*>(&gMemBase.heapAlloc);
-}
+    ini_t* ini = ini_load(reinterpret_cast<const char*>(blob.Data()), Mem::GetDefaultAlloc());
+    if (!ini)
+        return false;
 
-void Mem::SetDefaultAlloc(MemAllocator* alloc)
-{
-    gMemBase.defaultAlloc = alloc != nullptr ? alloc : &gMemBase.heapAlloc;
-}
+    char keyTrimmed[64];
+    char valueTrimmed[256];
+    uint32 count = 0;
 
-void Mem::EnableMemPro(bool enable)
-{
-    #if MEMPRO_ENABLED
-    gMemBase.enableMemPro = enable;
-    #else
-    UNUSED(enable);
-    #endif
-}
+    for (int i = 0; i < ini_section_count(ini); i++) {
+        const char* sectionName = ini_section_name(ini, i);
 
-bool Mem::IsMemProEnabled()
-{
-    #if MEMPRO_ENABLED
-    return gMemBase.enableMemPro;
-    #else
-    return false;
-    #endif
-}
+        for (uint32 c = 0; c < gSettings.customCallbacks.Count(); c++) {
+            SettingsCustomCallbacks* callbacks = gSettings.customCallbacks[c];
 
-void Mem::TrackMalloc([[maybe_unused]] void* ptr, [[maybe_unused]] size_t size)
-{
-    if constexpr (MEMPRO_ENABLED) {
-        if (gMemBase.enableMemPro)
-            MEMPRO_TRACK_ALLOC(ptr, size);
-    }    
-}
+            uint32 foundCatId = UINT32_MAX;
+            for (uint32 catId = 0, catIdCount = callbacks->GetCategoryCount(); catId < catIdCount; catId++) {
+                if (Str::IsEqualNoCase(sectionName, callbacks->GetCategory(catId))) {
+                    foundCatId = catId;
+                    break;
+                }
+            }
 
-void Mem::TrackFree([[maybe_unused]] void* ptr)
-{
-    if constexpr (MEMPRO_ENABLED) {
-        if (gMemBase.enableMemPro)
-            MEMPRO_TRACK_FREE(ptr);
-    }
-}
+            for (int j = 0; j < ini_property_count(ini, i); j++) {
+                const char* key = ini_property_name(ini, i, j);
+                const char* value = ini_property_value(ini, i, j);
+                Str::Trim(keyTrimmed, sizeof(keyTrimmed), key);
+                Str::Trim(valueTrimmed, sizeof(valueTrimmed), value);
 
-void Mem::TrackRealloc([[maybe_unused]] void* oldPtr, [[maybe_unused]] void* ptr, [[maybe_unused]] size_t size)
-{
-    if constexpr (MEMPRO_ENABLED) {
-        if (gMemBase.enableMemPro)
-            MEMPRO_TRACK_REALLOC(oldPtr, ptr, size);
-    }
-}
+                bool predefined = foundCatId != UINT32_MAX ? callbacks->ParseSetting(foundCatId, keyTrimmed, valueTrimmed) : false;
 
-inline void* MemHeapAllocator::Malloc(size_t size, uint32 align)
-{
-    void* ptr;
-    if (align <= CONFIG_MACHINE_ALIGNMENT) {
-        ptr = malloc(size);
-        ASSERT((uintptr_t(ptr) % CONFIG_MACHINE_ALIGNMENT) == 0);   // Validate machine alignment with malloc
-    }
-    else {
-        align = Max(align, CONFIG_MACHINE_ALIGNMENT);
-        ptr = aligned_malloc(align, size);
-    }
-    if (!ptr) {
-        MEM_FAIL();
-        return nullptr;
+                if (!predefined)
+                    SetValue(keyTrimmed, valueTrimmed);
+
+                char msg[256];
+                Str::PrintFmt(msg, sizeof(msg), "\t%u) %s%s = %s\n", ++count, keyTrimmed, !predefined ? "(*)" : "", valueTrimmed);
+                Debug::Print(msg);
+            }
+        } // for each custom settings parser
     }
 
-    TracyCAlloc(ptr, size);        
-
-    Mem::TrackMalloc(ptr, size);
-    return ptr;
-}
-    
-inline void* MemHeapAllocator::Realloc(void* ptr, size_t size, uint32 align)
-{
-    [[maybe_unused]] void* freePtr = ptr;
-
-    if (align <= CONFIG_MACHINE_ALIGNMENT) {
-        ptr = realloc(ptr, size);
-    }
-    else {
-        align = Max(align, CONFIG_MACHINE_ALIGNMENT);
-        ptr = aligned_realloc(ptr, align, size);
-    }
-    
-    if (!ptr) {
-        MEM_FAIL();
-        return nullptr;
-    }
-    
-    TracyCRealloc(freePtr, ptr, size);
-    Mem::TrackRealloc(freePtr, ptr, size);
-    return ptr;
-}
-    
-inline void MemHeapAllocator::Free(void* ptr, uint32 align)
-{
-    if (ptr != nullptr) {
-        if (align <= CONFIG_MACHINE_ALIGNMENT) {
-            free(ptr);
+    int sectionId = ini_find_section(ini, SETTINGS_NONE_PREDEFINED, Str::Len(SETTINGS_NONE_PREDEFINED));
+    if (sectionId != -1) {
+        for (int i = 0; i < ini_property_count(ini, sectionId); i++) {
+            SetValue(ini_property_name(ini, sectionId, i), ini_property_value(ini, sectionId, i));
         }
-        else {
-            aligned_free(ptr);
+    }
+
+    ini_destroy(ini);
+    return true;
+}
+
+#if PLATFORM_ANDROID
+bool InitializeFromAndroidAsset(AAssetManager* assetMgr, const char* iniFilepath)
+{
+    char msg[256];
+    Str::PrintFmt(msg, sizeof(msg), "Loading settings from assets: %s\n", iniFilepath);
+    Debug::Print(msg);
+
+    Blob blob;
+    AAsset* asset = AAssetManager_open(assetMgr, iniFilepath, AASSET_MODE_BUFFER);
+    if (asset && AAsset_getLength(asset) > 0) {
+        off_t size = AAsset_getLength(asset);
+        blob.Reserve(size + 1);
+        int bytesRead = AAsset_read(asset, const_cast<void*>(blob.Data()), size);
+        
+        if (bytesRead > 0) {
+            blob.SetSize(bytesRead);
+            blob.Write<char>('\0');
         }
-    
-        TracyCFree(ptr);
-        Mem::TrackFree(ptr);
+
+        AAsset_close(asset);
     }
-}
 
-#if !PLATFORM_WINDOWS
-INLINE void* aligned_malloc(uint32 align, size_t size)
-{
-    ASSERT(align >= CONFIG_MACHINE_ALIGNMENT);
-    
-    size_t total = size + align + sizeof(uint32);
-    uint8* ptr = (uint8*)malloc(total);
-    if (!ptr)
-        return nullptr;
-    uint8* aligned = (uint8*)Mem::AlignPointer(ptr, sizeof(uint32), align);
-    uint32* header = (uint32*)aligned - 1;
-    *header = PtrToInt<uint32>((void*)(aligned - ptr));  // Save the offset needed to move back from aligned pointer
-    return aligned;
-}
-
-INLINE void* aligned_realloc(void* ptr, uint32 align, size_t size)
-{
-    ASSERT(align >= CONFIG_MACHINE_ALIGNMENT);
-
-    if (ptr) {
-        uint8* aligned = (uint8*)ptr;
-        uint32 offset = *((uint32*)aligned - 1);
-        ptr = aligned - offset;
-
-        size_t total = size + align + sizeof(uint32);
-        ptr = realloc(ptr, total);
-        if (!ptr)
-            return nullptr;
-        uint8* newAligned = (uint8*)Mem::AlignPointer(ptr, sizeof(uint32), align);
-        if (newAligned == aligned)
-            return aligned;
-
-        aligned = (uint8*)ptr + offset;
-        memmove(newAligned, aligned, size);
-        uint32* header = (uint32*)newAligned - 1;
-        *header = PtrToInt<uint32>((void*)(newAligned - (uint8*)ptr));
-        return newAligned;
+    if (!blob.IsValid()) {
+        Str::PrintFmt(msg, sizeof(msg), "Opening ini file '%s' failed\n", iniFilepath);
+        Debug::Print(msg);
+        return false;
     }
-    else {
-        return aligned_malloc(align, size);
+
+    bool r = settingsLoadFromINIInternal(blob);
+    blob.Free();
+
+    if (!r) {
+        Str::PrintFmt(msg, sizeof(msg), "Parsing ini file '%s' failed\n", iniFilepath);
+        Debug::Print(msg);
     }
-}
-
-INLINE void aligned_free(void* ptr)
-{
-    if (ptr) {
-        uint8* aligned = (uint8*)ptr;
-        uint32* header = (uint32*)aligned - 1;
-        ptr = aligned - *header;
-        free(ptr);
-    }
-}
-#endif  // !PLATFORM_WINDOWS
-
-#if PLATFORM_ANDROID || PLATFORM_LINUX
-static size_t strcpy_s(char *dest, size_t size, const char *src)
-{
-    size_t ret = strlen(src);
-
-    if (size) {
-        size_t len = (ret >= size) ? size - 1 : ret;
-        memcpy(dest, src, len);
-        dest[len] = '\0';
-    }
-    return ret;
-}
-
-static size_t strcat_s(char *dst, size_t size, const char *src)
-{
-    size_t  len;
-    size_t  slen;
-
-    len = 0;
-    slen = strlen(src);
-    while (*dst && size > 0) // added @JS1 edit
-    {
-        dst++;
-        len++;
-        size--;
-    }
-    while (*src && size-- > 1) //added @JS1 edit
-        *dst++ = *src++;
-    if (size == 1 || *src == 0) // **VERY IMPORTANT:** read update below
-        *dst = '\0';
-    return (slen + len);
+    return r;
 }
 #endif  // PLATFORM_ANDROID
 
+bool InitializeFromINI(const char* iniFilepath)
+{
+    char msg[256];
+    Str::PrintFmt(msg, sizeof(msg), "Loading settings from file: %s", iniFilepath);
+    Debug::Print(msg);
+
+    Blob blob;
+    File f;
+    if (f.Open(iniFilepath, FileOpenFlags::Read | FileOpenFlags::SeqScan)) {
+        uint64 size = f.GetSize();
+        if (size) {
+            blob.Reserve(size + 1);
+            size_t bytesRead = f.Read(const_cast<void*>(blob.Data()), size);
+            blob.SetSize(bytesRead);
+            blob.Write<char>('\0');
+        }
+        f.Close();
+    }
+
+    if (!blob.IsValid()) {
+        Str::PrintFmt(msg, sizeof(msg), "Opening ini file '%s' failed", iniFilepath);
+        Debug::Print(msg);
+        return false;
+    }
+
+    bool r = settingsLoadFromINIInternal(blob);
+    blob.Free();
+
+    if (!r) {
+        Str::PrintFmt(msg, sizeof(msg), "Parsing ini file '%s' failed", iniFilepath);
+        Debug::Print(msg);
+    }
+    return r;
+}
+
+void SaveToINI(const char* iniFilepath)
+{
+    char msg[256];
+    Str::PrintFmt(msg, sizeof(msg), "Saving settings to file: %s", iniFilepath);
+    Debug::Print(msg);
+    
+    MemTempAllocator tmpAlloc;
+    ini_t* ini = ini_create(&tmpAlloc);
+    
+    for (SettingsCustomCallbacks* callbacks : gSettings.customCallbacks) {
+        for (uint32 cId = 0; cId < callbacks->GetCategoryCount(); cId++) {
+            Array<SettingsKeyValue> items(&tmpAlloc);
+            const char* catName = callbacks->GetCategory(cId);
+            int sectionId = ini_section_add(ini, catName, Str::Len(catName));
+            
+            callbacks->SaveCategory(cId, items);
+            
+            for (SettingsKeyValue& item : items) {
+                if (item.value.Length())
+                    ini_property_add(ini, sectionId, item.key.CStr(), item.key.Length(), item.value.CStr(), item.value.Length());
+            }
+
+            items.Free();
+        }
+    }
+
+    if (gSettings.keyValuePairs.Count()) {
+        int sectionId = ini_section_add(ini, SETTINGS_NONE_PREDEFINED, Str::Len(SETTINGS_NONE_PREDEFINED));
+        
+        for (SettingsKeyValue& item : gSettings.keyValuePairs) {
+            if (item.value.Length())
+                ini_property_add(ini, sectionId, item.key.CStr(), item.key.Length(), item.value.CStr(), item.value.Length());
+        }
+    }
+
+    int size = ini_save(ini, nullptr, 0);
+    if (size > 0) {
+        char* data = tmpAlloc.MallocTyped<char>(size);
+        ini_save(ini, data, size);
+
+        while (size && data[size-1] == 0)
+            --size;
+    
+        File f;
+        if (f.Open(iniFilepath, FileOpenFlags::Write)) {
+            f.Write(data, size);
+            f.Close();
+        }
+    }
+
+    ini_destroy(ini);
+}
+
+bool InitializeFromCommandLine(int argc, char* argv[])
+{
+    sargs_state* args = sargs_create(sargs_desc {
+        .argc = argc,
+        .argv = argv
+    });
+
+    if (sargs_num_args(args) > 0) {
+        Debug::Print("Loading settings from CommandLine:");
+        #if PLATFORM_WINDOWS
+        Debug::Print("\n");
+        #endif
+    }
+
+    for (int i = 0; i < sargs_num_args(args); i++) {
+        const char* key = sargs_key_at(args, i);
+        const char* value = sargs_value_at(args, i);
+
+        if (key[0] != '-')
+            continue;
+        ++key;
+
+        for (uint32 c = 0; c < gSettings.customCallbacks.Count(); c++) {
+            SettingsCustomCallbacks* callbacks = gSettings.customCallbacks[c];
+
+            uint32 foundCatId = UINT32_MAX;
+            uint32 catLen = 0;
+            for (uint32 catId = 0, catIdCount = callbacks->GetCategoryCount(); catId < catIdCount; catId++) {
+                const char* cat = callbacks->GetCategory(catId);
+                catLen = Str::Len(cat);
+                if (Str::IsEqualNoCaseCount(key, cat, catLen)) {
+                    foundCatId = catId;
+                    break;
+                }
+            }
+    
+            bool predefined = foundCatId != UINT32_MAX ? callbacks->ParseSetting(foundCatId, key + catLen, value) : false;
+
+            if (!predefined)
+                SetValue(key, value);
+
+            char msg[256];
+            Str::PrintFmt(msg, sizeof(msg), "\t%d) %s%s = %s", i+1, key, !predefined ? "(*)" : "", value);
+            Debug::Print(msg);
+            #if PLATFORM_WINDOWS
+            Debug::Print("\n");
+            #endif
+        }
+
+    }
+
+    sargs_destroy(args);
+    return true;
+}
+
+void SetValue(const char* key, const char* value)
+{
+    if (value[0] == 0)
+        return;
+
+    uint32 index = gSettings.keyValuePairs.FindIf([key](const SettingsKeyValue& keyval) {
+        return keyval.key.IsEqual(key);
+    });
+
+    if (index != UINT32_MAX)
+        gSettings.keyValuePairs[index].value = value;
+    else
+        gSettings.keyValuePairs.Push(SettingsKeyValue {.key = key, .value = value});
+}
+
+const char* GetValue(const char* key, const char* defaultValue)
+{
+    uint32 index = gSettings.keyValuePairs.FindIf([key](const SettingsKeyValue& keyval) {
+        return keyval.key.IsEqual(key);
+    });
+    
+    return index != UINT32_MAX ? gSettings.keyValuePairs[index].value.CStr() : defaultValue;
+}
+
+void Release()
+{
+    gSettings.keyValuePairs.Free();
+}
+
+} // Settings
 
 #include <string.h>
 #include <stdlib.h>
@@ -15048,41 +17909,10 @@ bool OS::Win32GetRegisterLocalMachineString(const char* subkey, const char* valu
     return gAdvApi32.RegGetValueA(HKEY_LOCAL_MACHINE, subkey, value, RRF_RT_REG_SZ|RRF_RT_REG_EXPAND_SZ, nullptr, dst, &dataSize) == ERROR_SUCCESS;
 }
 
-static uint32 _GetPhysicalCoresCount()
-{
-	static uint32 cachedCoreCount = UINT32_MAX;
-	if (cachedCoreCount != UINT32_MAX)
-		return cachedCoreCount;
-
-	SYSTEM_LOGICAL_PROCESSOR_INFORMATION* buffer = nullptr;
-	DWORD returnLen = 0;
-	DWORD countCount = 0;
-	if (!GetLogicalProcessorInformation(buffer, &returnLen)) {
-		if (GetLastError() == ERROR_INSUFFICIENT_BUFFER)
-			buffer = (SYSTEM_LOGICAL_PROCESSOR_INFORMATION*)Mem::Alloc(returnLen);
-	}
-
-	if (buffer != nullptr && GetLogicalProcessorInformation(buffer, &returnLen)) {
-		SYSTEM_LOGICAL_PROCESSOR_INFORMATION* ptr = buffer;
-		DWORD byteOffset = 0;
-		while (byteOffset + sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION) <= returnLen) {
-			if (ptr->Relationship == RelationProcessorCore)
-				++countCount;
-
-			byteOffset += sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION);
-			++ptr;
-		}
-	}
-
-	Mem::Free(buffer);
-
-	cachedCoreCount = Clamp<uint32>(countCount, 1, _limits::SYS_MAX_CORES);
-    ASSERT_MSG(cachedCoreCount <= _limits::SYS_MAX_CORES, "CPU core count appears to be too high (%u). Consider increasing SYS_MAX_CORES", cachedCoreCount);
-	return cachedCoreCount;
-}
-
 void OS::GetSysInfo(SysInfo* info)
 {
+    memset(info, 0x0, sizeof(*info));
+
     struct i4 
     {
         int i[4];
@@ -15171,7 +18001,53 @@ void OS::GetSysInfo(SysInfo* info)
     GetSystemInfo(&sysinfo);
     
     info->pageSize = sysinfo.dwPageSize;
-    info->coreCount = _GetPhysicalCoresCount();
+
+    {
+        SYSTEM_LOGICAL_PROCESSOR_INFORMATION* buffer = nullptr;
+        DWORD returnLen = 0;
+        DWORD coreCount = 0;
+        if (!GetLogicalProcessorInformation(buffer, &returnLen)) {
+            if (GetLastError() == ERROR_INSUFFICIENT_BUFFER)
+                buffer = (SYSTEM_LOGICAL_PROCESSOR_INFORMATION*)Mem::Alloc(returnLen);
+        }
+
+        if (buffer != nullptr && GetLogicalProcessorInformation(buffer, &returnLen)) {
+            SYSTEM_LOGICAL_PROCESSOR_INFORMATION* ptr = buffer;
+            DWORD byteOffset = 0;
+            while (byteOffset + sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION) <= returnLen) {
+                if (ptr->Relationship == RelationProcessorCore) {
+                    ++coreCount;
+                }
+
+                if (ptr->Relationship == RelationCache) {
+                    const CACHE_DESCRIPTOR& cache = ptr->Cache;
+                    if (cache.Type == CacheUnified || cache.Type == CacheData) {
+                        SysInfo::CacheInfo* cacheInfo = nullptr;
+                        switch (cache.Level) {
+                            case 1:  cacheInfo = &info->L1Cache;   break;
+                            case 2:  cacheInfo = &info->L2Cache;   break;
+                            case 3:  cacheInfo = &info->L3Cache;   break;
+                        }
+                        ++cacheInfo->count;
+                        cacheInfo->kway = cache.Associativity;
+                        cacheInfo->lineSize = cache.LineSize;
+                        cacheInfo->size = cache.Size;
+                    }
+                }
+
+                byteOffset += sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION);
+                ++ptr;
+            }
+        }
+
+        Mem::Free(buffer);
+
+        ASSERT(coreCount);
+        ASSERT_MSG(coreCount <= _limits::SYS_MAX_CORES, "CPU core count appears to be too high (%u). Consider increasing SYS_MAX_CORES", coreCount);
+        coreCount = Clamp<uint32>(coreCount, 1, _limits::SYS_MAX_CORES);
+        
+        info->coreCount = coreCount;       
+    }
 
     ULONGLONG memSizeKb;
     if (GetPhysicallyInstalledSystemMemory(&memSizeKb)) 
@@ -19295,2836 +22171,83 @@ bool SpinLockMutex::TryEnter()
 
 
 
-DEFINE_HANDLE(HandleDummy);
+#ifdef TRACY_ENABLE
 
-_private::HandlePoolTable* _private::handleCreatePoolTable(uint32 capacity, MemAllocator* alloc)
-{
-    uint32 maxSize = AlignValue(capacity, 16u);
-
-    MemSingleShotMalloc<HandlePoolTable> buff;
-    HandlePoolTable* tbl = buff.AddMemberArray<uint32>(offsetof(HandlePoolTable, dense), maxSize)
-    .AddMemberArray<uint32>(offsetof(HandlePoolTable, sparse), maxSize)
-    .Calloc(alloc);
-    tbl->capacity = capacity;
-    handleResetPoolTable(tbl);
-
-    return tbl;
-}
-
-void _private::handleDestroyPoolTable(HandlePoolTable* tbl, MemAllocator* alloc)
-{
-    MemSingleShotMalloc<HandlePoolTable>::Free(tbl, alloc);
-}
-
-bool _private::handleGrowPoolTable(HandlePoolTable** pTbl, MemAllocator* alloc)
-{
-    HandlePoolTable* tbl = *pTbl;
-    uint32 newCapacity = tbl->capacity << 1;
-
-    HandlePoolTable* newTable = handleCreatePoolTable(newCapacity, alloc);
-    if (!newTable)
-        return false;
-    newTable->count = tbl->count;
-    memcpy(newTable->dense, tbl->dense, sizeof(uint32) * tbl->capacity);
-    memcpy(newTable->sparse, tbl->sparse, sizeof(uint32) * tbl->capacity);
-
-    handleDestroyPoolTable(tbl, alloc);
-    *pTbl = newTable;
-    return true;
-}
-
-_private::HandlePoolTable* _private::handleClone(HandlePoolTable* tbl, MemAllocator* alloc)
-{
-    ASSERT(tbl->capacity);
-    HandlePoolTable* newTable = handleCreatePoolTable(tbl->capacity, alloc);
-    if (!newTable)
-        return nullptr;
-
-    newTable->count = tbl->count;
-    memcpy(newTable->dense, tbl->dense, sizeof(uint32) * tbl->capacity);
-    memcpy(newTable->sparse, tbl->sparse, sizeof(uint32) * tbl->capacity);
-
-    return newTable;
-}
-
-uint32 _private::handleNew(HandlePoolTable* tbl)
-{
-    if (tbl->count < tbl->capacity) {
-        uint32 index = tbl->count++;
-        HandleDummy handle(tbl->dense[index]);
-
-        uint32 gen = handle.GetGen();
-        uint32 sparseIndex = handle.GetSparseIndex();
-        HandleDummy newHandle;
-        newHandle.Set(++gen, sparseIndex);
-
-        tbl->dense[index] = static_cast<uint32>(newHandle);
-        tbl->sparse[sparseIndex] = index;
-        return static_cast<uint32>(newHandle);
-    } else {
-        ASSERT_MSG(0, "handle pool table is full");
-    }
-
-    return UINT32_MAX;
-}
-
-void _private::handleDel(HandlePoolTable* tbl, uint32 handle)
-{
-    ASSERT(tbl->count > 0);
-    ASSERT(handleIsValid(tbl, handle));
-
-    HandleDummy h(handle);
-
-    uint32 index = tbl->sparse[h.GetSparseIndex()];
-    HandleDummy lastHandle = HandleDummy(tbl->dense[--tbl->count]);
-
-    tbl->dense[tbl->count] = handle;
-    tbl->sparse[lastHandle.GetSparseIndex()] = index;
-    tbl->dense[index] = static_cast<uint32>(lastHandle);
-}
-
-void _private::handleResetPoolTable(HandlePoolTable* tbl)
-{
-    tbl->count = 0;
-    uint32* dense = tbl->dense;
-    for (uint32 i = 0, c = tbl->capacity; i < c; i++) {
-        HandleDummy h;
-        h.Set(0, i);
-        dense[i] = static_cast<uint32>(h);
-    }
-}
-
-bool _private::handleIsValid(const HandlePoolTable* tbl, uint32 handle)
-{
-    ASSERT(handle);
-    HandleDummy h(handle);
-
-    uint32 index = tbl->sparse[h.GetSparseIndex()];
-    return index < tbl->count && tbl->dense[index] == handle;
-}
-
-uint32 _private::handleAt(const HandlePoolTable* tbl, uint32 index)
-{
-    ASSERT(index < tbl->count);
-    return tbl->dense[index];
-}
-
-bool _private::handleFull(const HandlePoolTable* tbl)
-{
-    return tbl->count == tbl->capacity;
-}
-
-size_t _private::handleGetMemoryRequirement(uint32 capacity)
-{
-    uint32 maxSize = AlignValue(capacity, 16u);
-    
-    MemSingleShotMalloc<HandlePoolTable> mallocator;
-    return mallocator.AddMemberArray<uint32>(offsetof(HandlePoolTable, dense), maxSize)
-        .AddMemberArray<uint32>(offsetof(HandlePoolTable, sparse), maxSize)
-        .GetMemoryRequirement();
-}
-
-_private::HandlePoolTable* _private::handleCreatePoolTableWithBuffer(uint32 capacity, void* data, size_t size)
-{
-    uint32 maxSize = AlignValue(capacity, 16u);
-    
-    MemSingleShotMalloc<HandlePoolTable> mallocator;
-    HandlePoolTable* tbl = mallocator.AddMemberArray<uint32>(offsetof(HandlePoolTable, dense), maxSize)
-        .AddMemberArray<uint32>(offsetof(HandlePoolTable, sparse), maxSize)
-        .Calloc(data, size);
-    tbl->capacity = capacity;
-    handleResetPoolTable(tbl);
-    
-    return tbl;
-}
-
-bool _private::handleGrowPoolTableWithBuffer(HandlePoolTable** pTbl, void* buff, size_t size)
-{
-    HandlePoolTable* tbl = *pTbl;
-    uint32 newCapacity = tbl->capacity << 1;
-    
-    HandlePoolTable* newTable = handleCreatePoolTableWithBuffer(newCapacity, buff, size);
-    if (!newTable)
-        return false;
-    newTable->count = tbl->count;
-    memcpy(newTable->dense, tbl->dense, sizeof(uint32) * tbl->capacity);
-    memcpy(newTable->sparse, tbl->sparse, sizeof(uint32) * tbl->capacity);
-    
-    *pTbl = newTable;
-    return true;
-}
-
-
-
-#include <stdarg.h> // va_list
-#include <stdio.h>  // puts
-
-
-#if PLATFORM_MOBILE || PLATFORM_OSX
-    #define TERM_COLOR_RESET     ""
-    #define TERM_COLOR_RED       ""
-    #define TERM_COLOR_YELLOW    ""
-    #define TERM_COLOR_GREEN     ""
-    #define TERM_COLOR_CYAN      ""
-    #define TERM_COLOR_WHITE     ""
-#else
-    #define TERM_COLOR_RESET     "\033[0m"
-    #define TERM_COLOR_RED       "\033[31m"
-    #define TERM_COLOR_YELLOW    "\033[33m"
-    #define TERM_COLOR_GREEN     "\033[32m"
-    #define TERM_COLOR_CYAN      "\033[36m"
-    #define TERM_COLOR_WHITE     "\033[97m"
-#endif
-
-#ifndef DEFAULT_LOG_LEVEL
-    #if CONFIG_DEV_MODE
-        #define DEFAULT_LOG_LEVEL LogLevel::Debug
-    #else
-        #define DEFAULT_LOG_LEVEL LogLevel::Info
-    #endif
-#endif
-
-struct LogContext
-{
-    StaticArray<Pair<LogCallback, void*>, 8> callbacks;
-    LogLevel logLevel = DEFAULT_LOG_LEVEL;
-    bool breakOnErrors;
-    bool treatWarningsAsErrors;
-};
-
-static LogContext gLog;
-
-static const char* LOG_ENTRY_TYPES[static_cast<uint32>(LogLevel::_Count)] = { 
-    "", 
-    "[ERR] ",
-    "[WRN] ",
-    "", 
-    "", 
-    "[DBG] "
-};
-
-namespace Log
-{
-    void SetSettings(LogLevel logLevel, bool breakOnErrors, bool treatWarningsAsErrors)
-    {
-        ASSERT(logLevel != LogLevel::Default);
-
-        gLog.logLevel = logLevel;
-        gLog.breakOnErrors = breakOnErrors;
-        gLog.treatWarningsAsErrors = treatWarningsAsErrors;
-    }
-
-    static void _PrintToTerminal(const LogEntry& entry)
-    {
-        uint32 newSize = entry.textLen + 128;
-
-        MemTempAllocator tmp;
-        char* text = tmp.MallocTyped<char>(newSize);
-
-        if (text) {
-            const char* openFmt = "";
-            const char* closeFmt = "";
-
-            switch (entry.type) {
-            case LogLevel::Info:    openFmt = TERM_COLOR_WHITE; closeFmt = TERM_COLOR_WHITE; break;
-            case LogLevel::Debug:	openFmt = TERM_COLOR_CYAN; closeFmt = TERM_COLOR_RESET; break;
-            case LogLevel::Verbose:	openFmt = TERM_COLOR_RESET; closeFmt = TERM_COLOR_RESET; break;
-            case LogLevel::Warning:	openFmt = TERM_COLOR_YELLOW; closeFmt = TERM_COLOR_RESET; break;
-            case LogLevel::Error:	openFmt = TERM_COLOR_RED; closeFmt = TERM_COLOR_RESET; break;
-            default:			    break;
-            }
-
-            Str::PrintFmt(text, newSize, "%s%s%s%s", 
-                openFmt, 
-                LOG_ENTRY_TYPES[static_cast<uint32>(entry.type)], 
-                entry.text, closeFmt);
-        
-            puts(text);
-        }
-        else {
-            ASSERT_ALWAYS(0, "Not enough stack memory: %u bytes", newSize);
-        }
-    }
-
-    #if PLATFORM_ANDROID
-    static void _PrintToAndroidLog(const LogEntry& entry)
-    {
-        OSAndroidLogType androidLogType;
-        switch (entry.type) {
-        case LogLevel::Info:	androidLogType = OSAndroidLogType::Info;        break;
-        case LogLevel::Debug:	androidLogType = OSAndroidLogType::Debug;       break;
-        case LogLevel::Verbose:	androidLogType = OSAndroidLogType::Verbose;     break;
-        case LogLevel::Warning:	androidLogType = OSAndroidLogType::Warn;        break;
-        case LogLevel::Error:	androidLogType = OSAndroidLogType::Error;       break;
-        default:			    androidLogType = OSAndroidLogType::Unknown;
-        }
-        
-        OS::AndroidPrintToLog(androidLogType, CONFIG_APP_NAME, entry.text);
-    }
-    #endif // PLATFORM_ANDROID
-
-    static void _PrintToDebugger(const LogEntry& entry)
-    {
-        #if PLATFORM_WINDOWS
-            uint32 newSize = entry.textLen + 128;
-            MemTempAllocator tmp;
-            char* text = tmp.MallocTyped<char>(newSize);
-
-            if (text) {
-                char source[PATH_CHARS_MAX];
-                if (entry.sourceFile)
-                    Str::PrintFmt(source, sizeof(source), "%s(%d): ", entry.sourceFile, entry.line);
-                else 
-                    source[0] = '\0';
-                Str::PrintFmt(text, newSize, "%s%s%s\n", source, LOG_ENTRY_TYPES[static_cast<uint32>(entry.type)], entry.text);
-                Debug::Print(text);
-            }
-            else {
-                ASSERT_ALWAYS(0, "Not enough stack memory: %u bytes", newSize);
-            }
-        #else
-            UNUSED(entry);
-        #endif
-    }
-
-    #ifdef TRACY_ENABLE
-    static void _PrintToTracy(const LogEntry& entry)
-    {
-        uint32 color;
-        switch (entry.type) {
-        case LogLevel::Info:	color = 0xFFFFFF; break;
-        case LogLevel::Debug:	color = 0xC8C8C8; break;
-        case LogLevel::Verbose:	color = 0x808080; break;
-        case LogLevel::Warning:	color = 0xFFFF00; break;
-        case LogLevel::Error:	color = 0xFF0000; break;
-        default:			    color = 0xFFFFFF; break;
-        }
-
-        TracyCMessageC(entry.text, entry.textLen, color);
-    }
-    #endif
-
-    static void _DispatchLogEntry(const LogEntry& entry)
-    {
-        _PrintToTerminal(entry); 
-        _PrintToDebugger(entry);
-        #ifdef TRACY_ENABLE
-            _PrintToTracy(entry);
-        #endif
-        #if PLATFORM_ANDROID
-            _PrintToAndroidLog(entry);
-        #endif
-
-        for (Pair<LogCallback, void*> c : gLog.callbacks)
-            c.first(entry, c.second);
-
-        if (entry.type == LogLevel::Error && gLog.breakOnErrors) {
-            ASSERT_MSG(0, "Breaking on error");
-        }
-    }
-
-    void _private::PrintInfo(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
-    {
-        if (gLog.logLevel < LogLevel::Info)
-            return;
-
-        MemTempAllocator tmp;
-        uint32 fmtLen = Str::Len(fmt) + 1024;
-        char* text = tmp.MallocTyped<char>(fmtLen);
-
-        va_list args;
-        va_start(args, fmt);
-        Str::PrintFmtArgs(text, fmtLen, fmt, args);
-        va_end(args);
-
-        _DispatchLogEntry({
-            .type = LogLevel::Info,
-            .channels = channels,
-            .textLen = Str::Len(text),
-            .sourceFileLen = sourceFile ? Str::Len(sourceFile) : 0,
-            .line = line,
-            .text = text,
-            .sourceFile = sourceFile
-        });
-    }
-
-    void _private::PrintDebug(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
-    {
-        #if !CONFIG_FINAL_BUILD
-            if (gLog.logLevel < LogLevel::Debug)
-                return;
-        
-            MemTempAllocator tmp;
-            uint32 fmtLen = Str::Len(fmt) + 1024;
-            char* text = tmp.MallocTyped<char>(fmtLen);
-
-            va_list args;
-            va_start(args, fmt);
-            Str::PrintFmtArgs(text, fmtLen, fmt, args);
-            va_end(args);
-
-            _DispatchLogEntry({
-                .type = LogLevel::Debug,
-                .channels = channels,
-                .textLen = Str::Len(text),
-                .sourceFileLen = sourceFile ? Str::Len(sourceFile) : 0,
-                .line = line,
-                .text = text,
-                .sourceFile = sourceFile
-            });
-        #else
-            UNUSED(channels);
-            UNUSED(sourceFile);
-            UNUSED(line);
-            UNUSED(fmt);
-        #endif
-    }
-
-    void _private::PrintVerbose(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
-    {
-        if (gLog.logLevel < LogLevel::Verbose)
-            return;
-
-        MemTempAllocator tmp;
-        uint32 fmtLen = Str::Len(fmt) + 1024;
-        char* text = tmp.MallocTyped<char>(fmtLen);
-
-        va_list args;
-        va_start(args, fmt);
-        Str::PrintFmtArgs(text, fmtLen, fmt, args);
-        va_end(args);
-
-        _DispatchLogEntry({
-            .type = LogLevel::Verbose,
-            .channels = channels,
-            .textLen = Str::Len(text),
-            .sourceFileLen = sourceFile ? Str::Len(sourceFile) : 0,
-            .line = line,
-            .text = text,
-            .sourceFile = sourceFile
-        });
-    }
-
-    void _private::PrintWarning(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
-    {
-        if (gLog.logLevel < LogLevel::Warning)
-            return;
-
-        MemTempAllocator tmp;
-        uint32 fmtLen = Str::Len(fmt) + 1024;
-        char* text = tmp.MallocTyped<char>(fmtLen);
-
-        va_list args;
-        va_start(args, fmt);
-        Str::PrintFmtArgs(text, fmtLen, fmt, args);
-        va_end(args);
-
-        _DispatchLogEntry({
-            .type = !gLog.treatWarningsAsErrors ? LogLevel::Warning : LogLevel::Error,
-            .channels = channels,
-            .textLen = Str::Len(text),
-            .sourceFileLen = sourceFile ? Str::Len(sourceFile) : 0,
-            .line = line,
-            .text = text,
-            .sourceFile = sourceFile
-        });
-    }
-
-    void _private::PrintError(uint32 channels, const char* sourceFile, uint32 line, const char* fmt, ...)
-    {
-        if (gLog.logLevel < LogLevel::Error)
-            return;
-
-        MemTempAllocator tmp;
-        uint32 fmtLen = Str::Len(fmt) + 1024;
-        char* text = tmp.MallocTyped<char>(fmtLen);
-
-        va_list args;
-        va_start(args, fmt);
-        Str::PrintFmtArgs(text, fmtLen, fmt, args);
-        va_end(args);
-
-        _DispatchLogEntry({
-            .type = LogLevel::Error,
-            .channels = channels,
-            .textLen = Str::Len(text),
-            .sourceFileLen = sourceFile ? Str::Len(sourceFile) : 0,
-            .line = line,
-            .text = text,
-            .sourceFile = sourceFile        
-        });
-    }
-
-    void RegisterCallback(LogCallback callback, void* userData)
-    {
-        ASSERT(callback);
-        ASSERT_MSG(gLog.callbacks.FindIf([callback](const Pair<LogCallback, void*>& p) { return p.first == callback; }) == UINT32_MAX, "Callback already added");
-        gLog.callbacks.Push(Pair<LogCallback, void*>(callback, userData));
-    }
-
-    void UnregisterCallback(LogCallback callback)
-    {
-        uint32 index = gLog.callbacks.FindIf([callback](const Pair<LogCallback, void*>& p) { return p.first == callback; });
-        if (index != UINT32_MAX)
-            gLog.callbacks.RemoveAndSwap(index);
-    }
-} // Log
-
-
-
-#define INI_IMPLEMENTATION
-#define INI_MALLOC(ctx, size)       Mem::Alloc(size, (MemAllocator*)ctx)
-#define INI_FREE(ctx, ptr)          Mem::Free(ptr, (MemAllocator*)ctx)
-#define INI_MEMCPY(dst, src, cnt)   memcpy(dst, src, cnt)
-#define INI_STRLEN(s)               Str::Len(s)
-#define INI_STRNICMP(s1, s2, cnt)   (Str::IsEqualNoCaseCount(s1, s2, cnt) ? 0 : 1)
-
+#define TRACY_DBGHELP_LOCK DebugDbgHelp
 PRAGMA_DIAGNOSTIC_PUSH()
-PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wsign-compare")
-//----------------------------------------------------------------------------------------------------------------------
-// External/mgustavsson/ini.h
-
-/*
-------------------------------------------------------------------------------
-          Licensing information can be found at the end of the file.
-------------------------------------------------------------------------------
-
-ini.h - v1.2 - Simple ini-file reader for C/C++.
-
-Do this:
-    #define INI_IMPLEMENTATION
-before you include this file in *one* C/C++ file to create the implementation.
-*/
-
-#ifndef ini_h
-#define ini_h
-
-#define INI_GLOBAL_SECTION ( 0 )
-#define INI_NOT_FOUND ( -1 )
-
-typedef struct ini_t ini_t;
-
-ini_t* ini_create( void* memctx );
-ini_t* ini_load( char const* data, void* memctx );
-
-int ini_save( ini_t const* ini, char* data, int size );
-void ini_destroy( ini_t* ini );
-
-int ini_section_count( ini_t const* ini );
-char const* ini_section_name( ini_t const* ini, int section );
-
-int ini_property_count( ini_t const* ini, int section );
-char const* ini_property_name( ini_t const* ini, int section, int property );
-char const* ini_property_value( ini_t const* ini, int section, int property );
-
-int ini_find_section( ini_t const* ini, char const* name, int name_length );
-int ini_find_property( ini_t const* ini, int section, char const* name, int name_length );
-
-int ini_section_add( ini_t* ini, char const* name, int length );
-void ini_property_add( ini_t* ini, int section, char const* name, int name_length, char const* value, int value_length );
-void ini_section_remove( ini_t* ini, int section );
-void ini_property_remove( ini_t* ini, int section, int property );
-
-void ini_section_name_set( ini_t* ini, int section, char const* name, int length );
-void ini_property_name_set( ini_t* ini, int section, int property, char const* name, int length );
-void ini_property_value_set( ini_t* ini, int section, int property, char const* value, int length  );
-
-#endif /* ini_h */
-
-
-/**
-
-ini.h 
-=====
-
-Simple ini-file reader for C/C++.
-
-
-Examples
---------
-
-#### Loading an ini file and retrieving values
-
-    #define INI_IMPLEMENTATION
-
-    #include <stdio.h>
-    #include <stdlib.h>
-
-    int main()
-        {
-        FILE* fp = fopen( "test.ini", "r" );
-        fseek( fp, 0, SEEK_END );
-        int size = ftell( fp );
-        fseek( fp, 0, SEEK_SET );
-        char* data = (char*) malloc( size + 1 );
-        fread( data, 1, size, fp );
-        data[ size ] = '\0';
-        fclose( fp );
-
-        ini_t* ini = ini_load( data );
-        free( data );
-        int second_index = ini_find_property( ini, INI_GLOBAL_SECTION, "SecondSetting" );
-        char const* second = ini_property_value( ini, INI_GLOBAL_SECTION, second_index );
-        printf( "%s=%s\n", "SecondSetting", second );
-        int section = ini_find_section( ini, "MySection" );
-        int third_index = ini_find_property( ini, section, "ThirdSetting" );
-        char const* third = ini_property_value( ini, section, third_index );
-        printf( "%s=%s\n", "ThirdSetting", third );
-        ini_destroy( ini );
-
-        return 0;
-        }
-
------------------------------------------------------------------------------------------------
-
-#### Creating a new ini file
-
-    #define INI_IMPLEMENTATION
-
-    #include <stdio.h>
-    #include <stdlib.h>
-
-    int main()
-        {       
-        ini_t* ini = ini_create();
-        ini_property_add( ini, INI_GLOBAL_SECTION, "FirstSetting", "Test" );
-        ini_property_add( ini, INI_GLOBAL_SECTION, "SecondSetting", "2" );
-        int section = ini_section_add( ini, "MySection" );
-        ini_property_add( ini, section, "ThirdSetting", "Three" );
-
-        int size = ini_save( ini, NULL, 0 ); // Find the size needed
-        char* data = (char*) malloc( size );
-        size = ini_save( ini, data, size ); // Actually save the file
-        ini_destroy( ini );
-
-        FILE* fp = fopen( "test.ini", "w" );
-        fwrite( data, 1, size, fp );
-        fclose( fp );
-        free( data );
-
-        return 0;
-        }
-
-
-
-API Documentation
------------------
-
-ini.h is a small library for reading classic .ini files. It is a single-header library, and does not need any .lib files 
-or other binaries, or any build scripts. To use it, you just include ini.h to get the API declarations. To get the 
-definitions, you must include ini.h from *one* single C or C++ file, and #define the symbol `INI_IMPLEMENTATION` before 
-you do. 
-
-
-### Customization
-
-There are a few different things in ini.h which are configurable by #defines. The customizations only affect the 
-implementation, so will only need to be defined in the file where you have the #define INI_IMPLEMENTATION.
-
-Note that if all customizations are utilized, ini.h will include no external files whatsoever, which might be useful
-if you need full control over what code is being built.
-
-
-#### Custom memory allocators
-
-To store the internal data structures, ini.h needs to do dynamic allocation by calling `malloc`. Programs might want to 
-keep track of allocations done, or use custom defined pools to allocate memory from. ini.h allows for specifying custom 
-memory allocation functions for `malloc` and `free`.
-This is done with the following code:
-
-    #define INI_IMPLEMENTATION
-    #define INI_MALLOC( ctx, size ) ( my_custom_malloc( ctx, size ) )
-    #define INI_FREE( ctx, ptr ) ( my_custom_free( ctx, ptr ) )
-
-where `my_custom_malloc` and `my_custom_free` are your own memory allocation/deallocation functions. The `ctx` parameter
-is an optional parameter of type `void*`. When `ini_create` or `ini_load` is called, you can pass in a `memctx` 
-parameter, which can be a pointer to anything you like, and which will be passed through as the `ctx` parameter to every 
-`INI_MALLOC`/`INI_FREE` call. For example, if you are doing memory tracking, you can pass a pointer to your tracking 
-data as `memctx`, and in your custom allocation/deallocation function, you can cast the `ctx` param back to the 
-right type, and access the tracking data.
-
-If no custom allocator is defined, ini.h will default to `malloc` and `free` from the C runtime library.
-
-
-#### Custom C runtime function
-
-The library makes use of three additional functions from the C runtime library, and for full flexibility, it allows you 
-to substitute them for your own. Here's an example:
-
-    #define INI_IMPLEMENTATION
-    #define INI_MEMCPY( dst, src, cnt ) ( my_memcpy_func( dst, src, cnt ) )
-    #define INI_STRLEN( s ) ( my_strlen_func( s ) )
-    #define INI_STRNICMP( s1, s2, cnt ) ( my_strnicmp_func( s1, s2, cnt ) )
-
-If no custom function is defined, ini.h will default to the C runtime library equivalent.
-
-
-ini_create
-----------
-    
-    ini_t* ini_create( void* memctx )
-
-Instantiates a new, empty ini structure, which can be manipulated with other API calls, to fill it with data. To save it
-out to an ini-file string, use `ini_save`. When no longer needed, it can be destroyed by calling `ini_destroy`.
-`memctx` is a pointer to user defined data which will be passed through to the custom INI_MALLOC/INI_FREE calls. It can 
-be NULL if no user defined data is needed.
-
-
-ini_load
---------
-
-    ini_t* ini_load( char const* data, void* memctx )
-
-Parse the zero-terminated string `data` containing an ini-file, and create a new ini_t instance containing the data. 
-The instance can be manipulated with other API calls to enumerate sections/properties and retrieve values. When no 
-longer needed, it can be destroyed by calling `ini_destroy`. `memctx` is a pointer to user defined data which will be 
-passed through to the custom INI_MALLOC/INI_FREE calls. It can be NULL if no user defined data is needed.
-
-
-ini_save
---------
-    
-    int ini_save( ini_t const* ini, char* data, int size )
-
-Saves an ini structure as a zero-terminated ini-file string, into the specified buffer. Returns the number of bytes 
-written, including the zero terminator. If `data` is NULL, nothing is written, but `ini_save` still returns the number
-of bytes it would have written. If the size of `data`, as specified in the `size` parameter, is smaller than that 
-required, only part of the ini-file string will be written. `ini_save` still returns the number of bytes it would have
-written had the buffer been large enough.
-
-
-ini_destroy
------------
-
-    void ini_destroy( ini_t* ini )
-
-Destroy an `ini_t` instance created by calling `ini_load` or `ini_create`, releasing the memory allocated by it. No
-further API calls are valid on an `ini_t` instance after calling `ini_destroy` on it.
-
-
-ini_section_count
------------------
-
-    int ini_section_count( ini_t const* ini )
-
-Returns the number of sections in an ini file. There's at least one section in an ini file (the global section), but 
-there can be many more, each specified in the file by the section name wrapped in square brackets [ ].
-
-
-ini_section_name
-----------------
-
-    char const* ini_section_name( ini_t const* ini, int section )
-
-Returns the name of the section with the specified index. `section` must be non-negative and less than the value 
-returned by `ini_section_count`, or `ini_section_name` will return NULL. The defined constant `INI_GLOBAL_SECTION` can
-be used to indicate the global section.
-
-
-ini_property_count
-------------------
-
-    int ini_property_count( ini_t const* ini, int section )
-
-Returns the number of properties belonging to the section with the specified index. `section` must be non-negative and 
-less than the value returned by `ini_section_count`, or `ini_section_name` will return 0. The defined constant 
-`INI_GLOBAL_SECTION` can be used to indicate the global section. Properties are declared in the ini-file on he format
-`name=value`.
-
-
-ini_property_name
------------------
-
-    char const* ini_property_name( ini_t const* ini, int section, int property )
-
-Returns the name of the property with the specified index `property` in the section with the specified index `section`.
-`section` must be non-negative and less than the value returned by `ini_section_count`, and `property` must be 
-non-negative and less than the value returned by `ini_property_count`, or `ini_property_name` will return NULL. The 
-defined constant `INI_GLOBAL_SECTION` can be used to indicate the global section.
-
-
-ini_property_value
-------------------
-
-    char const* ini_property_value( ini_t const* ini, int section, int property )
-
-Returns the value of the property with the specified index `property` in the section with the specified index `section`.
-`section` must be non-negative and less than the value returned by `ini_section_count`, and `property` must be 
-non-negative and less than the value returned by `ini_property_count`, or `ini_property_value` will return NULL. The 
-defined constant `INI_GLOBAL_SECTION` can be used to indicate the global section.
-
-
-ini_find_section
-----------------
-
-    int ini_find_section( ini_t const* ini, char const* name, int name_length )
-
-Finds the section with the specified name, and returns its index. `name_length` specifies the number of characters in
-`name`, which does not have to be zero-terminated. If `name_length` is zero, the length is determined automatically, but
-in this case `name` has to be zero-terminated. If no section with the specified name could be found, the value
-`INI_NOT_FOUND` is returned.
-
-
-ini_find_property
------------------
-
-    int ini_find_property( ini_t const* ini, int section, char const* name, int name_length )
-
-Finds the property with the specified name, within the section with the specified index, and returns the index of the 
-property. `name_length` specifies the number of characters in `name`, which does not have to be zero-terminated. If 
-`name_length` is zero, the length is determined automatically, but in this case `name` has to be zero-terminated. If no 
-property with the specified name could be found within the specified section, the value `INI_NOT_FOUND` is  returned.
-`section` must be non-negative and less than the value returned by `ini_section_count`, or `ini_find_property` will 
-return `INI_NOT_FOUND`. The defined constant `INI_GLOBAL_SECTION` can be used to indicate the global section.
-
-
-ini_section_add
----------------
-
-    int ini_section_add( ini_t* ini, char const* name, int length )
-
-Adds a section with the specified name, and returns the index it was added at. There is no check done to see if a 
-section with the specified name already exists - multiple sections of the same name are allowed. `length` specifies the 
-number of characters in `name`, which does not have to be zero-terminated. If `length` is zero, the length is determined 
-automatically, but in this case `name` has to be zero-terminated.
-
-
-ini_property_add
-----------------
-    
-    void ini_property_add( ini_t* ini, int section, char const* name, int name_length, char const* value, int value_length )
-
-Adds a property with the specified name and value to the specified section, and returns the index it was added at. There 
-is no check done to see if a property with the specified name already exists - multiple properties of the same name are 
-allowed. `name_length` and `value_length` specifies the number of characters in `name` and `value`, which does not have 
-to be zero-terminated. If `name_length` or `value_length` is zero, the length is determined automatically, but in this 
-case `name`/`value` has to be zero-terminated. `section` must be non-negative and less than the value returned by
-`ini_section_count`, or the property will not be added. The defined constant `INI_GLOBAL_SECTION` can be used to 
-indicate the global section.
-
-
-ini_section_remove
-------------------
-
-    void ini_section_remove( ini_t* ini, int section )
-
-Removes the section with the specified index, and all properties within it. `section` must be non-negative and less than 
-the value returned by `ini_section_count`. The defined constant `INI_GLOBAL_SECTION` can be used to indicate the global 
-section. Note that removing a section will shuffle section indices, so that section indices you may have stored will no 
-longer indicate the same section as it did before the remove. Use the find functions to update your indices.
-
-
-ini_property_remove
--------------------
-
-    void ini_property_remove( ini_t* ini, int section, int property )
-
-Removes the property with the specified index from the specified section. `section` must be non-negative and less than 
-the value returned by `ini_section_count`, and `property` must be non-negative and less than the value returned by 
-`ini_property_count`. The defined constant `INI_GLOBAL_SECTION` can be used to indicate the global section. Note that 
-removing a property will shuffle property indices within the specified section, so that property indices you may have 
-stored will no longer indicate the same property as it did before the remove. Use the find functions to update your 
-indices.
-
-
-ini_section_name_set
---------------------
-
-    void ini_section_name_set( ini_t* ini, int section, char const* name, int length )
-
-Change the name of the section with the specified index. `section` must be non-negative and less than the value returned 
-by `ini_section_count`. The defined constant `INI_GLOBAL_SECTION` can be used to indicate the global section. `length` 
-specifies the number of characters in `name`, which does not have to be zero-terminated. If `length` is zero, the length 
-is determined automatically, but in this case `name` has to be zero-terminated.
-
-
-ini_property_name_set
----------------------
-
-    void ini_property_name_set( ini_t* ini, int section, int property, char const* name, int length )
-
-Change the name of the property with the specified index in the specified section. `section` must be non-negative and 
-less than the value returned by `ini_section_count`, and `property` must be non-negative and less than the value 
-returned by `ini_property_count`. The defined constant `INI_GLOBAL_SECTION` can be used to indicate the global section.
-`length` specifies the number of characters in `name`, which does not have to be zero-terminated. If `length` is zero, 
-the length is determined automatically, but in this case `name` has to be zero-terminated.
-
-
-ini_property_value_set
-----------------------
-
-    void ini_property_value_set( ini_t* ini, int section, int property, char const* value, int length  )
-
-Change the value of the property with the specified index in the specified section. `section` must be non-negative and 
-less than the value returned by `ini_section_count`, and `property` must be non-negative and less than the value 
-returned by `ini_property_count`. The defined constant `INI_GLOBAL_SECTION` can be used to indicate the global section.
-`length` specifies the number of characters in `value`, which does not have to be zero-terminated. If `length` is zero, 
-the length is determined automatically, but in this case `value` has to be zero-terminated.
-
-*/
-
-
-/*
-----------------------
-    IMPLEMENTATION
-----------------------
-*/
-
-#ifdef INI_IMPLEMENTATION
-#undef INI_IMPLEMENTATION
-
-#define INITIAL_CAPACITY ( 256 )
-
-#undef _CRT_NONSTDC_NO_DEPRECATE 
-#define _CRT_NONSTDC_NO_DEPRECATE 
-#undef _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_WARNINGS
-#include <stddef.h>
-
-#ifndef INI_MALLOC
-    #include <stdlib.h>
-    #define INI_MALLOC( ctx, size ) ( malloc( size ) )
-    #define INI_FREE( ctx, ptr ) ( free( ptr ) )
+PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4530)   // C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wsometimes-uninitialized")
+PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-variable")
+#ifdef PLATFORM_POSIX
+    #define OLD_PLATFORM_POSIX PLATFORM_POSIX
+    #undef PLATFORM_POSIX
 #endif
-
-#ifndef INI_MEMCPY
-    #include <string.h>
-    #define INI_MEMCPY( dst, src, cnt ) ( memcpy( dst, src, cnt ) )
-#endif 
-
-#ifndef INI_STRLEN
-    #include <string.h>
-    #define INI_STRLEN( s ) ( strlen( s ) )
-#endif 
-
-#ifndef INI_STRNICMP
-    #ifdef _WIN32
-        #include <string.h>
-        #define INI_STRNICMP( s1, s2, cnt ) ( strnicmp( s1, s2, cnt ) )
-    #else                           
-        #include <string.h>         
-        #define INI_STRNICMP( s1, s2, cnt ) ( strncasecmp( s1, s2, cnt ) )        
-    #endif
-#endif 
-
-
-struct ini_internal_section_t
-    {
-    char name[ 32 ];
-    char* name_large;
-    };
-
-
-struct ini_internal_property_t
-    {
-    int section;
-    char name[ 32 ];
-    char* name_large;
-    char value[ 64 ];
-    char* value_large;
-    };
-
-
-struct ini_t
-    {
-    struct ini_internal_section_t* sections;
-    int section_capacity;
-    int section_count;
-
-    struct ini_internal_property_t* properties;
-    int property_capacity;
-    int property_count;
-
-    void* memctx;
-    };
-
-
-static int ini_internal_property_index( ini_t const* ini, int section, int property )
-    {
-    int i;
-    int p;
-
-    if( ini && section >= 0 && section < ini->section_count )
-        {
-        p = 0;
-        for( i = 0; i < ini->property_count; ++i )
-            {
-            if( ini->properties[ i ].section == section )
-                {
-                if( p == property ) return i;
-                ++p;
-                }
-            }
-        }
-
-    return INI_NOT_FOUND;
-    }
-
-
-ini_t* ini_create( void* memctx )
-    {
-    ini_t* ini;
-
-    ini = (ini_t*) INI_MALLOC( memctx, sizeof( ini_t ) );
-    ini->memctx = memctx;
-    ini->sections = (struct ini_internal_section_t*) INI_MALLOC( ini->memctx, INITIAL_CAPACITY * sizeof( ini->sections[ 0 ] ) );
-    ini->section_capacity = INITIAL_CAPACITY;
-    ini->section_count = 1; /* global section */
-    ini->sections[ 0 ].name[ 0 ] = '\0'; 
-    ini->sections[ 0 ].name_large = 0;
-    ini->properties = (struct ini_internal_property_t*) INI_MALLOC( ini->memctx, INITIAL_CAPACITY * sizeof( ini->properties[ 0 ] ) );
-    ini->property_capacity = INITIAL_CAPACITY;
-    ini->property_count = 0;
-    return ini;
-    }
-
-
-ini_t* ini_load( char const* data, void* memctx )
-    {
-    ini_t* ini;
-    char const* ptr;
-    int s;
-    char const* start;
-    char const* start2;
-    int l;
-
-    ini = ini_create( memctx );
-
-    ptr = data;
-    if( ptr )
-        {
-        s = 0;
-        while( *ptr )
-            {
-            /* trim leading whitespace */
-            while( *ptr && *ptr <=' ' )
-                ++ptr;
-            
-            /* done? */
-            if( !*ptr ) break;
-
-            /* comment */
-            else if( *ptr == ';' || *ptr == '#')
-                {
-                while( *ptr && *ptr !='\n' )
-                    ++ptr;
-                }
-            /* section */
-            else if( *ptr == '[' )
-                {
-                ++ptr;
-                start = ptr;
-                while( *ptr && *ptr !=']' && *ptr != '\n' )
-                    ++ptr;
-
-                if( *ptr == ']' )
-                    {
-                    s = ini_section_add( ini, start, (int)( ptr - start) );
-                    ++ptr;
-                    }
-                }
-            /* property */
-            else
-                {
-                start = ptr;
-                while( *ptr && *ptr !='=' && *ptr != '\n' )
-                    ++ptr;
-
-                if( *ptr == '=' )
-                    {
-                    l = (int)( ptr - start);
-                    ++ptr;
-                    while( *ptr && *ptr <= ' ' && *ptr != '\n' ) 
-                        ptr++;
-                    start2 = ptr;
-                    while( *ptr && *ptr != '\n' )
-                        ++ptr;
-                    while( *(--ptr) <= ' ' ) 
-                        (void)ptr;
-                    ptr++;
-                    ini_property_add( ini, s, start, l, start2, (int)( ptr - start2) );
-                    }
-                }
-            }
-        }   
-
-    return ini;
-    }
-
-
-int ini_save( ini_t const* ini, char* data, int size )
-    {
-    int s;
-    int p;
-    int i;
-    int l;
-    char* n;
-    int pos;
-
-    if( ini )
-        {
-        pos = 0;
-        for( s = 0; s < ini->section_count; ++s )
-            {
-            n = ini->sections[ s ].name_large ? ini->sections[ s ].name_large : ini->sections[ s ].name;
-            l = (int) INI_STRLEN( n );
-            if( l > 0 )
-                {
-                if( data && pos < size ) data[ pos ] = '[';
-                ++pos;
-                for( i = 0; i < l; ++i )
-                    {
-                    if( data && pos < size ) data[ pos ] = n[ i ];
-                    ++pos;
-                    }
-                if( data && pos < size ) data[ pos ] = ']';
-                ++pos;
-                if( data && pos < size ) data[ pos ] = '\n';
-                ++pos;
-                }
-
-            for( p = 0; p < ini->property_count; ++p )
-                {
-                if( ini->properties[ p ].section == s )
-                    {
-                    n = ini->properties[ p ].name_large ? ini->properties[ p ].name_large : ini->properties[ p ].name;
-                    l = (int) INI_STRLEN( n );
-                    for( i = 0; i < l; ++i )
-                        {
-                        if( data && pos < size ) data[ pos ] = n[ i ];
-                        ++pos;
-                        }
-                    if( data && pos < size ) data[ pos ] = '=';
-                    ++pos;
-                    n = ini->properties[ p ].value_large ? ini->properties[ p ].value_large : ini->properties[ p ].value;
-                    l = (int) INI_STRLEN( n );
-                    for( i = 0; i < l; ++i )
-                        {
-                        if( data && pos < size ) data[ pos ] = n[ i ];
-                        ++pos;
-                        }
-                    if( data && pos < size ) data[ pos ] = '\n';
-                    ++pos;
-                    }
-                }
-
-            if( pos > 0 )
-                {
-                if( data && pos < size ) data[ pos ] = '\n';
-                ++pos;
-                }
-            }
-
-        if( data && pos < size ) data[ pos ] = '\0';
-        ++pos;
-
-        return pos;
-        }
-
-    return 0;
-    }
-
-
-void ini_destroy( ini_t* ini )
-    {
-    int i;
-
-    if( ini )
-        {
-        for( i = 0; i < ini->property_count; ++i )
-            {
-            if( ini->properties[ i ].value_large ) INI_FREE( ini->memctx, ini->properties[ i ].value_large );
-            if( ini->properties[ i ].name_large ) INI_FREE( ini->memctx, ini->properties[ i ].name_large );
-            }
-        for( i = 0; i < ini->section_count; ++i )
-            if( ini->sections[ i ].name_large ) INI_FREE( ini->memctx, ini->sections[ i ].name_large );
-        INI_FREE( ini->memctx, ini->properties );
-        INI_FREE( ini->memctx, ini->sections );
-        INI_FREE( ini->memctx, ini );
-        }
-    }
-
-
-int ini_section_count( ini_t const* ini )
-    {
-    if( ini ) return ini->section_count;
-    return 0;
-    }
-
-
-char const* ini_section_name( ini_t const* ini, int section )
-    {
-    if( ini && section >= 0 && section < ini->section_count )
-        return ini->sections[ section ].name_large ? ini->sections[ section ].name_large : ini->sections[ section ].name;
-
-    return NULL;
-    }
-
-
-int ini_property_count( ini_t const* ini, int section )
-    {
-    int i;
-    int count;
-
-    if( ini )
-        {
-        count = 0;
-        for( i = 0; i < ini->property_count; ++i )
-            {
-            if( ini->properties[ i ].section == section ) ++count;
-            }
-        return count;
-        }
-
-    return 0;
-    }
-
-
-char const* ini_property_name( ini_t const* ini, int section, int property )
-    {
-    int p;
-
-    if( ini && section >= 0 && section < ini->section_count )
-        {
-        p = ini_internal_property_index( ini, section, property );
-        if( p != INI_NOT_FOUND )
-            return ini->properties[ p ].name_large ? ini->properties[ p ].name_large : ini->properties[ p ].name;
-        }
-
-    return NULL;
-    }
-
-
-char const* ini_property_value( ini_t const* ini, int section, int property )
-    {
-    int p;
-
-    if( ini && section >= 0 && section < ini->section_count )
-        {
-        p = ini_internal_property_index( ini, section, property );
-        if( p != INI_NOT_FOUND )
-            return ini->properties[ p ].value_large ? ini->properties[ p ].value_large : ini->properties[ p ].value;
-        }
-
-    return NULL;
-    }
-
-
-int ini_find_section( ini_t const* ini, char const* name, int name_length )
-    {
-    int i;
-
-    if( ini && name )
-        {
-        if( name_length <= 0 ) name_length = (int) INI_STRLEN( name );
-        for( i = 0; i < ini->section_count; ++i )
-            {
-            char const* const other = 
-                ini->sections[ i ].name_large ? ini->sections[ i ].name_large : ini->sections[ i ].name;
-            if( INI_STRNICMP( name, other, name_length ) == 0 )
-                return i;
-            }
-        }
-
-    return INI_NOT_FOUND;
-    }
-
-
-int ini_find_property( ini_t const* ini, int section, char const* name, int name_length )
-    {
-    int i;
-    int c;
-
-    if( ini && name && section >= 0 && section < ini->section_count)
-        {
-        if( name_length <= 0 ) name_length = (int) INI_STRLEN( name );
-        c = 0;
-        for( i = 0; i < ini->property_capacity; ++i )
-            {
-            if( ini->properties[ i ].section == section )
-                {
-                char const* const other = 
-                    ini->properties[ i ].name_large ? ini->properties[ i ].name_large : ini->properties[ i ].name;
-                if( INI_STRNICMP( name, other, name_length ) == 0 )
-                    return c;
-                ++c;
-                }
-            }
-        }
-
-    return INI_NOT_FOUND;
-    }
-
-
-int ini_section_add( ini_t* ini, char const* name, int length )
-    {
-    struct ini_internal_section_t* new_sections;
-    
-    if( ini && name )
-        {
-        if( length <= 0 ) length = (int) INI_STRLEN( name );
-        if( ini->section_count >= ini->section_capacity )
-            {
-            ini->section_capacity *= 2;
-            new_sections = (struct ini_internal_section_t*) INI_MALLOC( ini->memctx, 
-                ini->section_capacity * sizeof( ini->sections[ 0 ] ) );
-            INI_MEMCPY( new_sections, ini->sections, ini->section_count * sizeof( ini->sections[ 0 ] ) );
-            INI_FREE( ini->memctx, ini->sections );
-            ini->sections = new_sections;
-            }
-
-        ini->sections[ ini->section_count ].name_large = 0;
-        if( length + 1 >= sizeof( ini->sections[ 0 ].name ) )
-            {
-            ini->sections[ ini->section_count ].name_large = (char*) INI_MALLOC( ini->memctx, (size_t) length + 1 );
-            INI_MEMCPY( ini->sections[ ini->section_count ].name_large, name, (size_t) length );
-            ini->sections[ ini->section_count ].name_large[ length ] = '\0';
-            }
-        else
-            {
-            INI_MEMCPY( ini->sections[ ini->section_count ].name, name, (size_t) length );
-            ini->sections[ ini->section_count ].name[ length ] = '\0';
-            }
-
-        return ini->section_count++;
-        }
-    return INI_NOT_FOUND;
-    }
-
-
-void ini_property_add( ini_t* ini, int section, char const* name, int name_length, char const* value, int value_length )
-    {
-    struct ini_internal_property_t* new_properties;
-
-    if( ini && name && section >= 0 && section < ini->section_count )
-        {
-        if( name_length <= 0 ) name_length = (int) INI_STRLEN( name );
-        if( value_length <= 0 ) value_length = (int) INI_STRLEN( value );
-
-        if( ini->property_count >= ini->property_capacity )
-            {
-
-            ini->property_capacity *= 2;
-            new_properties = (struct ini_internal_property_t*) INI_MALLOC( ini->memctx, 
-                ini->property_capacity * sizeof( ini->properties[ 0 ] ) );
-            INI_MEMCPY( new_properties, ini->properties, ini->property_count * sizeof( ini->properties[ 0 ] ) );
-            INI_FREE( ini->memctx, ini->properties );
-            ini->properties = new_properties;
-            }
-        
-        ini->properties[ ini->property_count ].section = section;
-        ini->properties[ ini->property_count ].name_large = 0;
-        ini->properties[ ini->property_count ].value_large = 0;
-
-        if( name_length + 1 >= sizeof( ini->properties[ 0 ].name ) )
-            {
-            ini->properties[ ini->property_count ].name_large = (char*) INI_MALLOC( ini->memctx, (size_t) name_length + 1 );
-            INI_MEMCPY( ini->properties[ ini->property_count ].name_large, name, (size_t) name_length );
-            ini->properties[ ini->property_count ].name_large[ name_length ] = '\0';
-            }
-        else
-            {
-            INI_MEMCPY( ini->properties[ ini->property_count ].name, name, (size_t) name_length );
-            ini->properties[ ini->property_count ].name[ name_length ] = '\0';
-            }
-
-        if( value_length + 1 >= sizeof( ini->properties[ 0 ].value ) )
-            {
-            ini->properties[ ini->property_count ].value_large = (char*) INI_MALLOC( ini->memctx, (size_t) value_length + 1 );
-            INI_MEMCPY( ini->properties[ ini->property_count ].value_large, value, (size_t) value_length );
-            ini->properties[ ini->property_count ].value_large[ value_length ] = '\0';
-            }
-        else
-            {
-            INI_MEMCPY( ini->properties[ ini->property_count ].value, value, (size_t) value_length );
-            ini->properties[ ini->property_count ].value[ value_length ] = '\0';
-            }
-
-        ++ini->property_count;
-        }
-    }
-
-
-void ini_section_remove( ini_t* ini, int section )
-    {
-    int p;
-
-    if( ini && section >= 0 && section < ini->section_count )
-        {
-        if( ini->sections[ section ].name_large ) INI_FREE( ini->memctx, ini->sections[ section ].name_large );
-        for( p = ini->property_count - 1; p >= 0; --p ) 
-            {
-            if( ini->properties[ p ].section == section )
-                {
-                if( ini->properties[ p ].value_large ) INI_FREE( ini->memctx, ini->properties[ p ].value_large );
-                if( ini->properties[ p ].name_large ) INI_FREE( ini->memctx, ini->properties[ p ].name_large );
-                ini->properties[ p ] = ini->properties[ --ini->property_count ];
-                }
-            }
-
-        ini->sections[ section ] = ini->sections[ --ini->section_count  ];
-        
-        for( p = 0; p < ini->property_count; ++p ) 
-            {
-            if( ini->properties[ p ].section == ini->section_count )
-                ini->properties[ p ].section = section;
-            }
-        }
-    }
-
-
-void ini_property_remove( ini_t* ini, int section, int property )
-    {
-    int p;
-
-    if( ini && section >= 0 && section < ini->section_count )
-        {
-        p = ini_internal_property_index( ini, section, property );
-        if( p != INI_NOT_FOUND )
-            {
-            if( ini->properties[ p ].value_large ) INI_FREE( ini->memctx, ini->properties[ p ].value_large );
-            if( ini->properties[ p ].name_large ) INI_FREE( ini->memctx, ini->properties[ p ].name_large );
-            ini->properties[ p ] = ini->properties[ --ini->property_count  ];
-            return;
-            }
-        }
-    }
-
-
-void ini_section_name_set( ini_t* ini, int section, char const* name, int length )
-    {
-    if( ini && name && section >= 0 && section < ini->section_count )
-        {
-        if( length <= 0 ) length = (int) INI_STRLEN( name );
-        if( ini->sections[ section ].name_large ) INI_FREE( ini->memctx, ini->sections[ section ].name_large );
-        ini->sections[ section ].name_large = 0;
-        
-        if( length + 1 >= sizeof( ini->sections[ 0 ].name ) )
-            {
-            ini->sections[ section ].name_large = (char*) INI_MALLOC( ini->memctx, (size_t) length + 1 );
-            INI_MEMCPY( ini->sections[ section ].name_large, name, (size_t) length );
-            ini->sections[ section ].name_large[ length ] = '\0';
-            }
-        else
-            {
-            INI_MEMCPY( ini->sections[ section ].name, name, (size_t) length );
-            ini->sections[ section ].name[ length ] = '\0';
-            }
-        }
-    }
-
-
-void ini_property_name_set( ini_t* ini, int section, int property, char const* name, int length )
-    {
-    int p;
-
-    if( ini && name && section >= 0 && section < ini->section_count )
-        {
-        if( length <= 0 ) length = (int) INI_STRLEN( name );
-        p = ini_internal_property_index( ini, section, property );
-        if( p != INI_NOT_FOUND )
-            {
-            if( ini->properties[ p ].name_large ) INI_FREE( ini->memctx, ini->properties[ p ].name_large );
-            ini->properties[ ini->property_count ].name_large = 0;
-
-            if( length + 1 >= sizeof( ini->properties[ 0 ].name ) )
-                {
-                ini->properties[ p ].name_large = (char*) INI_MALLOC( ini->memctx, (size_t) length + 1 );
-                INI_MEMCPY( ini->properties[ p ].name_large, name, (size_t) length );
-                ini->properties[ p ].name_large[ length ] = '\0';
-                }
-            else
-                {
-                INI_MEMCPY( ini->properties[ p ].name, name, (size_t) length );
-                ini->properties[ p ].name[ length ] = '\0';
-                }
-            }
-        }
-    }
-
-
-void ini_property_value_set( ini_t* ini, int section, int property, char const* value, int length )
-    {
-    int p;
-
-    if( ini && value && section >= 0 && section < ini->section_count )
-        {
-        if( length <= 0 ) length = (int) INI_STRLEN( value );
-        p = ini_internal_property_index( ini, section, property );
-        if( p != INI_NOT_FOUND )
-            {
-            if( ini->properties[ p ].value_large ) INI_FREE( ini->memctx, ini->properties[ p ].value_large );
-            ini->properties[ ini->property_count ].value_large = 0;
-
-            if( length + 1 >= sizeof( ini->properties[ 0 ].value ) )
-                {
-                ini->properties[ p ].value_large = (char*) INI_MALLOC( ini->memctx, (size_t) length + 1 );
-                INI_MEMCPY( ini->properties[ p ].value_large, value, (size_t) length );
-                ini->properties[ p ].value_large[ length ] = '\0';
-                }
-            else
-                {
-                INI_MEMCPY( ini->properties[ p ].value, value, (size_t) length );
-                ini->properties[ p ].value[ length ] = '\0';
-                }
-            }
-        }
-    }
-
-
-#endif /* INI_IMPLEMENTATION */
-
-/*
-
-contributors:
-    Randy Gaul (copy-paste bug in ini_property_value_set)
-    Branimir Karadzic (INI_STRNICMP bugfix)
-
-revision history:
-    1.2     using strnicmp for correct length compares, fixed copy-paste bug in ini_property_value_set
-    1.1     customization, added documentation, cleanup
-    1.0     first publicly released version
-
-*/
-
-/*
-------------------------------------------------------------------------------
-
-This software is available under 2 licenses - you may choose the one you like.
-
-------------------------------------------------------------------------------
-
-ALTERNATIVE A - MIT License
-
-Copyright (c) 2015 Mattias Gustavsson
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of 
-this software and associated documentation files (the "Software"), to deal in 
-the Software without restriction, including without limitation the rights to 
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies 
-of the Software, and to permit persons to whom the Software is furnished to do 
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all 
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
-SOFTWARE.
-
-------------------------------------------------------------------------------
-
-ALTERNATIVE B - Public Domain (www.unlicense.org)
-
-This is free and unencumbered software released into the public domain.
-
-Anyone is free to copy, modify, publish, use, compile, sell, or distribute this 
-software, either in source code form or as a compiled binary, for any purpose, 
-commercial or non-commercial, and by any means.
-
-In jurisdictions that recognize copyright laws, the author or authors of this 
-software dedicate any and all copyright interest in the software to the public 
-domain. We make this dedication for the benefit of the public at large and to 
-the detriment of our heirs and successors. We intend this dedication to be an 
-overt act of relinquishment in perpetuity of all present and future rights to 
-this software under copyright law.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
-AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN 
-ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION 
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-------------------------------------------------------------------------------
-*/
-
+#ifdef PLATFORM_WINDOWS
+    #define fileno _fileno
+    #define OLD_PLATFORM_WINDOWS PLATFORM_WINDOWS
+    #undef PLATFORM_WINDOWS
+#endif
+#define TRACY_UNWIND(_stackframes, _depth) Debug::CaptureStacktrace(_stackframes, _depth, 2)
+#define TRACY_VK_USE_SYMBOL_TABLE
+#include "External/tracy/TracyClient.cpp"
 PRAGMA_DIAGNOSTIC_POP()
 
-typedef struct ini_t ini_t;
-
-INIFileContext INIFile::Create(MemAllocator* alloc)
-{
-    return INIFileContext { .ini = ini_create(alloc) };
-}
-
-INIFileContext INIFile::Load(const char* filepath, MemAllocator* alloc)
-{
-    ASSERT_MSG(alloc->GetType() != MemAllocatorType::Temp, "alloc cannot be temp. Because the code below also has temp alloc and breaks the stack");
-
-    File f;
-
-    MemTempAllocator tmpAlloc;
-    Blob blob(&tmpAlloc);
-    if (f.Open(filepath, FileOpenFlags::Read | FileOpenFlags::SeqScan)) {
-        size_t size = f.GetSize();
-        blob.Reserve(size + 1);
-        f.Read(const_cast<void*>(blob.Data()), size);
-        blob.SetSize(size);
-        blob.Write<char>('\0');
-        f.Close();
-    }
-    else {
-        return INIFileContext {};
-    }
-
-    void* data;
-    size_t size;
-    blob.Detach(&data, &size);
-    return INIFileContext { .ini = ini_load((const char*)data, alloc) };
-}
-
-INIFileContext INIFile::LoadFromString(const char* data, MemAllocator* alloc)
-{
-    return INIFileContext { .ini = ini_load(data, alloc) };
-}
-
-bool INIFile::Save(const INIFileContext& ini, const char* filepath)
-{
-    bool saveDone = false;
-    int size = ini_save(ini.ini, nullptr, 0);
-    if (size > 0) {
-        MemTempAllocator tmpAlloc;
-        char* data = tmpAlloc.MallocTyped<char>(size);
-        ini_save(ini.ini, data, size);
-
-        File f;
-        if (f.Open(filepath, FileOpenFlags::Write)) {
-            f.Write(data, size);
-            f.Close();
-            saveDone = true;
-        }
-    }
-    return saveDone;
-}
-
-Blob INIFile::SaveToMem(const INIFileContext& ini, MemAllocator* alloc)
-{
-    int size = ini_save(ini.ini, nullptr, 0);
-    Blob blob(alloc);
-    if (size > 0) {
-        blob.Reserve(size);
-        ini_save(ini.ini, (char*)blob.Data(), (int)blob.Size());
-        return blob;
-    }
-    return blob;
-}
-
-uint32 INIFileContext::GetSectionCount() const
-{
-    ASSERT(this->ini);
-    return static_cast<uint32>(ini_section_count(this->ini));
-}
-
-INIFileSection INIFileContext::GetSection(uint32 index) const
-{
-    ASSERT(this->ini);
-    return INIFileSection { .ini = this->ini, .id = static_cast<int>(index) };
-}
-
-const char* INIFileContext::GetSectionName(uint32 index) const
-{
-    ASSERT(this->ini);
-    return ini_section_name(this->ini, static_cast<int>(index));
-}
-
-INIFileSection INIFileContext::GetRootSection() const
-{
-    ASSERT(this->ini);
-    return INIFileSection { .ini = this->ini, .id = INI_GLOBAL_SECTION };
-}
-
-INIFileSection INIFileContext::NewSection(const char* name) const
-{
-    ASSERT(this->ini);
-    return INIFileSection { .ini = this->ini, .id = ini_section_add(this->ini, name, Str::Len(name)) };
-}
-
-INIFileSection INIFileContext::FindSection(const char* name) const
-{
-    ASSERT(this->ini);
-    return INIFileSection { .ini = this->ini, .id = ini_find_section(this->ini, name, Str::Len(name)) };
-}
-
-void INIFileContext::Destroy()
-{
-    if (this->ini) 
-        ini_destroy(this->ini);
-    this->ini = nullptr;
-}
-
-uint32 INIFileSection::GetPropertyCount()
-{
-    ASSERT(this->id != INI_NOT_FOUND);
-    return static_cast<uint32>(ini_property_count(this->ini, this->id));
-}
-
-INIFileProperty INIFileSection::GetProperty(uint32 index)
-{
-    return { .ini = this->ini, .sectionId = this->id, .id = static_cast<int>(index) };
-}
-
-const char* INIFileSection::GetPropertyName(uint32 index)
-{
-    ASSERT(this->id != INI_NOT_FOUND);
-    return ini_property_name(this->ini, this->id, static_cast<int>(index));
-}
-
-INIFileProperty INIFileSection::NewProperty(const char* name, const char* value)
-{
-    ASSERT(this->id != INI_NOT_FOUND);
-    ini_property_add(this->ini, this->id, name, Str::Len(name), value, Str::Len(value));
-    return INIFileProperty { 
-        .ini = this->ini, 
-        .sectionId = this->id,
-        .id = ini_property_count(this->ini, this->id) - 1 
-    };
-}
-
-INIFileProperty INIFileSection::FindProperty(const char* name)
-{
-    ASSERT(this->id != INI_NOT_FOUND);
-    return INIFileProperty { 
-        .ini = this->ini, 
-        .sectionId = this->id,
-        .id = ini_find_property(this->ini, this->id, name, Str::Len(name)) 
-    };
-}
-
-void INIFileSection::SetName(const char* name)
-{
-    ASSERT(this->id != INI_NOT_FOUND);
-    ini_section_name_set(this->ini, this->id, name, Str::Len(name));
-}
-
-const char* INIFileSection::GetName()
-{
-    ASSERT(this->id != INI_NOT_FOUND);
-    return ini_section_name(this->ini, this->id);
-}
-
-void INIFileSection::Delete()
-{
-    ASSERT(this->id != INI_NOT_FOUND);
-    ini_section_remove(this->ini, this->id);
-}
-
-void INIFileProperty::SetName(const char* name)
-{
-    ASSERT(this->id != INI_NOT_FOUND);
-    ini_property_name_set(this->ini, this->sectionId, this->id, name, (int)Str::Len(name));
-}
-
-void INIFileProperty::SetValue(const char* value)
-{
-    ASSERT(this->id != INI_NOT_FOUND);
-    ini_property_value_set(this->ini, this->sectionId, this->id, value, (int)Str::Len(value));
-}
-
-const char* INIFileProperty::GetName()
-{
-    ASSERT(this->id != INI_NOT_FOUND);
-    return ini_property_name(this->ini, this->sectionId, this->id);
-}
-
-const char* INIFileProperty::GetValue()
-{
-    ASSERT(this->id != INI_NOT_FOUND);
-    return ini_property_value(this->ini, this->sectionId, this->id);
-}
-
-void INIFileProperty::Delete()
-{
-    ASSERT(this->id != INI_NOT_FOUND);
-    ini_property_remove(this->ini, this->sectionId, this->id);
-}
-
-
-
-#define SOKOL_ARGS_IMPL
-#define SOKOL_ASSERT(c)     ASSERT(c)
-#define SOKOL_LOG(msg)      LOG_DEBUG(msg)
-#define SOKOL_CALLOC(n,s)   Mem::AllocZero((n)*(s))
-#define SOKOL_FREE(p)       Mem::Free(p)
-#define SOKOL_ARGS_API_DECL 
-#define SOKOL_API_IMPL      
-PRAGMA_DIAGNOSTIC_PUSH()
-PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4505)
-PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
-//----------------------------------------------------------------------------------------------------------------------
-// External/sokol/sokol_args.h
-
-#if defined(SOKOL_IMPL) && !defined(SOKOL_ARGS_IMPL)
-#define SOKOL_ARGS_IMPL
-#endif
-#ifndef SOKOL_ARGS_INCLUDED
-/*
-    sokol_args.h    -- cross-platform key/value arg-parsing for web and native
-
-    Project URL: https://github.com/floooh/sokol
-
-    Do this:
-        #define SOKOL_IMPL or
-        #define SOKOL_ARGS_IMPL
-    before you include this file in *one* C or C++ file to create the
-    implementation.
-
-    Optionally provide the following defines with your own implementations:
-
-    SOKOL_ASSERT(c)     - your own assert macro (default: assert(c))
-    SOKOL_LOG(msg)      - your own logging functions (default: puts(msg))
-    SOKOL_CALLOC(n,s)   - your own calloc() implementation (default: calloc(n,s))
-    SOKOL_FREE(p)       - your own free() implementation (default: free(p))
-    SOKOL_ARGS_API_DECL - public function declaration prefix (default: extern)
-    SOKOL_API_DECL      - same as SOKOL_ARGS_API_DECL
-    SOKOL_API_IMPL      - public function implementation prefix (default: -)
-
-    If sokol_args.h is compiled as a DLL, define the following before
-    including the declaration or implementation:
-
-    SOKOL_DLL
-
-    On Windows, SOKOL_DLL will define SOKOL_ARGS_API_DECL as __declspec(dllexport)
-    or __declspec(dllimport) as needed.
-
-    OVERVIEW
-    ========
-    sokol_args.h provides a simple unified argument parsing API for WebAssembly and
-    native apps.
-
-    When running as WebAssembly app, arguments are taken from the page URL:
-
-    https://floooh.github.io/tiny8bit/kc85.html?type=kc85_3&mod=m022&snapshot=kc85/jungle.kcc
-
-    The same arguments provided to a command line app:
-
-    kc85 type=kc85_3 mod=m022 snapshot=kc85/jungle.kcc
-
-    ARGUMENT FORMATTING
-    ===================
-    On the web platform, arguments must be formatted as a valid URL query string
-    with 'percent encoding' used for special characters.
-
-    Strings are expected to be UTF-8 encoded (although sokol_args.h doesn't
-    contain any special UTF-8 handling). See below on how to obtain
-    UTF-8 encoded argc/argv values on Windows when using WinMain() as
-    entry point.
-
-    On native platforms the following rules must be followed:
-
-    Arguments have the general form
-
-        key=value
-
-    Key/value pairs are separated by 'whitespace', valid whitespace
-    characters are space and tab.
-
-    Whitespace characters in front and after the separating '=' character
-    are ignored:
-
-        key = value
-
-    ...is the same as
-
-        key=value
-
-    The 'key' string must be a simple string without escape sequences or whitespace.
-
-    Currently 'single keys' without values are not allowed, but may be
-    in the future.
-
-    The 'value' string can be quoted, and quoted value strings can contain
-    whitespace:
-
-        key = 'single-quoted value'
-        key = "double-quoted value"
-
-    Single-quoted value strings can contain double quotes, and vice-versa:
-
-        key = 'single-quoted value "can contain double-quotes"'
-        key = "double-quoted value 'can contain single-quotes'"
-
-    Note that correct quoting can be tricky on some shells, since command
-    shells may remove quotes, unless they're escaped.
-
-    Value strings can contain a small selection of escape sequences:
-
-        \n  - newline
-        \r  - carriage return
-        \t  - tab
-        \\  - escaped backslash
-
-    (more escape codes may be added in the future).
-
-    CODE EXAMPLE
-    ============
-
-        int main(int argc, char* argv[]) {
-            sargs_setup(&(sargs_desc){
-                .argc = argc,
-                .argv = argv
-            });
-
-            if (sargs_exists("bla")) {
-                ...
-            }
-
-            const char* val0 = sargs_value("bla");
-
-            const char* val1 = sargs_value_def("bla", "default_value");
-
-            if (sargs_equals("type", "kc85_4")) {
-                ...
-            }
-
-            if (sargs_boolean("joystick_enabled")) {
-                ...
-            }
-
-            for (int i = 0; i < sargs_num_args(); i++) {
-                printf("key: %s, value: %s\n", sargs_key_at(i), sargs_value_at(i));
-            }
-
-            int index = sargs_find("bla");
-            printf("key: %s, value: %s\n", sargs_key_at(index), sargs_value_at(index));
-
-            sargs_shutdown();
-        }
-
-    WINMAIN AND ARGC / ARGV
-    =======================
-    On Windows with WinMain() based apps, getting UTF8-encoded command line
-    arguments is a bit more complicated:
-
-    First call GetCommandLineW(), this returns the entire command line
-    as UTF-16 string. Then call CommandLineToArgvW(), this parses the
-    command line string into the usual argc/argv format (but in UTF-16).
-    Finally convert the UTF-16 strings in argv[] into UTF-8 via
-    WideCharToMultiByte().
-
-    See the function _sapp_win32_command_line_to_utf8_argv() in sokol_app.h
-    for example code how to do this (if you're using sokol_app.h, it will
-    already convert the command line arguments to UTF-8 for you of course,
-    so you can plug them directly into sokol_app.h).
-
-    API DOCUMENTATION
-    =================
-    void sargs_setup(const sargs_desc* desc)
-        Initialize sokol_args, desc contains the following configuration
-        parameters:
-            int argc        - the main function's argc parameter
-            char** argv     - the main function's argv parameter
-            int max_args    - max number of key/value pairs, default is 16
-            int buf_size    - size of the internal string buffer, default is 16384
-
-        Note that on the web, argc and argv will be ignored and the arguments
-        will be taken from the page URL instead.
-
-        sargs_setup() will allocate 2 memory chunks: one for keeping track
-        of the key/value args of size 'max_args*8', and a string buffer
-        of size 'buf_size'.
-
-    void sargs_shutdown(void)
-        Shutdown sokol-args and free any allocated memory.
-
-    bool sargs_isvalid(void)
-        Return true between sargs_setup() and sargs_shutdown()
-
-    bool sargs_exists(const char* key)
-        Test if a key arg exists.
-
-    const char* sargs_value(const char* key)
-        Return value associated with key. Returns an empty
-        string ("") if the key doesn't exist.
-
-    const char* sargs_value_def(const char* key, const char* default)
-        Return value associated with key, or the provided default
-        value if the value doesn't exist.
-
-    bool sargs_equals(const char* key, const char* val);
-        Return true if the value associated with key matches
-        the 'val' argument.
-
-    bool sargs_boolean(const char* key)
-        Return true if the value string of 'key' is one
-        of 'true', 'yes', 'on'.
-
-    int sargs_find(const char* key)
-        Find argument by key name and return its index, or -1 if not found.
-
-    int sargs_num_args(void)
-        Return number of key/value pairs.
-
-    const char* sargs_key_at(int index)
-        Return the key name of argument at index. Returns empty string if
-        is index is outside range.
-
-    const char* sargs_value_at(int index)
-        Return the value of argument at index. Returns empty string
-        if index is outside range.
-
-    TODO
-    ====
-    - parsing errors?
-
-    LICENSE
-    =======
-
-    zlib/libpng license
-
-    Copyright (c) 2018 Andre Weissflog
-
-    This software is provided 'as-is', without any express or implied warranty.
-    In no event will the authors be held liable for any damages arising from the
-    use of this software.
-
-    Permission is granted to anyone to use this software for any purpose,
-    including commercial applications, and to alter it and redistribute it
-    freely, subject to the following restrictions:
-
-        1. The origin of this software must not be misrepresented; you must not
-        claim that you wrote the original software. If you use this software in a
-        product, an acknowledgment in the product documentation would be
-        appreciated but is not required.
-
-        2. Altered source versions must be plainly marked as such, and must not
-        be misrepresented as being the original software.
-
-        3. This notice may not be removed or altered from any source
-        distribution.
-*/
-#define SOKOL_ARGS_INCLUDED (1)
-#include <stdint.h>
-#include <stdbool.h>
-
-#if defined(SOKOL_API_DECL) && !defined(SOKOL_ARGS_API_DECL)
-#define SOKOL_ARGS_API_DECL SOKOL_API_DECL
-#endif
-#ifndef SOKOL_ARGS_API_DECL
-#if defined(_WIN32) && defined(SOKOL_DLL) && defined(SOKOL_ARGS_IMPL)
-#define SOKOL_ARGS_API_DECL __declspec(dllexport)
-#elif defined(_WIN32) && defined(SOKOL_DLL)
-#define SOKOL_ARGS_API_DECL __declspec(dllimport)
-#else
-#define SOKOL_ARGS_API_DECL extern
-#endif
+#ifdef OLD_PLATFORM_POSIX
+    #undef PLATFORM_POSIX
+    #define PLATFORM_POSIX OLD_PLATFORM_POSIX
 #endif
 
-#ifdef __cplusplus
-extern "C" {
+#ifdef OLD_PLATFORM_WINDOWS
+    #undef PLATFORM_WINDOWS
+    #define PLATFORM_WINDOWS OLD_PLATFORM_WINDOWS
 #endif
 
-typedef struct sargs_desc {
-    int argc;
-    char** argv;
-    int max_args;
-    int buf_size;
-} sargs_desc;
+#include <string.h>
 
-typedef struct sargs_state sargs_state;
+static TracyZoneEnterCallback gZoneEnterCallback;
+static TracyZoneExitCallback gZoneExitCallback;
 
-/* setup sokol-args */
-SOKOL_ARGS_API_DECL sargs_state* sargs_create(const sargs_desc* desc);
-/* shutdown sokol-args */
-SOKOL_ARGS_API_DECL void sargs_destroy(sargs_state* state);
-/* true between sargs_create() and sargs_destroy() */
-SOKOL_ARGS_API_DECL bool sargs_isvalid(const sargs_state* state);
-/* test if an argument exists by key name */
-SOKOL_ARGS_API_DECL bool sargs_exists(const sargs_state* state, const char* key);
-/* get value by key name, return empty string if key doesn't exist */
-SOKOL_ARGS_API_DECL const char* sargs_value(const sargs_state* state, const char* key);
-/* get value by key name, return provided default if key doesn't exist */
-SOKOL_ARGS_API_DECL const char* sargs_value_def(const sargs_state* state, const char* key, const char* def);
-/* return true if val arg matches the value associated with key */
-SOKOL_ARGS_API_DECL bool sargs_equals(const sargs_state* state, const char* key, const char* val);
-/* return true if key's value is "true", "yes" or "on" */
-SOKOL_ARGS_API_DECL bool sargs_boolean(const sargs_state* state, const char* key);
-/* get index of arg by key name, return -1 if not exists */
-SOKOL_ARGS_API_DECL int sargs_find(const sargs_state* state, const char* key);
-/* get number of parsed arguments */
-SOKOL_ARGS_API_DECL int sargs_num_args(const sargs_state* state);
-/* get key name of argument at index, or empty string */
-SOKOL_ARGS_API_DECL const char* sargs_key_at(const sargs_state* state, int index);
-/* get value string of argument at index, or empty string */
-SOKOL_ARGS_API_DECL const char* sargs_value_at(const sargs_state* state, int index);
-
-#ifdef __cplusplus
-} /* extern "C" */
-
-/* reference-based equivalents for c++ */
-inline sargs_state* sargs_create(const sargs_desc& desc) { return sargs_create(&desc); }
-
-#endif
-#endif // SOKOL_ARGS_INCLUDED
-
-/*--- IMPLEMENTATION ---------------------------------------------------------*/
-#ifdef SOKOL_ARGS_IMPL
-#define SOKOL_ARGS_IMPL_INCLUDED (1)
-#include <string.h> /* memset, strcmp */
-
-#if defined(__EMSCRIPTEN__)
-#include <emscripten/emscripten.h>
-#endif
-
-#ifndef SOKOL_API_IMPL
-    #define SOKOL_API_IMPL
-#endif
-#ifndef SOKOL_DEBUG
-    #ifndef NDEBUG
-        #define SOKOL_DEBUG (1)
-    #endif
-#endif
-#ifndef SOKOL_ASSERT
-    #include <assert.h>
-    #define SOKOL_ASSERT(c) assert(c)
-#endif
-#if !defined(SOKOL_CALLOC) && !defined(SOKOL_FREE)
-    #include <stdlib.h>
-#endif
-#if !defined(SOKOL_CALLOC)
-    #define SOKOL_CALLOC(n,s) calloc(n,s)
-#endif
-#if !defined(SOKOL_FREE)
-    #define SOKOL_FREE(p) free(p)
-#endif
-#ifndef SOKOL_LOG
-    #ifdef SOKOL_DEBUG
-        #include <stdio.h>
-        #define SOKOL_LOG(s) { SOKOL_ASSERT(s); puts(s); }
-    #else
-        #define SOKOL_LOG(s)
-    #endif
-#endif
-
-#ifndef _SOKOL_PRIVATE
-    #if defined(__GNUC__) || defined(__clang__)
-        #define _SOKOL_PRIVATE __attribute__((unused)) static
-    #else
-        #define _SOKOL_PRIVATE static
-    #endif
-#endif
-
-#define _sargs_def(val, def) (((val) == 0) ? (def) : (val))
-
-#define _SARGS_MAX_ARGS_DEF (16)
-#define _SARGS_BUF_SIZE_DEF (16*1024)
-
-/* parser state */
-#define _SARGS_EXPECT_KEY (1<<0)
-#define _SARGS_EXPECT_SEP (1<<1)
-#define _SARGS_EXPECT_VAL (1<<2)
-#define _SARGS_PARSING_KEY (1<<3)
-#define _SARGS_PARSING_VAL (1<<4)
-#define _SARGS_ERROR (1<<5)
-
-/* a key/value pair struct */
-typedef struct {
-    int key;        /* index to start of key string in buf */
-    int val;        /* index to start of value string in buf */
-} _sargs_kvp_t;
-
-/* sokol-args state */
-typedef struct sargs_state {
-    int max_args;       /* number of key/value pairs in args array */
-    int num_args;       /* number of valid items in args array */
-    _sargs_kvp_t* args;   /* key/value pair array */
-    int buf_size;       /* size of buffer in bytes */
-    int buf_pos;        /* current buffer position */
-    char* buf;          /* character buffer, first char is reserved and zero for 'empty string' */
-    bool valid;
-    uint32_t parse_state;
-    char quote;         /* current quote char, 0 if not in a quote */
-    bool in_escape;     /* currently in an escape sequence */
-} sargs_state;
-
-/*== PRIVATE IMPLEMENTATION FUNCTIONS ========================================*/
-
-_SOKOL_PRIVATE void _sargs_putc(sargs_state* state, char c) {
-    if ((state->buf_pos+2) < state->buf_size) {
-        state->buf[state->buf_pos++] = c;
-    }
-}
-
-_SOKOL_PRIVATE const char* _sargs_str(const sargs_state* state, int index) {
-    SOKOL_ASSERT((index >= 0) && (index < state->buf_size));
-    return &state->buf[index];
-}
-
-/*-- argument parser functions ------------------*/
-_SOKOL_PRIVATE void _sargs_expect_key(sargs_state* state) {
-    state->parse_state = _SARGS_EXPECT_KEY;
-}
-
-_SOKOL_PRIVATE bool _sargs_key_expected(sargs_state* state) {
-    return 0 != (state->parse_state & _SARGS_EXPECT_KEY);
-}
-
-_SOKOL_PRIVATE void _sargs_expect_val(sargs_state* state) {
-    state->parse_state = _SARGS_EXPECT_VAL;
-}
-
-_SOKOL_PRIVATE bool _sargs_val_expected(const sargs_state* state) {
-    return 0 != (state->parse_state & _SARGS_EXPECT_VAL);
-}
-
-_SOKOL_PRIVATE void _sargs_expect_sep(sargs_state* state) {
-    state->parse_state = _SARGS_EXPECT_SEP;
-}
-
-_SOKOL_PRIVATE bool _sargs_any_expected(const sargs_state* state) {
-    return 0 != (state->parse_state & (_SARGS_EXPECT_KEY | _SARGS_EXPECT_VAL | _SARGS_EXPECT_SEP));
-}
-
-_SOKOL_PRIVATE bool _sargs_is_separator(char c) {
-    return c == '=';
-}
-
-_SOKOL_PRIVATE bool _sargs_is_quote(const sargs_state* state, char c) {
-    if (0 == state->quote) {
-        return (c == '\'') || (c == '"');
-    }
-    else {
-        return c == state->quote;
-    }
-}
-
-_SOKOL_PRIVATE void _sargs_begin_quote(sargs_state* state, char c) {
-    state->quote = c;
-}
-
-_SOKOL_PRIVATE void _sargs_end_quote(sargs_state* state) {
-    state->quote = 0;
-}
-
-_SOKOL_PRIVATE bool _sargs_in_quotes(const sargs_state* state) {
-    return 0 != state->quote;
-}
-
-_SOKOL_PRIVATE bool _sargs_is_whitespace(const sargs_state* state, char c) {
-    return !_sargs_in_quotes(state) && ((c == ' ') || (c == '\t'));
-}
-
-_SOKOL_PRIVATE void _sargs_start_key(sargs_state* state) {
-    SOKOL_ASSERT(state->num_args < state->max_args);
-    state->parse_state = _SARGS_PARSING_KEY;
-    state->args[state->num_args].key = state->buf_pos;
-}
-
-_SOKOL_PRIVATE void _sargs_end_key(sargs_state* state) {
-    SOKOL_ASSERT(state->num_args < state->max_args);
-    _sargs_putc(state, 0);
-    state->parse_state = 0;
-}
-
-_SOKOL_PRIVATE bool _sargs_parsing_key(const sargs_state* state) {
-    return 0 != (state->parse_state & _SARGS_PARSING_KEY);
-}
-
-_SOKOL_PRIVATE void _sargs_start_val(sargs_state* state) {
-    SOKOL_ASSERT(state->num_args < state->max_args);
-    state->parse_state = _SARGS_PARSING_VAL;
-    state->args[state->num_args].val = state->buf_pos;
-}
-
-_SOKOL_PRIVATE void _sargs_end_val(sargs_state* state) {
-    SOKOL_ASSERT(state->num_args < state->max_args);
-    _sargs_putc(state, 0);
-    state->num_args++;
-    state->parse_state = 0;
-}
-
-_SOKOL_PRIVATE bool _sargs_is_escape(char c) {
-    return '\\' == c;
-}
-
-_SOKOL_PRIVATE void _sargs_start_escape(sargs_state* state) {
-    state->in_escape = true;
-}
-
-_SOKOL_PRIVATE bool _sargs_in_escape(const sargs_state* state) {
-    return state->in_escape;
-}
-
-_SOKOL_PRIVATE char _sargs_escape(char c) {
-    switch (c) {
-        case 'n':   return '\n';
-        case 't':   return '\t';
-        case 'r':   return '\r';
-        case '\\':  return '\\';
-        default:    return c;
-    }
-}
-
-_SOKOL_PRIVATE void _sargs_end_escape(sargs_state* state) {
-    state->in_escape = false;
-}
-
-_SOKOL_PRIVATE bool _sargs_parsing_val(const sargs_state* state) {
-    return 0 != (state->parse_state & _SARGS_PARSING_VAL);
-}
-
-_SOKOL_PRIVATE bool _sargs_parse_carg(sargs_state* state, const char* src) {
-    char c;
-    while (0 != (c = *src++)) {
-        if (_sargs_in_escape(state)) {
-            c = _sargs_escape(c);
-            _sargs_end_escape(state);
-        }
-        else if (_sargs_is_escape(c)) {
-            _sargs_start_escape(state);
-            continue;
-        }
-        if (_sargs_any_expected(state)) {
-            if (!_sargs_is_whitespace(state, c)) {
-                /* start of key, value or separator */
-                if (_sargs_key_expected(state)) {
-                    /* start of new key */
-                    _sargs_start_key(state);
-                }
-                else if (_sargs_val_expected(state)) {
-                    /* start of value */
-                    if (_sargs_is_quote(state, c)) {
-                        _sargs_begin_quote(state, c);
-                        continue;
-                    }
-                    _sargs_start_val(state);
-                }
-                else {
-                    /* separator */
-                    if (_sargs_is_separator(c)) {
-                        _sargs_expect_val(state);
-                        continue;
-                    }
-                }
-            }
-            else {
-                /* skip white space */
-                continue;
-            }
-        }
-        else if (_sargs_parsing_key(state)) {
-            if (_sargs_is_whitespace(state, c) || _sargs_is_separator(c)) {
-                /* end of key string */
-                _sargs_end_key(state);
-                if (_sargs_is_separator(c)) {
-                    _sargs_expect_val(state);
-                }
-                else {
-                    _sargs_expect_sep(state);
-                }
-                continue;
-            }
-        }
-        else if (_sargs_parsing_val(state)) {
-            if (_sargs_in_quotes(state)) {
-                /* when in quotes, whitespace is a normal character
-                   and a matching quote ends the value string
-                */
-                if (_sargs_is_quote(state, c)) {
-                    _sargs_end_quote(state);
-                    _sargs_end_val(state);
-                    _sargs_expect_key(state);
-                    continue;
-                }
-            }
-            else if (_sargs_is_whitespace(state, c)) {
-                /* end of value string (no quotes) */
-                _sargs_end_val(state);
-                _sargs_expect_key(state);
-                continue;
-            }
-        }
-        _sargs_putc(state, c);
-    }
-    if (_sargs_parsing_key(state)) {
-        _sargs_end_key(state);
-        _sargs_expect_sep(state);
-    }
-    else if (_sargs_parsing_val(state) && !_sargs_in_quotes(state)) {
-        _sargs_end_val(state);
-        _sargs_expect_key(state);
-    }
-    return true;
-}
-
-_SOKOL_PRIVATE bool _sargs_parse_cargs(sargs_state* state, int argc, const char** argv) {
-    _sargs_expect_key(state);
-    bool retval = true;
-    for (int i = 1; i < argc; i++) {
-        retval &= _sargs_parse_carg(state, argv[i]);
-    }
-    state->parse_state = 0;
-    return retval;
-}
-
-/*-- EMSCRIPTEN IMPLEMENTATION -----------------------------------------------*/
-#if defined(__EMSCRIPTEN__)
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-EMSCRIPTEN_KEEPALIVE void _sargs_add_kvp(sargs_state* state, const char* key, const char* val) {
-    SOKOL_ASSERT(state->valid && key && val);
-    if (state->num_args >= state->max_args) {
-        return;
-    }
-
-    /* copy key string */
-    char c;
-    state->args[state->num_args].key = state->buf_pos;
-    const char* ptr = key;
-    while (0 != (c = *ptr++)) {
-        _sargs_putc(state, c);
-    }
-    _sargs_putc(state, 0);
-
-    /* copy value string */
-    state->args[state->num_args].val = state->buf_pos;
-    ptr = val;
-    while (0 != (c = *ptr++)) {
-        _sargs_putc(state, c);
-    }
-    _sargs_putc(state, 0);
-
-    state->num_args++;
-}
-#ifdef __cplusplus
-} /* extern "C" */
-#endif
-
-/* JS function to extract arguments from the page URL */
-EM_JS(void, sargs_js_parse_url, (void), {
-    var params = new URLSearchParams(window.location.search).entries();
-    for (var p = params.next(); !p.done; p = params.next()) {
-        var key = p.value[0];
-        var val = p.value[1];
-        var res = ccall('_sargs_add_kvp', 'void', ['string','string'], [key,val]);
-    }
-});
-
-#endif /* EMSCRIPTEN */
-
-/*== PUBLIC IMPLEMENTATION FUNCTIONS =========================================*/
-SOKOL_API_IMPL sargs_state* sargs_create(const sargs_desc* desc) {
-    SOKOL_ASSERT(desc);
-    sargs_state* state = (sargs_state*)SOKOL_CALLOC(1, sizeof(sargs_state));
-    memset(state, 0, sizeof(*state));
-    state->max_args = _sargs_def(desc->max_args, _SARGS_MAX_ARGS_DEF);
-    state->buf_size = _sargs_def(desc->buf_size, _SARGS_BUF_SIZE_DEF);
-    SOKOL_ASSERT(state->buf_size > 8);
-    state->args = (_sargs_kvp_t*) SOKOL_CALLOC((size_t)state->max_args, sizeof(_sargs_kvp_t));
-    state->buf = (char*) SOKOL_CALLOC((size_t)state->buf_size, sizeof(char));
-    /* the first character in buf is reserved and always zero, this is the 'empty string' */
-    state->buf_pos = 1;
-    state->valid = true;
-
-    /* parse argc/argv */
-    _sargs_parse_cargs(state, desc->argc, (const char**) desc->argv);
-
-    #if defined(__EMSCRIPTEN__)
-        /* on emscripten, also parse the page URL*/
-        sargs_js_parse_url(state);
-    #endif
-    return state;
-}
-
-SOKOL_API_IMPL void sargs_destroy(sargs_state* state) {
-    if (state) {
-        SOKOL_ASSERT(state->valid);
-        if (state->args) {
-            SOKOL_FREE(state->args);
-            state->args = 0;
-        }
-        if (state->buf) {
-            SOKOL_FREE(state->buf);
-            state->buf = 0;
-        }
-        state->valid = false;
-        SOKOL_FREE(state);
-    }
-}
-
-SOKOL_API_IMPL bool sargs_isvalid(const sargs_state* state) {
-    return state->valid;
-}
-
-SOKOL_API_IMPL int sargs_find(const sargs_state* state, const char* key) {
-    SOKOL_ASSERT(state->valid && key);
-    for (int i = 0; i < state->num_args; i++) {
-        if (0 == strcmp(_sargs_str(state, state->args[i].key), key)) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-SOKOL_API_IMPL int sargs_num_args(const sargs_state* state) {
-    SOKOL_ASSERT(state->valid);
-    return state->num_args;
-}
-
-SOKOL_API_IMPL const char* sargs_key_at(const sargs_state* state, int index) {
-    SOKOL_ASSERT(state->valid);
-    if ((index >= 0) && (index < state->num_args)) {
-        return _sargs_str(state, state->args[index].key);
-    }
-    else {
-        /* index 0 is always the empty string */
-        return _sargs_str(state, 0);
-    }
-}
-
-SOKOL_API_IMPL const char* sargs_value_at(const sargs_state* state, int index) {
-    SOKOL_ASSERT(state->valid);
-    if ((index >= 0) && (index < state->num_args)) {
-        return _sargs_str(state, state->args[index].val);
-    }
-    else {
-        /* index 0 is always the empty string */
-        return _sargs_str(state, 0);
-    }
-}
-
-SOKOL_API_IMPL bool sargs_exists(const sargs_state* state, const char* key) {
-    SOKOL_ASSERT(state->valid && key);
-    return -1 != sargs_find(state, key);
-}
-
-SOKOL_API_IMPL const char* sargs_value(const sargs_state* state, const char* key) {
-    SOKOL_ASSERT(state->valid && key);
-    return sargs_value_at(state, sargs_find(state, key));
-}
-
-SOKOL_API_IMPL const char* sargs_value_def(const sargs_state* state, const char* key, const char* def) {
-    SOKOL_ASSERT(state->valid && key && def);
-    int arg_index = sargs_find(state, key);
-    if (-1 != arg_index) {
-        return sargs_value_at(state, arg_index);
-    }
-    else {
-        return def;
-    }
-}
-
-SOKOL_API_IMPL bool sargs_equals(const sargs_state* state, const char* key, const char* val) {
-    SOKOL_ASSERT(state->valid && key && val);
-    return 0 == strcmp(sargs_value(state, key), val);
-}
-
-SOKOL_API_IMPL bool sargs_boolean(const sargs_state* state, const char* key) {
-    const char* val = sargs_value(state, key);
-    return (0 == strcmp("true", val)) ||
-           (0 == strcmp("yes", val)) ||
-           (0 == strcmp("on", val));
-}
-
-#endif /* SOKOL_ARGS_IMPL */
-
-PRAGMA_DIAGNOSTIC_POP()
-
-#if PLATFORM_ANDROID
-#include <android/asset_manager.h>
-#endif
-
-#define SETTINGS_NONE_PREDEFINED "_UNKNOWN_"
-
-struct SettingsContext
+void Tracy::SetZoneCallbacks(TracyZoneEnterCallback zoneEnterCallback, TracyZoneExitCallback zoneExitCallback)
 {
-    Array<SettingsKeyValue> keyValuePairs;  // Container to save none-predefined settings
-    StaticArray<SettingsCustomCallbacks*, 8> customCallbacks;
-};
-
-static SettingsContext gSettings;
-
-namespace Settings
-{
-
-void AddCustomCallbacks(SettingsCustomCallbacks* callbacks)
-{
-    ASSERT(callbacks);
-
-    uint32 index = gSettings.customCallbacks.Find(callbacks);
-    if (index == UINT32_MAX) 
-        gSettings.customCallbacks.Push(callbacks);
+    gZoneEnterCallback = zoneEnterCallback;
+    gZoneExitCallback = zoneExitCallback;
 }
 
-void RemoveCustomCallbacks(SettingsCustomCallbacks* callbacks)
+bool Tracy::RunZoneExitCallback(TracyCZoneCtx* ctx)
 {
-    ASSERT(callbacks);
-
-    uint32 index = gSettings.customCallbacks.Find(callbacks);
-    if (index != UINT32_MAX) 
-        gSettings.customCallbacks.RemoveAndSwap(index);
-}
-
-static bool settingsLoadFromINIInternal(const Blob& blob)
-{
-    ASSERT(blob.IsValid());
-
-    ini_t* ini = ini_load(reinterpret_cast<const char*>(blob.Data()), Mem::GetDefaultAlloc());
-    if (!ini)
-        return false;
-
-    char keyTrimmed[64];
-    char valueTrimmed[256];
-    uint32 count = 0;
-
-    for (int i = 0; i < ini_section_count(ini); i++) {
-        const char* sectionName = ini_section_name(ini, i);
-
-        for (uint32 c = 0; c < gSettings.customCallbacks.Count(); c++) {
-            SettingsCustomCallbacks* callbacks = gSettings.customCallbacks[c];
-
-            uint32 foundCatId = UINT32_MAX;
-            for (uint32 catId = 0, catIdCount = callbacks->GetCategoryCount(); catId < catIdCount; catId++) {
-                if (Str::IsEqualNoCase(sectionName, callbacks->GetCategory(catId))) {
-                    foundCatId = catId;
-                    break;
-                }
-            }
-
-            for (int j = 0; j < ini_property_count(ini, i); j++) {
-                const char* key = ini_property_name(ini, i, j);
-                const char* value = ini_property_value(ini, i, j);
-                Str::Trim(keyTrimmed, sizeof(keyTrimmed), key);
-                Str::Trim(valueTrimmed, sizeof(valueTrimmed), value);
-
-                bool predefined = foundCatId != UINT32_MAX ? callbacks->ParseSetting(foundCatId, keyTrimmed, valueTrimmed) : false;
-
-                if (!predefined)
-                    SetValue(keyTrimmed, valueTrimmed);
-
-                char msg[256];
-                Str::PrintFmt(msg, sizeof(msg), "\t%u) %s%s = %s\n", ++count, keyTrimmed, !predefined ? "(*)" : "", valueTrimmed);
-                Debug::Print(msg);
-            }
-        } // for each custom settings parser
-    }
-
-    int sectionId = ini_find_section(ini, SETTINGS_NONE_PREDEFINED, Str::Len(SETTINGS_NONE_PREDEFINED));
-    if (sectionId != -1) {
-        for (int i = 0; i < ini_property_count(ini, sectionId); i++) {
-            SetValue(ini_property_name(ini, sectionId, i), ini_property_value(ini, sectionId, i));
-        }
-    }
-
-    ini_destroy(ini);
-    return true;
-}
-
-#if PLATFORM_ANDROID
-bool InitializeFromAndroidAsset(AAssetManager* assetMgr, const char* iniFilepath)
-{
-    char msg[256];
-    Str::PrintFmt(msg, sizeof(msg), "Loading settings from assets: %s\n", iniFilepath);
-    Debug::Print(msg);
-
-    Blob blob;
-    AAsset* asset = AAssetManager_open(assetMgr, iniFilepath, AASSET_MODE_BUFFER);
-    if (asset && AAsset_getLength(asset) > 0) {
-        off_t size = AAsset_getLength(asset);
-        blob.Reserve(size + 1);
-        int bytesRead = AAsset_read(asset, const_cast<void*>(blob.Data()), size);
-        
-        if (bytesRead > 0) {
-            blob.SetSize(bytesRead);
-            blob.Write<char>('\0');
-        }
-
-        AAsset_close(asset);
-    }
-
-    if (!blob.IsValid()) {
-        Str::PrintFmt(msg, sizeof(msg), "Opening ini file '%s' failed\n", iniFilepath);
-        Debug::Print(msg);
-        return false;
-    }
-
-    bool r = settingsLoadFromINIInternal(blob);
-    blob.Free();
-
-    if (!r) {
-        Str::PrintFmt(msg, sizeof(msg), "Parsing ini file '%s' failed\n", iniFilepath);
-        Debug::Print(msg);
-    }
-    return r;
-}
-#endif  // PLATFORM_ANDROID
-
-bool InitializeFromINI(const char* iniFilepath)
-{
-    char msg[256];
-    Str::PrintFmt(msg, sizeof(msg), "Loading settings from file: %s", iniFilepath);
-    Debug::Print(msg);
-
-    Blob blob;
-    File f;
-    if (f.Open(iniFilepath, FileOpenFlags::Read | FileOpenFlags::SeqScan)) {
-        uint64 size = f.GetSize();
-        if (size) {
-            blob.Reserve(size + 1);
-            size_t bytesRead = f.Read(const_cast<void*>(blob.Data()), size);
-            blob.SetSize(bytesRead);
-            blob.Write<char>('\0');
-        }
-        f.Close();
-    }
-
-    if (!blob.IsValid()) {
-        Str::PrintFmt(msg, sizeof(msg), "Opening ini file '%s' failed", iniFilepath);
-        Debug::Print(msg);
-        return false;
-    }
-
-    bool r = settingsLoadFromINIInternal(blob);
-    blob.Free();
-
-    if (!r) {
-        Str::PrintFmt(msg, sizeof(msg), "Parsing ini file '%s' failed", iniFilepath);
-        Debug::Print(msg);
-    }
-    return r;
-}
-
-void SaveToINI(const char* iniFilepath)
-{
-    char msg[256];
-    Str::PrintFmt(msg, sizeof(msg), "Saving settings to file: %s", iniFilepath);
-    Debug::Print(msg);
-    
-    MemTempAllocator tmpAlloc;
-    ini_t* ini = ini_create(&tmpAlloc);
-    
-    for (SettingsCustomCallbacks* callbacks : gSettings.customCallbacks) {
-        for (uint32 cId = 0; cId < callbacks->GetCategoryCount(); cId++) {
-            Array<SettingsKeyValue> items(&tmpAlloc);
-            const char* catName = callbacks->GetCategory(cId);
-            int sectionId = ini_section_add(ini, catName, Str::Len(catName));
-            
-            callbacks->SaveCategory(cId, items);
-            
-            for (SettingsKeyValue& item : items) {
-                if (item.value.Length())
-                    ini_property_add(ini, sectionId, item.key.CStr(), item.key.Length(), item.value.CStr(), item.value.Length());
-            }
-
-            items.Free();
-        }
-    }
-
-    if (gSettings.keyValuePairs.Count()) {
-        int sectionId = ini_section_add(ini, SETTINGS_NONE_PREDEFINED, Str::Len(SETTINGS_NONE_PREDEFINED));
-        
-        for (SettingsKeyValue& item : gSettings.keyValuePairs) {
-            if (item.value.Length())
-                ini_property_add(ini, sectionId, item.key.CStr(), item.key.Length(), item.value.CStr(), item.value.Length());
-        }
-    }
-
-    int size = ini_save(ini, nullptr, 0);
-    if (size > 0) {
-        char* data = tmpAlloc.MallocTyped<char>(size);
-        ini_save(ini, data, size);
-
-        while (size && data[size-1] == 0)
-            --size;
-    
-        File f;
-        if (f.Open(iniFilepath, FileOpenFlags::Write)) {
-            f.Write(data, size);
-            f.Close();
-        }
-    }
-
-    ini_destroy(ini);
-}
-
-bool InitializeFromCommandLine(int argc, char* argv[])
-{
-    sargs_state* args = sargs_create(sargs_desc {
-        .argc = argc,
-        .argv = argv
-    });
-
-    if (sargs_num_args(args) > 0) {
-        Debug::Print("Loading settings from CommandLine:");
-        #if PLATFORM_WINDOWS
-        Debug::Print("\n");
-        #endif
-    }
-
-    for (int i = 0; i < sargs_num_args(args); i++) {
-        const char* key = sargs_key_at(args, i);
-        const char* value = sargs_value_at(args, i);
-
-        if (key[0] != '-')
-            continue;
-        ++key;
-
-        for (uint32 c = 0; c < gSettings.customCallbacks.Count(); c++) {
-            SettingsCustomCallbacks* callbacks = gSettings.customCallbacks[c];
-
-            uint32 foundCatId = UINT32_MAX;
-            uint32 catLen = 0;
-            for (uint32 catId = 0, catIdCount = callbacks->GetCategoryCount(); catId < catIdCount; catId++) {
-                const char* cat = callbacks->GetCategory(catId);
-                catLen = Str::Len(cat);
-                if (Str::IsEqualNoCaseCount(key, cat, catLen)) {
-                    foundCatId = catId;
-                    break;
-                }
-            }
-    
-            bool predefined = foundCatId != UINT32_MAX ? callbacks->ParseSetting(foundCatId, key + catLen, value) : false;
-
-            if (!predefined)
-                SetValue(key, value);
-
-            char msg[256];
-            Str::PrintFmt(msg, sizeof(msg), "\t%d) %s%s = %s", i+1, key, !predefined ? "(*)" : "", value);
-            Debug::Print(msg);
-            #if PLATFORM_WINDOWS
-            Debug::Print("\n");
-            #endif
-        }
-
-    }
-
-    sargs_destroy(args);
-    return true;
-}
-
-void SetValue(const char* key, const char* value)
-{
-    if (value[0] == 0)
-        return;
-
-    uint32 index = gSettings.keyValuePairs.FindIf([key](const SettingsKeyValue& keyval) {
-        return keyval.key.IsEqual(key);
-    });
-
-    if (index != UINT32_MAX)
-        gSettings.keyValuePairs[index].value = value;
+    if (gZoneExitCallback)
+        return gZoneExitCallback(ctx);
     else
-        gSettings.keyValuePairs.Push(SettingsKeyValue {.key = key, .value = value});
+        return false;
 }
 
-const char* GetValue(const char* key, const char* defaultValue)
+void Tracy::RunZoneEnterCallback(TracyCZoneCtx* ctx, const ___tracy_source_location_data* sourceLoc)
 {
-    uint32 index = gSettings.keyValuePairs.FindIf([key](const SettingsKeyValue& keyval) {
-        return keyval.key.IsEqual(key);
-    });
-    
-    return index != UINT32_MAX ? gSettings.keyValuePairs[index].value.CStr() : defaultValue;
+    if (gZoneEnterCallback)
+        gZoneEnterCallback(ctx, sourceLoc);
 }
 
-void Release()
+
+void Tracy::_private::___tracy_emit_gpu_calibrate_serial(const struct ___tracy_gpu_calibrate_data data)
 {
-    gSettings.keyValuePairs.Free();
+    auto item = tracy::Profiler::QueueSerial();
+    tracy::MemWrite(&item->hdr.type, tracy::QueueType::GpuCalibration);
+    tracy::MemWrite(&item->gpuCalibration.gpuTime, data.gpuTime);
+    tracy::MemWrite(&item->gpuCalibration.cpuTime, data.cpuTime);
+    tracy::MemWrite(&item->gpuCalibration.cpuDelta, data.deltaTime);
+    tracy::MemWrite(&item->gpuCalibration.context, data.context);
+    tracy::Profiler::QueueSerialFinish();
 }
 
-} // Settings
+int64 Tracy::_private::__tracy_get_time(void)
+{
+    return tracy::Profiler::GetTime();
+}
+
+uint64 Tracy::_private::__tracy_alloc_source_loc(uint32 line, const char* source, const char* function, const char* name)
+{
+    return tracy::Profiler::AllocSourceLocation(line, source, function, name, name ? strlen(name): 0);
+}
+
+#endif  // TRACY_ENABLE
+

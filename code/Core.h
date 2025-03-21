@@ -1,29 +1,29 @@
 // This header file is auto-generated
 // Inlined files:
-//	blitsort.h
-//	mathall.h
-//	stringutil.h
-//	atomic.h
 //	allocators.h
-//	base.h
 //	arrays.h
+//	atomic.h
+//	base.h
+//	blitsort.h
+//	blobs.h
+//	config.h
+//	debug.h
+//	c89atomic.h
+//	hash.h
+//	iniparser.h
+//	jobs.h
+//	jsonparser.h
+//	log.h
+//	mathall.h
 //	mathscalar.h
 //	mathtypes.h
-//	hash.h
-//	includewin.h
 //	pools.h
-//	config.h
-//	blobs.h
-//	c89atomic.h
-//	debug.h
-//	jobs.h
-//	iniparser.h
-//	log.h
-//	jsonparser.h
 //	settings.h
+//	stringutil.h
 //	system.h
 
 #pragma once
+
 
 //----------------------------------------------------------------------------------------------------------------------
 // Base.h
@@ -1013,79 +1013,1104 @@ template<typename _T>
 
 
 
-struct DebugStacktraceEntry
+template <typename _T> struct Array; // Fwd from Array.h
+using SpinLockFake = uint8[CACHE_LINE_SIZE];
+
+template <typename _T> struct HashTable;
+
+struct MemDebugPointer
 {
-    char name[PATH_CHARS_MAX];
-    char filename[PATH_CHARS_MAX];
-    uint64 offsetFromSymbol;
-    uint32 offsetFromLine;
-    uint32 line;
+    void* ptr;
+    uint32 align;
 };
 
-using DebugFiberScopeProtectorCallback = bool(*)(void* userData);
-
-namespace Debug
+struct MemProxyAllocatorItem
 {
-    API void Print(const char* text);
-    API void SetCaptureStacktraceForFiberProtector(bool capture);
-    API uint16 CaptureStacktrace(void** stackframes, uint16 maxStackframes, uint16 framesToSkip = 1, uint32* pHash = nullptr);
-    API void ResolveStacktrace(uint16 numStacktrace, void* const* stackframes, DebugStacktraceEntry* entries);
+    void* ptr;
+    size_t size;
+};
 
-    API void StacktraceSaveStopPoint(void* funcPtr);
+enum class MemProxyAllocatorFlags : uint32
+{
+    None = 0,
+    EnableTracking = 0x1,
+    EnableCaptureCallstacks = 0x2 // TODO
+};
+ENABLE_BITMASK(MemProxyAllocatorFlags);
 
-    API void FiberScopeProtector_RegisterCallback(DebugFiberScopeProtectorCallback callback, void* userData = nullptr);
-    API uint16 FiberScopeProtector_Push(const char* name);
-    API void FiberScopeProtector_Pop(uint16 id);
-    API void FiberScopeProtector_Check();
+
+struct alignas(CACHE_LINE_SIZE) MemProxyAllocator final : MemAllocator
+{
+    MemProxyAllocator();
+
+    void Initialize(const char* name, MemAllocator* baseAlloc, MemProxyAllocatorFlags flags);
+    void Release();
+
+    [[nodiscard]] void* Malloc(size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
+    [[nodiscard]] void* Realloc(void* ptr, size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
+    void Free(void* ptr, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
+    MemAllocatorType GetType() const override { return MemAllocatorType::Proxy; }
+
+    const char* mName = nullptr;
+    MemAllocator* mBaseAlloc = nullptr;
+    HashTable<MemProxyAllocatorItem>* mAllocTable;
+    uint64 mTotalSizeAllocated = 0;
+    uint32 mNumAllocs = 0;
+    MemProxyAllocatorFlags mFlags = MemProxyAllocatorFlags::None;
+
+    uint8 _padding[CACHE_LINE_SIZE - sizeof(MemAllocator) - sizeof(void*)*3 - sizeof(uint64) - sizeof(uint32)*2];
+    SpinLockFake mLock;
+};
+
+struct MemTempAllocator final : MemAllocator
+{
+    using ID = uint32;
+
+    struct Stats
+    {
+        size_t curPeak;
+        size_t maxPeak;
+        uint32 threadId;
+        const char* threadName;
+    };
+
+    MemTempAllocator();
+    explicit MemTempAllocator(ID id);
+    ~MemTempAllocator();
+
+    ID GetId() const { return mId; }
+    bool OwnsId() const { return mOwnsId; }
+
+    [[nodiscard]] void* Malloc(size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
+    [[nodiscard]] void* Realloc(void* ptr, size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
+    [[nodiscard]] void* MallocZero(size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT);
+    void Free(void* ptr, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
+
+    template <typename _T>
+    [[nodiscard]] _T* MallocTyped(uint32 count = 1, uint32 align = CONFIG_MACHINE_ALIGNMENT) { return reinterpret_cast<_T*>(Malloc(count*sizeof(_T), align)); }
+   
+    template <typename _T>
+    [[nodiscard]] _T* MallocZeroTyped(uint32 count = 1, uint32 align = CONFIG_MACHINE_ALIGNMENT)  { return reinterpret_cast<_T*>(MallocZero(count*sizeof(_T), align)); }
+    
+    template <typename _T>
+    [[nodiscard]] _T* ReallocTyped(_T* ptr, uint32 count = 1, uint32 align = CONFIG_MACHINE_ALIGNMENT) { return reinterpret_cast<_T*>(Realloc(ptr, count*sizeof(_T), align)); }
+
+    MemAllocatorType GetType() const override { return MemAllocatorType::Temp; }
+    size_t GetOffset() const;
+    size_t GetPointerOffset(void* ptr) const;
+
+    API [[nodiscard]] static ID PushId();
+    API static void PopId(ID id);
+    API static void EnableDebugMode(bool enable);
+    API static void EnableCallstackCapture(bool capture);
+    API static void GetStats(MemAllocator* alloc, Stats** outStats, uint32* outCount);
+    API static void Reset();
+
+private:
+    ID mId = 0;
+    uint16 mFiberProtectorId = 0;
+    bool mOwnsId = false;
+};
+
+                                                                                     
+struct MemBumpAllocatorBase : MemAllocator
+{
+    void Initialize(size_t reserveSize, size_t pageSize, bool debugMode = false);
+    void Release();
+    void Reset();
+    void CommitAll();
+    bool IsInitialized() const;
+
+    [[nodiscard]] void* Malloc(size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
+    [[nodiscard]] void* Realloc(void* ptr, size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
+    void  Free(void* ptr, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
+    MemAllocatorType GetType() const override { return MemAllocatorType::Bump; }
+
+    size_t GetReservedSize() const { return mReserveSize; }
+    size_t GetAllocatedSize() const { return mOffset; }
+    size_t GetCommitedSize() const { return mCommitSize; }
+    size_t GetPointerOffset(void* ptr);
+    size_t GetOffset() const { return mOffset; }
+    void SetOffset(size_t offset);      // Only accepts lesser values than current offset. potentially harmful. Use with care!
+    bool IsDebugMode() const { return mDebugMode; }
+
+protected:
+    virtual void* BackendReserve(size_t size) = 0;
+    virtual void* BackendCommit(void* ptr, size_t size) = 0;
+    virtual void  BackendDecommit(void* ptr, size_t size) = 0;
+    virtual void  BackendRelease(void* ptr, size_t size) = 0;
+
+    uint8* mBuffer = nullptr;
+    size_t mCommitSize = 0;
+    size_t mOffset = 0;
+    size_t mPageSize = 0;
+    size_t mReserveSize = 0;
+    void* mLastAllocatedPtr = 0;
+    Array<MemDebugPointer>* mDebugPointers = nullptr;
+    bool mDebugMode = false;
+};
+
+struct MemBumpAllocatorVM final : MemBumpAllocatorBase
+{
+    void WarmUp();
+
+private:
+    void* BackendReserve(size_t size) override;
+    void* BackendCommit(void* ptr, size_t size) override;
+    void  BackendDecommit(void* ptr, size_t size) override;
+    void  BackendRelease(void* ptr, size_t size) override;
+};
+
+struct MemBumpAllocatorCustom final : MemBumpAllocatorBase
+{
+    MemAllocator* mAlloc = Mem::GetDefaultAlloc();
+
+private:
+    void* BackendReserve(size_t size) override;
+    void* BackendCommit(void* ptr, size_t size) override;
+    void  BackendDecommit(void* ptr, size_t size) override;
+    void  BackendRelease(void* ptr, size_t size) override;
+};
+
+struct alignas(CACHE_LINE_SIZE) MemThreadSafeAllocator final : MemAllocator
+{
+    MemThreadSafeAllocator();
+    explicit MemThreadSafeAllocator(MemAllocator* alloc);
+    void SetAllocator(MemAllocator* alloc);
+
+    [[nodiscard]] void* Malloc(size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
+    [[nodiscard]] void* Realloc(void* ptr, size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
+    void Free(void* ptr, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
+    MemAllocatorType GetType() const override;
+
+private:
+    MemAllocator* mAlloc = nullptr;
+    [[maybe_unused]] uint8 _padding1[CACHE_LINE_SIZE - sizeof(MemAllocator) - sizeof(MemAllocator*)];
+    SpinLockFake mLock;
+};
+
+
+struct MemTlsfAllocator final : MemAllocator
+{
+    static size_t GetMemoryRequirement(size_t poolSize);
+
+    void Initialize(MemAllocator* alloc, size_t poolSize, bool debugMode = false);
+    void Initialize(size_t poolSize, void* buffer, size_t size, bool debugMode = false);
+    void Release();
+
+    [[nodiscard]] void* Malloc(size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
+    [[nodiscard]] void* Realloc(void* ptr, size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
+    void  Free(void* ptr, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
+    MemAllocatorType GetType() const override { return MemAllocatorType::Tlsf; }
+
+    size_t GetAllocatedSize() const { return mAllocatedSize; }
+
+    float CalculateFragmentation();
+    bool Validate();
+    bool IsDebugMode() const { return mDebugMode; }
+
+protected:
+    MemAllocator* mAlloc = nullptr;
+    size_t mPoolSize = 0;
+    size_t mAllocatedSize = 0;
+    void*  mTlsf = nullptr;
+    size_t mTlsfSize = 0;
+    bool   mDebugMode = false;
+};
+
+
+                                                                                                                                     
+struct NO_VTABLE MemSingleshotMallocBase
+{
+    virtual void* MallocInternal(void* buff, size_t size) = 0;
+    virtual size_t GetMemoryRequirement() const = 0;
+};
+
+template <typename _T, uint32 _MaxFields = 8>
+struct MemSingleShotMalloc final : MemSingleshotMallocBase
+{
+    MemSingleShotMalloc();
+
+    template <typename _FieldType> MemSingleShotMalloc& AddMemberArray(uint32 offsetInStruct, size_t arrayCount, 
+                                                                       bool relativePtr = false,
+                                                                       uint32 align = CONFIG_MACHINE_ALIGNMENT);
+    MemSingleShotMalloc& AddChildStructSingleShot(MemSingleshotMallocBase& childSingleShot, 
+                                                  uint32 offsetInStruct, size_t arrayCount, 
+                                                  bool relativePtr = false,
+                                                  uint32 align = CONFIG_MACHINE_ALIGNMENT);
+    template <typename _FieldType> MemSingleShotMalloc& AddExternalPointerField(_FieldType** pPtr, size_t arrayCount, 
+                                                                                uint32 align = CONFIG_MACHINE_ALIGNMENT);
+
+    _T* Calloc(MemAllocator* alloc = Mem::GetDefaultAlloc());
+    _T* Calloc(void* buff, size_t size);
+
+    _T* Malloc(MemAllocator* alloc = Mem::GetDefaultAlloc());
+    _T* Malloc(void* buff, size_t size);
+
+    void* MallocInternal(void* buff, size_t size) override;
+    size_t GetMemoryRequirement() const override;
+
+    static void Free(_T* p, MemAllocator* alloc = Mem::GetDefaultAlloc());
+    size_t GetSize() const;
+
+private:
+    struct Field
+    {
+        void** pPtr;
+        MemSingleshotMallocBase* childStruct;
+        size_t offset;
+        uint32 offsetInStruct;
+        bool   relativePtr;
+    };
+
+    Field  mFields[_MaxFields];
+    size_t mSize;
+    uint32 mNumFields;
+};
+
+
+template <typename _T, uint32 _MaxFields>
+inline MemSingleShotMalloc<_T, _MaxFields>::MemSingleShotMalloc()
+{
+    mSize = sizeof(_T);
+
+    mFields[0].pPtr = nullptr;
+    mFields[0].childStruct = nullptr;
+    mFields[0].offset = 0;
+    mFields[0].offsetInStruct = uint32(-1);
+    mNumFields = 1;
 }
 
-#if PLATFORM_WINDOWS && defined(TRACY_ENABLE)
-    #ifdef __cplusplus
-    extern "C" {
-    #endif
-        void DebugDbgHelpInit();
-        void DebugDbgHelpLock();
-        void DebugDbgHelpUnlock();
-    #ifdef __cplusplus
+template <typename _T, uint32 _MaxFields>
+template <typename _FieldType> inline MemSingleShotMalloc<_T, _MaxFields>& 
+    MemSingleShotMalloc<_T, _MaxFields>::AddMemberArray(uint32 offsetInStruct, size_t arrayCount, bool relativePtr, uint32 align)
+{
+    uint32 index = mNumFields;
+    ASSERT_MSG(index < _MaxFields, "Cannot add more fields, increase the _MaxFields");
+    
+    align = Max(CONFIG_MACHINE_ALIGNMENT, align);
+    size_t size = sizeof(_FieldType) * arrayCount;
+    size = AlignValue<size_t>(size, align);
+
+    size_t offset = mSize;
+    if (offset % align != 0)
+        offset = AlignValue<size_t>(offset, align);
+
+    Field& buff = mFields[index];
+    buff.pPtr = nullptr;
+    buff.childStruct = nullptr;
+    buff.offset = offset;
+    buff.offsetInStruct = offsetInStruct;
+    buff.relativePtr = relativePtr;
+
+    mSize += size;
+    ++mNumFields;
+
+    return *this;
+}
+
+template <typename _T, uint32 _MaxFields>
+inline MemSingleShotMalloc<_T, _MaxFields>& 
+    MemSingleShotMalloc<_T, _MaxFields>::AddChildStructSingleShot(MemSingleshotMallocBase& childSingleShot, uint32 offsetInStruct, 
+                                                                  size_t arrayCount, bool relativePtr, uint32 align)
+{
+    uint32 index = mNumFields;
+    ASSERT_MSG(index < _MaxFields, "Cannot add more fields, increase the _MaxFields");
+    
+    align = Max(CONFIG_MACHINE_ALIGNMENT, align);
+    size_t size = childSingleShot.GetMemoryRequirement() * arrayCount;
+    size = AlignValue<size_t>(size, align);
+
+    size_t offset = mSize;
+    if (offset % align != 0) {
+        offset = AlignValue<size_t>(offset, align);
     }
-    #endif
-#endif
 
+    Field& buff = mFields[index];
+    buff.pPtr = nullptr;
+    buff.childStruct = &childSingleShot;
+    buff.offset = offset;
+    buff.offsetInStruct = offsetInStruct;
+    buff.relativePtr = relativePtr;
 
-#if PLATFORM_WINDOWS 
-using RDBG_Id = uint32;
+    mSize += size;
+    ++mNumFields;
 
-enum class RDBG_ProcessorBreakpointType : uint8
-{
-    Write = 1,
-    ReadWrite = 2,
-    Execute = 3
-};
-
-namespace RDBG
-{
-    API bool Initialize(const char* serverName, const char* remedybgPath);
-    API void Release();
-    API bool AttachToProcess(uint32 id = 0);
-    API bool DetachFromProcess();
-    API bool Break();
-    API bool Continue();
-    API bool RunToFileAtLine(const char* filename, uint32 line);
-    API RDBG_Id AddFunctionBreakpoint(const char* funcName, const char* conditionExpr = nullptr, uint32 overloadId = 0);
-    API RDBG_Id AddFileLineBreakpoint(const char* filename, uint32 line, const char* conditionExpr = nullptr);
-    API RDBG_Id AddAddressBreakpoint(uintptr_t addr, const char* conditionExpr = nullptr);
-    API RDBG_Id AddProcessorBreakpoint(const void* addr, uint8 numBytes, 
-                                       RDBG_ProcessorBreakpointType type, const char* conditionExpr = nullptr);
-    API bool EnableBreakpoint(RDBG_Id bId, bool enable);
-    API bool SetBreakpointCondition(RDBG_Id bId, const char* conditionExpr);
-    API bool DeleteBreakpoint(RDBG_Id bId);
-    API bool DeleteAllBreakpoints();
-    API RDBG_Id AddWatch(const char* expr, const char* comment, uint8 windowNum);
-    API RDBG_Id DeleteWatch(RDBG_Id wId);
-    bool DeleteAllWatches();
+    return *this;
 }
 
-#endif // PLATFORM_WINDOWS
+
+template <typename _T, uint32 _MaxFields>
+template <typename _FieldType> inline MemSingleShotMalloc<_T, _MaxFields>& 
+    MemSingleShotMalloc<_T, _MaxFields>::AddExternalPointerField(_FieldType** pPtr, size_t arrayCount, uint32 align)
+{
+    ASSERT(pPtr);
+
+    uint32 index = mNumFields;
+    ASSERT_MSG(index < _MaxFields, "Cannot add more fields, increase the _MaxFields");
+    
+    align = Max(CONFIG_MACHINE_ALIGNMENT, align);
+    size_t size = sizeof(_FieldType) * arrayCount;
+    size = AlignValue<size_t>(size, align);
+    
+    size_t offset = mSize;
+    if (offset % align != 0) {
+        offset = AlignValue<size_t>(offset, align);
+    }
+    
+    Field& buff = mFields[index];
+    buff.pPtr = (void**)pPtr;
+    buff.offset = offset;
+    buff.offsetInStruct = uint32(-1);
+    buff.relativePtr = false;
+    
+    mSize += size;
+    ++mNumFields;
+
+    return *this;
+}
+
+template <typename _T, uint32 _MaxFields>
+inline size_t MemSingleShotMalloc<_T, _MaxFields>::GetMemoryRequirement() const
+{
+    return mSize;
+}
+
+template <typename _T, uint32 _MaxFields>
+inline void MemSingleShotMalloc<_T, _MaxFields>::Free(_T* p, MemAllocator* alloc)
+{
+    ASSERT(alloc);
+    if (p)
+        Mem::FreeAligned(p, alignof(_T), alloc);
+}
+
+template <typename _T, uint32 _MaxFields>
+inline size_t MemSingleShotMalloc<_T, _MaxFields>::GetSize() const
+{
+    return mSize;
+}
+
+template <typename _T, uint32 _MaxFields>
+inline _T* MemSingleShotMalloc<_T, _MaxFields>::Calloc(MemAllocator* alloc)
+{
+    void* mem = Mem::AllocAligned(mSize, alignof(_T), alloc);
+    return Calloc(mem, mSize);
+}
+
+template <typename _T, uint32 _MaxFields>
+inline _T*  MemSingleShotMalloc<_T, _MaxFields>::Calloc(void* buff, [[maybe_unused]] size_t size)
+{
+    ASSERT(buff);
+    ASSERT(size == 0 || size >= GetMemoryRequirement());
+
+    memset(buff, 0x0, mSize);
+
+    return Malloc(buff, size);
+}
+
+template <typename _T, uint32 _MaxFields>
+inline _T* MemSingleShotMalloc<_T, _MaxFields>::Malloc(MemAllocator* alloc)
+{
+    void* mem = Mem::AllocAligned(mSize, alignof(_T), alloc);
+    return (_T*)MallocInternal(mem, mSize);
+}
+
+template <typename _T, uint32 _MaxFields>
+inline _T*  MemSingleShotMalloc<_T, _MaxFields>::Malloc(void* buff, size_t size)
+{
+    return (_T*)MallocInternal(buff, size);
+}
+
+template <typename _T, uint32 _MaxFields>
+inline void* MemSingleShotMalloc<_T, _MaxFields>::MallocInternal(void* buff, [[maybe_unused]] size_t size)
+{
+    ASSERT(buff);
+    ASSERT(size == 0 || size >= GetMemoryRequirement());
+
+    uint8* tmp = (uint8*)buff;
+    
+    for (int i = 1, c = mNumFields; i < c; i++) {
+        if (mFields[i].offsetInStruct != -1) {
+            ASSERT(mFields[i].pPtr == nullptr);
+            void* ptr = tmp + mFields[i].offset;
+            void* srcPtr = tmp + mFields[i].offsetInStruct;
+            if (!mFields[i].relativePtr)
+                *((void**)srcPtr) = ptr;
+            else
+                *((int*)srcPtr) = (int)mFields[i].offset - (int)mFields[i].offsetInStruct;
+
+            if (mFields[i].childStruct)
+                mFields[i].childStruct->MallocInternal(ptr, 0);
+        } else {
+            ASSERT(mFields[i].offsetInStruct == -1);
+            *mFields[i].pPtr = tmp + mFields[i].offset;
+        }
+    }
+
+    return buff;
+}
+
+
+
+
+
+template <typename _T>
+struct Array
+{
+    using SortFunc = bool (*)(const _T& a, const _T& b);
+
+    Array() : Array(Mem::GetDefaultAlloc()) {}
+    explicit Array(MemAllocator* alloc) : mAlloc(alloc) {}
+    explicit Array(const void* buffer, size_t size);
+
+    void SetAllocator(MemAllocator* alloc);
+    void Reserve(uint32 capacity);
+    void Reserve(uint32 capacity, void* buffer, size_t size);
+    void Free();
+    static size_t GetMemoryRequirement(uint32 capacity);
+
+    [[nodiscard]] _T* Push();
+    _T* Push(const _T& item);
+    _T* PushBatch(const _T* items, uint32 numItems);
+
+    template <typename _Func> _T* PushAndSort(const _T& item, _Func sortFunc);
+
+    void RemoveAndSwap(uint32 index);
+    void RemoveAndShift(uint32 index);
+    void RemoveRangeAndShift(uint32 index, uint32 endIndex = INVALID_INDEX);
+
+    uint32 Count() const;
+    uint32 Capacity() const;
+    bool IsEmpty() const;
+    void Clear();
+    _T& Last();
+    _T PopLast();
+    _T PopFirst();
+    _T Pop(uint32 index);
+    void Extend(const Array<_T>& arr);
+    void Extend(const _T* arr, uint32 numArrItems);
+    const _T& operator[](uint32 index) const;
+    _T& operator[](uint32 index);
+    void Shrink();
+    bool IsFull() const;
+    const _T* Ptr() const;
+    _T* Ptr();
+    
+    void Detach(_T** outBuffer, uint32* outCount);
+    Span<_T> Detach();
+
+    void ShiftLeft(uint32 count);
+    void CopyTo(Array<_T>* otherArray) const;
+
+    uint32 Find(const _T& value);
+
+    template <typename _Func> uint32 FindIf(_Func findFunc);
+    
+    struct Iterator 
+    {
+        Iterator(_T* ptr) : _ptr(ptr) {}
+        _T& operator*() { return *_ptr; }
+        void operator++() { ++_ptr; }
+        bool operator!=(Iterator it) { return _ptr != it._ptr; }
+        _T* _ptr;
+    };
+
+    Iterator begin()    { return Iterator(&mBuffer[0]); }
+    Iterator end()      { return Iterator(&mBuffer[mCount]); }
+
+    Iterator begin() const    { return Iterator(&mBuffer[0]); }
+    Iterator end() const     { return Iterator(&mBuffer[mCount]); }
+
+private:
+    MemAllocator* mAlloc = nullptr;
+    uint32 mCapacity = 0;
+    uint32 mCount = 0;
+    _T* mBuffer = nullptr;
+};
+
+
+template <typename _T, uint32 _MaxCount>
+struct StaticArray
+{
+    _T* Push();
+    _T* Push(const _T& item);
+
+    template <typename _Func> _T* PushAndSort(const _T& item, _Func sortFunc);
+
+    void RemoveAndSwap(uint32 index);
+    uint32 Count() const;
+    bool IsEmpty() const;
+    bool IsFull() const;
+    void Clear();
+    _T& Last();
+    _T PopFirst();
+    _T Pop(uint32 index);
+    _T& PopLast();
+    const _T& operator[](uint32 index) const;
+    _T& operator[](uint32 index);
+    const _T* Ptr() const;
+    _T* Ptr();
+
+    uint32 Find(const _T& value);
+    template <typename _Func> uint32 FindIf(_Func findFunc);
+
+    struct Iterator 
+    {
+        Iterator(_T* ptr) : _ptr(ptr) {}
+        _T& operator*() { return *_ptr; }
+        void operator++() { ++_ptr; }
+        bool operator!=(Iterator it) { return _ptr != it._ptr; }
+        _T* _ptr;
+    };
+    
+    Iterator begin()    { return Iterator(&mBuffer[0]); }
+    Iterator end()      { return Iterator(&mBuffer[mCount]); }
+
+    Iterator begin() const    { return Iterator(&mBuffer[0]); }
+    Iterator end() const     { return Iterator(&mBuffer[mCount]); }
+
+private:
+    uint32 mCount = 0;
+    _T mBuffer[_MaxCount];
+};
+
+
+template <typename _T>
+inline Array<_T>::Array(const void* buffer, size_t size)
+{
+    mCapacity = size / sizeof(_T);
+    ASSERT(mCapacity);
+    mBuffer = buffer;
+}
+
+template <typename _T>
+inline void Array<_T>::SetAllocator(MemAllocator* alloc)
+{
+    ASSERT_MSG(mBuffer == nullptr, "buffer should be freed/uninitialized before setting allocator");
+    mAlloc = alloc;
+}    
+
+template <typename _T>
+inline _T* Array<_T>::Push()
+{
+    if (mCount >= mCapacity) {
+        if (mAlloc) {
+            Reserve(mCapacity ? (mCapacity << 1) : 8);
+        } 
+        else {
+            ASSERT(mBuffer);
+            ASSERT_MSG(mCount < mCapacity, "Array overflow, capacity=%u", mCapacity);
+            return nullptr;
+        }
+    }
+    
+    return PLACEMENT_NEW(&mBuffer[mCount++], _T) {};
+}
+
+template <typename _T>
+inline _T* Array<_T>::Push(const _T& item)
+{
+    if (mCount >= mCapacity) {
+        if (mAlloc) {
+            Reserve(mCapacity ? (mCapacity << 1) : 8);
+        } 
+        else {
+            ASSERT(mBuffer);
+            ASSERT_MSG(mCount < mCapacity, "Array overflow, capacity=%u", mCapacity);
+            return nullptr;
+        }
+    }
+    
+    _T* dest = &mBuffer[mCount++];
+    *dest = item;
+    return dest;
+}
+
+template <typename _T>
+template<typename _Func> inline _T* Array<_T>::PushAndSort(const _T& item, _Func sortFunc)
+{
+    Push(item);
+    uint32 itemIndex = mCount - 1;
+    if (itemIndex) {
+        for (uint32 i = itemIndex; i-- > 0;) {
+            int val = sortFunc(mBuffer[itemIndex], mBuffer[i]);
+            if (val >= 0)
+                break;
+
+            Swap<_T>(mBuffer[itemIndex], mBuffer[i]);
+            itemIndex = i;
+        }
+    }
+
+    return &mBuffer[itemIndex];    
+}
+
+template <typename _T>
+inline _T* Array<_T>::PushBatch(const _T* items, uint32 numItems)
+{
+    ASSERT(items);
+    ASSERT(numItems);
+
+    uint32 targetCount = mCount + numItems;
+    if (targetCount > mCapacity) {
+        if (mAlloc) {
+            Reserve(AlignValue(targetCount, 8u));
+        }
+        else {
+            ASSERT(mBuffer);
+            ASSERT_MSG(mCount < mCapacity, "Array overflow, capacity=%u", mCapacity);
+            return nullptr;
+        }
+    }
+
+    _T* dest = &mBuffer[mCount];
+    memcpy(dest, items, sizeof(_T)*numItems);
+    mCount += numItems;
+
+    return dest;
+}
+
+template <typename _T>
+inline void Array<_T>::RemoveAndSwap(uint32 index)
+{
+    ASSERT(mBuffer);
+    #ifdef CONFIG_CHECK_OUTOFBOUNDS
+    ASSERT_MSG(index < mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
+    #endif
+    --mCount;
+    if (index < mCount)
+        Swap<_T>(mBuffer[index], mBuffer[mCount]);
+}
+
+template <typename _T>
+inline void Array<_T>::RemoveAndShift(uint32 index)
+{
+    Pop(index);
+}
+
+template <typename _T>
+inline void Array<_T>::RemoveRangeAndShift(uint32 index, uint32 endIndex)
+{
+    if (endIndex == INVALID_INDEX)
+        endIndex = mCount;
+
+    #ifdef CONFIG_CHECK_OUTOFBOUNDS
+    ASSERT(endIndex > index);
+    ASSERT(endIndex <= mCount);
+    #endif
+
+    uint32 removeCount = endIndex - index;
+    for (uint32 i = 0; i < removeCount; i++) {
+        uint32 start = i + index;
+        uint32 end = i + endIndex;
+        if (end < mCount)
+            mBuffer[start] = mBuffer[end];
+    }
+
+    mCount -= removeCount;
+}
+
+template <typename _T>
+inline uint32 Array<_T>::Count() const
+{
+    return mCount;
+}
+
+template <typename _T>
+inline bool Array<_T>::IsEmpty() const
+{
+    return mCount == 0;
+}
+
+template <typename _T>
+inline uint32 Array<_T>::Capacity() const
+{
+    return mCapacity;
+}
+
+template <typename _T>
+inline void Array<_T>::Reserve(uint32 capacity)
+{
+    ASSERT(mAlloc);
+    if (capacity > mCapacity) {
+        mCapacity = Max(capacity, 8u);
+        mBuffer = Mem::ReallocTyped<_T>(mBuffer, mCapacity, mAlloc);
+        ASSERT(mBuffer);
+    }
+}
+
+template <typename _T>
+inline void Array<_T>::Reserve(uint32 capacity, void* buffer, [[maybe_unused]] size_t size)
+{
+    capacity = Max(capacity, 8u);
+
+    ASSERT(buffer);
+    ASSERT_MSG(mBuffer == nullptr, "Array should not be initialized before reserve by pointer");
+    ASSERT_MSG(size >= capacity*sizeof(_T), "Buffer should have at least %u bytes long (size=%u)", capacity*sizeof(_T), size);
+    
+    mAlloc = nullptr;
+    mCapacity = capacity;
+    mBuffer = (_T*)buffer;
+}    
+
+template <typename _T>
+inline void Array<_T>::Clear()
+{
+    mCount = 0;
+}
+
+template <typename _T>
+inline _T& Array<_T>::Last()
+{
+    ASSERT(mCount > 0);
+    return mBuffer[mCount - 1];
+}
+
+template <typename _T>
+inline _T Array<_T>::PopLast()
+{
+    ASSERT(mCount > 0);
+    return mBuffer[--mCount];
+}
+
+template <typename _T>
+inline _T Array<_T>::PopFirst()
+{
+    return Pop(0);
+}
+
+template <typename _T>
+inline _T Array<_T>::Pop(uint32 index)
+{
+    ASSERT(mCount > 0);
+    #ifdef CONFIG_CHECK_OUTOFBOUNDS
+    ASSERT_MSG(index < mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
+    #endif
+
+    _T item = mBuffer[index];
+    for (uint32 i = index+1, c = mCount; i < c; i++)
+        mBuffer[i-1] = mBuffer[i];
+    --mCount;
+    return item;
+}
+
+template <typename _T>
+inline void Array<_T>::Extend(const Array<_T>& arr)
+{
+    if (arr.Count()) {
+        uint32 newCount = mCount + arr.mCount;
+        uint32 newCapacity = Max(newCount, Min(mCapacity, arr.mCapacity));
+        if (newCapacity > mCapacity)
+            Reserve(newCapacity);
+        memcpy(&mBuffer[mCount], arr.mBuffer, sizeof(_T)*arr.mCount);
+        mCount = newCount;
+    }
+}
+
+template <typename _T>
+inline void Array<_T>::Extend(const _T* arr, uint32 numArrItems)
+{
+    if (numArrItems) {
+        uint32 newCount = mCount + numArrItems;
+        uint32 newCapacity = Max(newCount, mCapacity);
+        if (newCapacity > mCapacity)
+            Reserve(newCapacity);
+        memcpy(&mBuffer[mCount], arr, sizeof(_T)*numArrItems);
+        mCount = newCount;
+    }
+}
+
+template <typename _T>
+inline void Array<_T>::ShiftLeft(uint32 count)
+{
+    ASSERT(count <= mCount);
+    
+    mCount -= count;
+    if (mCount)
+        memmove(mBuffer, mBuffer + sizeof(_T)*count, sizeof(_T)*mCount);
+}
+
+template <typename _T>
+inline void Array<_T>::CopyTo(Array<_T>* otherArray) const
+{
+    ASSERT(otherArray);
+
+    if (mCapacity)
+        otherArray->Reserve(mCapacity);
+
+    if (mCount) {
+        otherArray->mCount = mCount;
+        memcpy(otherArray->mBuffer, mBuffer, sizeof(_T)*mCount);
+    }
+}
+
+template <typename _T>
+inline const _T& Array<_T>::operator[](uint32 index) const
+{
+    #ifdef CONFIG_CHECK_OUTOFBOUNDS
+    ASSERT_MSG(index < mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
+    #endif
+    return mBuffer[index];
+}
+
+template <typename _T>
+inline _T& Array<_T>::operator[](uint32 index)
+{
+    #ifdef CONFIG_CHECK_OUTOFBOUNDS
+    ASSERT_MSG(index < mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
+    #endif
+    return mBuffer[index];
+}
+
+template <typename _T>
+inline const _T* Array<_T>::Ptr() const
+{
+    return mBuffer;
+}
+
+template <typename _T>
+inline _T* Array<_T>::Ptr()
+{
+    return mBuffer;
+}
+
+template <typename _T>
+inline void Array<_T>::Detach(_T** outBuffer, uint32* outCount)
+{
+    ASSERT(outBuffer);
+    ASSERT(outCount);
+
+    *outBuffer = mBuffer;
+    *outCount = mCount;
+
+    mBuffer = nullptr;
+    mCount = 0;
+    mCapacity = 0;
+}
+
+template <typename _T>
+inline Span<_T> Array<_T>::Detach()
+{
+    _T* ptr;
+    uint32 count;
+
+    Detach(&ptr, &count);
+    return Span<_T>(ptr, count);
+}
+
+template<typename _T>
+inline bool Array<_T>::IsFull() const
+{
+    return mCount >= mCapacity;
+}    
+
+template <typename _T>
+inline void Array<_T>::Free()
+{
+    mCount = 0;
+
+    if (mAlloc) {
+        Mem::Free(mBuffer, mAlloc);
+        mCapacity = 0;
+        mBuffer = nullptr;
+    }
+}
+
+template <typename _T>
+inline void Array<_T>::Shrink()
+{
+    ASSERT(mAlloc);
+    mCapacity = Max(mCount, 8u);
+    Reserve(mCapacity);
+}
+
+template <typename _T> 
+inline uint32 Array<_T>::Find(const _T& value)
+{
+    for (uint32 i = 0; i < mCount; i++) {
+        if (mBuffer[i] == value)
+            return i;
+    }
+
+    return UINT32_MAX;
+}
+
+template<typename _T>
+template<typename _Func> inline uint32 Array<_T>::FindIf(_Func findFunc)
+{
+    for (uint32 i = 0, c = mCount; i < c; i++) {
+        if (findFunc(mBuffer[i]))
+            return i;
+    }
+
+    return UINT32_MAX;
+}
+
+template<typename _T>
+inline size_t Array<_T>::GetMemoryRequirement(uint32 capacity)
+{
+    capacity = Max(capacity, 8u);
+    return capacity * sizeof(_T);
+}
+
+template<typename _T, uint32 _MaxCount>
+inline _T* StaticArray<_T, _MaxCount>::Push()
+{
+    ASSERT_MSG(mCount < _MaxCount, "Trying to add more than _MaxCount=%u", _MaxCount);
+    return &mBuffer[mCount++];
+}
+
+template<typename _T, uint32 _MaxCount>
+inline _T* StaticArray<_T, _MaxCount>::Push(const _T& item)
+{
+    ASSERT_MSG(mCount < _MaxCount, "Trying to add more than _MaxCount=%u", _MaxCount);
+    uint32 index = mCount++;
+    mBuffer[index] = item;
+    return &mBuffer[index];
+}
+
+template <typename _T, uint32 _MaxCount>
+template<typename _Func> inline _T* StaticArray<_T, _MaxCount>::PushAndSort(const _T& item, _Func sortFunc)
+{
+    Push(item);
+    uint32 itemIndex = mCount - 1;
+    if (itemIndex) {
+        for (uint32 i = itemIndex; i-- > 0;) {
+            int val = sortFunc(mBuffer[itemIndex], mBuffer[i]);
+            if (val >= 0)
+                break;
+
+            Swap<_T>(mBuffer[itemIndex], mBuffer[i]);
+            itemIndex = i;
+        }
+    }
+
+    return &mBuffer[itemIndex];    
+}
+
+
+template<typename _T, uint32 _MaxCount>
+inline void StaticArray<_T, _MaxCount>::RemoveAndSwap(uint32 index)
+{
+    ASSERT(mBuffer);
+    #ifdef CONFIG_CHECK_OUTOFBOUNDS
+    ASSERT_MSG(index <= mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
+    #endif
+    Swap<_T>(mBuffer[index], mBuffer[--mCount]);
+}
+
+template<typename _T, uint32 _MaxCount>
+inline uint32 StaticArray<_T, _MaxCount>::Count() const
+{
+    return mCount;
+}
+
+template<typename _T, uint32 _MaxCount>
+inline bool StaticArray<_T, _MaxCount>::IsEmpty() const
+{
+    return mCount == 0;
+}
+
+template<typename _T, uint32 _MaxCount>
+inline bool StaticArray<_T, _MaxCount>::IsFull() const
+{
+    return mCount == _MaxCount;
+}
+
+template<typename _T, uint32 _MaxCount>
+inline void StaticArray<_T, _MaxCount>::Clear()
+{
+    mCount = 0;
+}
+
+template<typename _T, uint32 _MaxCount>
+inline _T& StaticArray<_T, _MaxCount>::Last()
+{
+    ASSERT(mCount > 0);
+    return mBuffer[mCount - 1];
+}
+
+template <typename _T, uint32 _MaxCount>
+inline _T StaticArray<_T, _MaxCount>::Pop(uint32 index)
+{
+    ASSERT(mCount > 0);
+    #ifdef CONFIG_CHECK_OUTOFBOUNDS
+    ASSERT_MSG(index < mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
+    #endif
+
+    _T item = mBuffer[index];
+    for (uint32 i = index+1, c = mCount; i < c; i++)
+        mBuffer[i-1] = mBuffer[i];
+    --mCount;
+    return item;
+}
+
+template <typename _T, uint32 _MaxCount>
+inline _T StaticArray<_T, _MaxCount>::PopFirst()
+{
+    Pop(0);
+}
+
+template<typename _T, uint32 _MaxCount>
+inline _T& StaticArray<_T, _MaxCount>::PopLast()
+{
+    ASSERT(mCount > 0);
+    return mBuffer[--mCount];
+}
+
+template<typename _T, uint32 _MaxCount>
+inline const _T& StaticArray<_T, _MaxCount>::operator[](uint32 index) const
+{
+    #ifdef CONFIG_CHECK_OUTOFBOUNDS
+    ASSERT_MSG(index <= mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
+    #endif
+    return mBuffer[index];
+}
+
+template<typename _T, uint32 _MaxCount>
+inline _T& StaticArray<_T, _MaxCount>::operator[](uint32 index)
+{
+    #ifdef CONFIG_CHECK_OUTOFBOUNDS
+    ASSERT_MSG(index <= mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
+    #endif
+    return mBuffer[index];
+}
+
+template<typename _T, uint32 _MaxCount>
+inline const _T* StaticArray<_T, _MaxCount>::Ptr() const
+{
+    return reinterpret_cast<const _T*>(mBuffer);
+}
+
+template<typename _T, uint32 _MaxCount>
+inline _T* StaticArray<_T, _MaxCount>::Ptr()
+{
+    return reinterpret_cast<_T*>(mBuffer);
+}
+
+template <typename _T, uint32 _MaxCount> 
+inline uint32 StaticArray<_T, _MaxCount>::Find(const _T& value)
+{
+    for (uint32 i = 0; i < mCount; i++) {
+        if (mBuffer[i] == value)
+            return i;
+    }
+    return UINT32_MAX;
+}
+
+template <typename _T, uint32 _MaxCount>
+template <typename _Func> inline uint32 StaticArray<_T, _MaxCount>::FindIf(_Func findFunc)
+{
+    for (uint32 i = 0, c = mCount; i < c; i++) {
+        if (findFunc(mBuffer[i])) {
+            return i;
+        }
+    }
+    
+    return UINT32_MAX;
+}
+
+
 
 
 
@@ -4124,4657 +5149,6 @@ FORCE_INLINE bool Atomic::CompareExchangeExplicit_Strong(
 
 
 
-
-template <typename _T> struct Array; // Fwd from Array.h
-using SpinLockFake = uint8[CACHE_LINE_SIZE];
-
-template <typename _T> struct HashTable;
-
-struct MemDebugPointer
-{
-    void* ptr;
-    uint32 align;
-};
-
-struct MemProxyAllocatorItem
-{
-    void* ptr;
-    size_t size;
-};
-
-enum class MemProxyAllocatorFlags : uint32
-{
-    None = 0,
-    EnableTracking = 0x1,
-    EnableCaptureCallstacks = 0x2 // TODO
-};
-ENABLE_BITMASK(MemProxyAllocatorFlags);
-
-
-struct alignas(CACHE_LINE_SIZE) MemProxyAllocator final : MemAllocator
-{
-    MemProxyAllocator();
-
-    void Initialize(const char* name, MemAllocator* baseAlloc, MemProxyAllocatorFlags flags);
-    void Release();
-
-    [[nodiscard]] void* Malloc(size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
-    [[nodiscard]] void* Realloc(void* ptr, size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
-    void Free(void* ptr, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
-    MemAllocatorType GetType() const override { return MemAllocatorType::Proxy; }
-
-    const char* mName = nullptr;
-    MemAllocator* mBaseAlloc = nullptr;
-    HashTable<MemProxyAllocatorItem>* mAllocTable;
-    uint64 mTotalSizeAllocated = 0;
-    uint32 mNumAllocs = 0;
-    MemProxyAllocatorFlags mFlags = MemProxyAllocatorFlags::None;
-
-    uint8 _padding[CACHE_LINE_SIZE - sizeof(MemAllocator) - sizeof(void*)*3 - sizeof(uint64) - sizeof(uint32)*2];
-    SpinLockFake mLock;
-};
-
-struct MemTempAllocator final : MemAllocator
-{
-    using ID = uint32;
-
-    struct Stats
-    {
-        size_t curPeak;
-        size_t maxPeak;
-        uint32 threadId;
-        const char* threadName;
-    };
-
-    MemTempAllocator();
-    explicit MemTempAllocator(ID id);
-    ~MemTempAllocator();
-
-    ID GetId() const { return mId; }
-    bool OwnsId() const { return mOwnsId; }
-
-    [[nodiscard]] void* Malloc(size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
-    [[nodiscard]] void* Realloc(void* ptr, size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
-    [[nodiscard]] void* MallocZero(size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT);
-    void Free(void* ptr, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
-
-    template <typename _T>
-    [[nodiscard]] _T* MallocTyped(uint32 count = 1, uint32 align = CONFIG_MACHINE_ALIGNMENT) { return reinterpret_cast<_T*>(Malloc(count*sizeof(_T), align)); }
-   
-    template <typename _T>
-    [[nodiscard]] _T* MallocZeroTyped(uint32 count = 1, uint32 align = CONFIG_MACHINE_ALIGNMENT)  { return reinterpret_cast<_T*>(MallocZero(count*sizeof(_T), align)); }
-    
-    template <typename _T>
-    [[nodiscard]] _T* ReallocTyped(_T* ptr, uint32 count = 1, uint32 align = CONFIG_MACHINE_ALIGNMENT) { return reinterpret_cast<_T*>(Realloc(ptr, count*sizeof(_T), align)); }
-
-    MemAllocatorType GetType() const override { return MemAllocatorType::Temp; }
-    size_t GetOffset() const;
-    size_t GetPointerOffset(void* ptr) const;
-
-    API [[nodiscard]] static ID PushId();
-    API static void PopId(ID id);
-    API static void EnableDebugMode(bool enable);
-    API static void EnableCallstackCapture(bool capture);
-    API static void GetStats(MemAllocator* alloc, Stats** outStats, uint32* outCount);
-    API static void Reset();
-
-private:
-    ID mId = 0;
-    uint16 mFiberProtectorId = 0;
-    bool mOwnsId = false;
-};
-
-                                                                                     
-struct MemBumpAllocatorBase : MemAllocator
-{
-    void Initialize(size_t reserveSize, size_t pageSize, bool debugMode = false);
-    void Release();
-    void Reset();
-    void CommitAll();
-    bool IsInitialized() const;
-
-    [[nodiscard]] void* Malloc(size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
-    [[nodiscard]] void* Realloc(void* ptr, size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
-    void  Free(void* ptr, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
-    MemAllocatorType GetType() const override { return MemAllocatorType::Bump; }
-
-    size_t GetReservedSize() const { return mReserveSize; }
-    size_t GetAllocatedSize() const { return mOffset; }
-    size_t GetCommitedSize() const { return mCommitSize; }
-    size_t GetPointerOffset(void* ptr);
-    size_t GetOffset() const { return mOffset; }
-    void SetOffset(size_t offset);      // Only accepts lesser values than current offset. potentially harmful. Use with care!
-    bool IsDebugMode() const { return mDebugMode; }
-
-protected:
-    virtual void* BackendReserve(size_t size) = 0;
-    virtual void* BackendCommit(void* ptr, size_t size) = 0;
-    virtual void  BackendDecommit(void* ptr, size_t size) = 0;
-    virtual void  BackendRelease(void* ptr, size_t size) = 0;
-
-    uint8* mBuffer = nullptr;
-    size_t mCommitSize = 0;
-    size_t mOffset = 0;
-    size_t mPageSize = 0;
-    size_t mReserveSize = 0;
-    void* mLastAllocatedPtr = 0;
-    Array<MemDebugPointer>* mDebugPointers = nullptr;
-    bool mDebugMode = false;
-};
-
-struct MemBumpAllocatorVM final : MemBumpAllocatorBase
-{
-    void WarmUp();
-
-private:
-    void* BackendReserve(size_t size) override;
-    void* BackendCommit(void* ptr, size_t size) override;
-    void  BackendDecommit(void* ptr, size_t size) override;
-    void  BackendRelease(void* ptr, size_t size) override;
-};
-
-struct MemBumpAllocatorCustom final : MemBumpAllocatorBase
-{
-    MemAllocator* mAlloc = Mem::GetDefaultAlloc();
-
-private:
-    void* BackendReserve(size_t size) override;
-    void* BackendCommit(void* ptr, size_t size) override;
-    void  BackendDecommit(void* ptr, size_t size) override;
-    void  BackendRelease(void* ptr, size_t size) override;
-};
-
-struct alignas(CACHE_LINE_SIZE) MemThreadSafeAllocator final : MemAllocator
-{
-    MemThreadSafeAllocator();
-    explicit MemThreadSafeAllocator(MemAllocator* alloc);
-    void SetAllocator(MemAllocator* alloc);
-
-    [[nodiscard]] void* Malloc(size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
-    [[nodiscard]] void* Realloc(void* ptr, size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
-    void Free(void* ptr, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
-    MemAllocatorType GetType() const override;
-
-private:
-    MemAllocator* mAlloc = nullptr;
-    [[maybe_unused]] uint8 _padding1[CACHE_LINE_SIZE - sizeof(MemAllocator) - sizeof(MemAllocator*)];
-    SpinLockFake mLock;
-};
-
-
-struct MemTlsfAllocator final : MemAllocator
-{
-    static size_t GetMemoryRequirement(size_t poolSize);
-
-    void Initialize(MemAllocator* alloc, size_t poolSize, bool debugMode = false);
-    void Initialize(size_t poolSize, void* buffer, size_t size, bool debugMode = false);
-    void Release();
-
-    [[nodiscard]] void* Malloc(size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
-    [[nodiscard]] void* Realloc(void* ptr, size_t size, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
-    void  Free(void* ptr, uint32 align = CONFIG_MACHINE_ALIGNMENT) override;
-    MemAllocatorType GetType() const override { return MemAllocatorType::Tlsf; }
-
-    size_t GetAllocatedSize() const { return mAllocatedSize; }
-
-    float CalculateFragmentation();
-    bool Validate();
-    bool IsDebugMode() const { return mDebugMode; }
-
-protected:
-    MemAllocator* mAlloc = nullptr;
-    size_t mPoolSize = 0;
-    size_t mAllocatedSize = 0;
-    void*  mTlsf = nullptr;
-    size_t mTlsfSize = 0;
-    bool   mDebugMode = false;
-};
-
-
-                                                                                                                                     
-struct NO_VTABLE MemSingleshotMallocBase
-{
-    virtual void* MallocInternal(void* buff, size_t size) = 0;
-    virtual size_t GetMemoryRequirement() const = 0;
-};
-
-template <typename _T, uint32 _MaxFields = 8>
-struct MemSingleShotMalloc final : MemSingleshotMallocBase
-{
-    MemSingleShotMalloc();
-
-    template <typename _FieldType> MemSingleShotMalloc& AddMemberArray(uint32 offsetInStruct, size_t arrayCount, 
-                                                                       bool relativePtr = false,
-                                                                       uint32 align = CONFIG_MACHINE_ALIGNMENT);
-    MemSingleShotMalloc& AddChildStructSingleShot(MemSingleshotMallocBase& childSingleShot, 
-                                                  uint32 offsetInStruct, size_t arrayCount, 
-                                                  bool relativePtr = false,
-                                                  uint32 align = CONFIG_MACHINE_ALIGNMENT);
-    template <typename _FieldType> MemSingleShotMalloc& AddExternalPointerField(_FieldType** pPtr, size_t arrayCount, 
-                                                                                uint32 align = CONFIG_MACHINE_ALIGNMENT);
-
-    _T* Calloc(MemAllocator* alloc = Mem::GetDefaultAlloc());
-    _T* Calloc(void* buff, size_t size);
-
-    _T* Malloc(MemAllocator* alloc = Mem::GetDefaultAlloc());
-    _T* Malloc(void* buff, size_t size);
-
-    void* MallocInternal(void* buff, size_t size) override;
-    size_t GetMemoryRequirement() const override;
-
-    static void Free(_T* p, MemAllocator* alloc = Mem::GetDefaultAlloc());
-    size_t GetSize() const;
-
-private:
-    struct Field
-    {
-        void** pPtr;
-        MemSingleshotMallocBase* childStruct;
-        size_t offset;
-        uint32 offsetInStruct;
-        bool   relativePtr;
-    };
-
-    Field  mFields[_MaxFields];
-    size_t mSize;
-    uint32 mNumFields;
-};
-
-
-template <typename _T, uint32 _MaxFields>
-inline MemSingleShotMalloc<_T, _MaxFields>::MemSingleShotMalloc()
-{
-    mSize = sizeof(_T);
-
-    mFields[0].pPtr = nullptr;
-    mFields[0].childStruct = nullptr;
-    mFields[0].offset = 0;
-    mFields[0].offsetInStruct = uint32(-1);
-    mNumFields = 1;
-}
-
-template <typename _T, uint32 _MaxFields>
-template <typename _FieldType> inline MemSingleShotMalloc<_T, _MaxFields>& 
-    MemSingleShotMalloc<_T, _MaxFields>::AddMemberArray(uint32 offsetInStruct, size_t arrayCount, bool relativePtr, uint32 align)
-{
-    uint32 index = mNumFields;
-    ASSERT_MSG(index < _MaxFields, "Cannot add more fields, increase the _MaxFields");
-    
-    align = Max(CONFIG_MACHINE_ALIGNMENT, align);
-    size_t size = sizeof(_FieldType) * arrayCount;
-    size = AlignValue<size_t>(size, align);
-
-    size_t offset = mSize;
-    if (offset % align != 0)
-        offset = AlignValue<size_t>(offset, align);
-
-    Field& buff = mFields[index];
-    buff.pPtr = nullptr;
-    buff.childStruct = nullptr;
-    buff.offset = offset;
-    buff.offsetInStruct = offsetInStruct;
-    buff.relativePtr = relativePtr;
-
-    mSize += size;
-    ++mNumFields;
-
-    return *this;
-}
-
-template <typename _T, uint32 _MaxFields>
-inline MemSingleShotMalloc<_T, _MaxFields>& 
-    MemSingleShotMalloc<_T, _MaxFields>::AddChildStructSingleShot(MemSingleshotMallocBase& childSingleShot, uint32 offsetInStruct, 
-                                                                  size_t arrayCount, bool relativePtr, uint32 align)
-{
-    uint32 index = mNumFields;
-    ASSERT_MSG(index < _MaxFields, "Cannot add more fields, increase the _MaxFields");
-    
-    align = Max(CONFIG_MACHINE_ALIGNMENT, align);
-    size_t size = childSingleShot.GetMemoryRequirement() * arrayCount;
-    size = AlignValue<size_t>(size, align);
-
-    size_t offset = mSize;
-    if (offset % align != 0) {
-        offset = AlignValue<size_t>(offset, align);
-    }
-
-    Field& buff = mFields[index];
-    buff.pPtr = nullptr;
-    buff.childStruct = &childSingleShot;
-    buff.offset = offset;
-    buff.offsetInStruct = offsetInStruct;
-    buff.relativePtr = relativePtr;
-
-    mSize += size;
-    ++mNumFields;
-
-    return *this;
-}
-
-
-template <typename _T, uint32 _MaxFields>
-template <typename _FieldType> inline MemSingleShotMalloc<_T, _MaxFields>& 
-    MemSingleShotMalloc<_T, _MaxFields>::AddExternalPointerField(_FieldType** pPtr, size_t arrayCount, uint32 align)
-{
-    ASSERT(pPtr);
-
-    uint32 index = mNumFields;
-    ASSERT_MSG(index < _MaxFields, "Cannot add more fields, increase the _MaxFields");
-    
-    align = Max(CONFIG_MACHINE_ALIGNMENT, align);
-    size_t size = sizeof(_FieldType) * arrayCount;
-    size = AlignValue<size_t>(size, align);
-    
-    size_t offset = mSize;
-    if (offset % align != 0) {
-        offset = AlignValue<size_t>(offset, align);
-    }
-    
-    Field& buff = mFields[index];
-    buff.pPtr = (void**)pPtr;
-    buff.offset = offset;
-    buff.offsetInStruct = uint32(-1);
-    buff.relativePtr = false;
-    
-    mSize += size;
-    ++mNumFields;
-
-    return *this;
-}
-
-template <typename _T, uint32 _MaxFields>
-inline size_t MemSingleShotMalloc<_T, _MaxFields>::GetMemoryRequirement() const
-{
-    return mSize;
-}
-
-template <typename _T, uint32 _MaxFields>
-inline void MemSingleShotMalloc<_T, _MaxFields>::Free(_T* p, MemAllocator* alloc)
-{
-    ASSERT(alloc);
-    if (p)
-        Mem::FreeAligned(p, alignof(_T), alloc);
-}
-
-template <typename _T, uint32 _MaxFields>
-inline size_t MemSingleShotMalloc<_T, _MaxFields>::GetSize() const
-{
-    return mSize;
-}
-
-template <typename _T, uint32 _MaxFields>
-inline _T* MemSingleShotMalloc<_T, _MaxFields>::Calloc(MemAllocator* alloc)
-{
-    void* mem = Mem::AllocAligned(mSize, alignof(_T), alloc);
-    return Calloc(mem, mSize);
-}
-
-template <typename _T, uint32 _MaxFields>
-inline _T*  MemSingleShotMalloc<_T, _MaxFields>::Calloc(void* buff, [[maybe_unused]] size_t size)
-{
-    ASSERT(buff);
-    ASSERT(size == 0 || size >= GetMemoryRequirement());
-
-    memset(buff, 0x0, mSize);
-
-    return Malloc(buff, size);
-}
-
-template <typename _T, uint32 _MaxFields>
-inline _T* MemSingleShotMalloc<_T, _MaxFields>::Malloc(MemAllocator* alloc)
-{
-    void* mem = Mem::AllocAligned(mSize, alignof(_T), alloc);
-    return (_T*)MallocInternal(mem, mSize);
-}
-
-template <typename _T, uint32 _MaxFields>
-inline _T*  MemSingleShotMalloc<_T, _MaxFields>::Malloc(void* buff, size_t size)
-{
-    return (_T*)MallocInternal(buff, size);
-}
-
-template <typename _T, uint32 _MaxFields>
-inline void* MemSingleShotMalloc<_T, _MaxFields>::MallocInternal(void* buff, [[maybe_unused]] size_t size)
-{
-    ASSERT(buff);
-    ASSERT(size == 0 || size >= GetMemoryRequirement());
-
-    uint8* tmp = (uint8*)buff;
-    
-    for (int i = 1, c = mNumFields; i < c; i++) {
-        if (mFields[i].offsetInStruct != -1) {
-            ASSERT(mFields[i].pPtr == nullptr);
-            void* ptr = tmp + mFields[i].offset;
-            void* srcPtr = tmp + mFields[i].offsetInStruct;
-            if (!mFields[i].relativePtr)
-                *((void**)srcPtr) = ptr;
-            else
-                *((int*)srcPtr) = (int)mFields[i].offset - (int)mFields[i].offsetInStruct;
-
-            if (mFields[i].childStruct)
-                mFields[i].childStruct->MallocInternal(ptr, 0);
-        } else {
-            ASSERT(mFields[i].offsetInStruct == -1);
-            *mFields[i].pPtr = tmp + mFields[i].offset;
-        }
-    }
-
-    return buff;
-}
-
-
-
-
-
-template <typename _T>
-struct Array
-{
-    using SortFunc = bool (*)(const _T& a, const _T& b);
-
-    Array() : Array(Mem::GetDefaultAlloc()) {}
-    explicit Array(MemAllocator* alloc) : mAlloc(alloc) {}
-    explicit Array(const void* buffer, size_t size);
-
-    void SetAllocator(MemAllocator* alloc);
-    void Reserve(uint32 capacity);
-    void Reserve(uint32 capacity, void* buffer, size_t size);
-    void Free();
-    static size_t GetMemoryRequirement(uint32 capacity);
-
-    [[nodiscard]] _T* Push();
-    _T* Push(const _T& item);
-    _T* PushBatch(const _T* items, uint32 numItems);
-
-    template <typename _Func> _T* PushAndSort(const _T& item, _Func sortFunc);
-
-    void RemoveAndSwap(uint32 index);
-    void RemoveAndShift(uint32 index);
-    void RemoveRangeAndShift(uint32 index, uint32 endIndex = INVALID_INDEX);
-
-    uint32 Count() const;
-    uint32 Capacity() const;
-    bool IsEmpty() const;
-    void Clear();
-    _T& Last();
-    _T PopLast();
-    _T PopFirst();
-    _T Pop(uint32 index);
-    void Extend(const Array<_T>& arr);
-    void Extend(const _T* arr, uint32 numArrItems);
-    const _T& operator[](uint32 index) const;
-    _T& operator[](uint32 index);
-    void Shrink();
-    bool IsFull() const;
-    const _T* Ptr() const;
-    _T* Ptr();
-    
-    void Detach(_T** outBuffer, uint32* outCount);
-    Span<_T> Detach();
-
-    void ShiftLeft(uint32 count);
-    void CopyTo(Array<_T>* otherArray) const;
-
-    uint32 Find(const _T& value);
-
-    template <typename _Func> uint32 FindIf(_Func findFunc);
-    
-    struct Iterator 
-    {
-        Iterator(_T* ptr) : _ptr(ptr) {}
-        _T& operator*() { return *_ptr; }
-        void operator++() { ++_ptr; }
-        bool operator!=(Iterator it) { return _ptr != it._ptr; }
-        _T* _ptr;
-    };
-
-    Iterator begin()    { return Iterator(&mBuffer[0]); }
-    Iterator end()      { return Iterator(&mBuffer[mCount]); }
-
-    Iterator begin() const    { return Iterator(&mBuffer[0]); }
-    Iterator end() const     { return Iterator(&mBuffer[mCount]); }
-
-private:
-    MemAllocator* mAlloc = nullptr;
-    uint32 mCapacity = 0;
-    uint32 mCount = 0;
-    _T* mBuffer = nullptr;
-};
-
-
-template <typename _T, uint32 _MaxCount>
-struct StaticArray
-{
-    _T* Push();
-    _T* Push(const _T& item);
-
-    template <typename _Func> _T* PushAndSort(const _T& item, _Func sortFunc);
-
-    void RemoveAndSwap(uint32 index);
-    uint32 Count() const;
-    bool IsEmpty() const;
-    bool IsFull() const;
-    void Clear();
-    _T& Last();
-    _T PopFirst();
-    _T Pop(uint32 index);
-    _T& PopLast();
-    const _T& operator[](uint32 index) const;
-    _T& operator[](uint32 index);
-    const _T* Ptr() const;
-    _T* Ptr();
-
-    uint32 Find(const _T& value);
-    template <typename _Func> uint32 FindIf(_Func findFunc);
-
-    struct Iterator 
-    {
-        Iterator(_T* ptr) : _ptr(ptr) {}
-        _T& operator*() { return *_ptr; }
-        void operator++() { ++_ptr; }
-        bool operator!=(Iterator it) { return _ptr != it._ptr; }
-        _T* _ptr;
-    };
-    
-    Iterator begin()    { return Iterator(&mBuffer[0]); }
-    Iterator end()      { return Iterator(&mBuffer[mCount]); }
-
-    Iterator begin() const    { return Iterator(&mBuffer[0]); }
-    Iterator end() const     { return Iterator(&mBuffer[mCount]); }
-
-private:
-    uint32 mCount = 0;
-    _T mBuffer[_MaxCount];
-};
-
-
-template <typename _T>
-inline Array<_T>::Array(const void* buffer, size_t size)
-{
-    mCapacity = size / sizeof(_T);
-    ASSERT(mCapacity);
-    mBuffer = buffer;
-}
-
-template <typename _T>
-inline void Array<_T>::SetAllocator(MemAllocator* alloc)
-{
-    ASSERT_MSG(mBuffer == nullptr, "buffer should be freed/uninitialized before setting allocator");
-    mAlloc = alloc;
-}    
-
-template <typename _T>
-inline _T* Array<_T>::Push()
-{
-    if (mCount >= mCapacity) {
-        if (mAlloc) {
-            Reserve(mCapacity ? (mCapacity << 1) : 8);
-        } 
-        else {
-            ASSERT(mBuffer);
-            ASSERT_MSG(mCount < mCapacity, "Array overflow, capacity=%u", mCapacity);
-            return nullptr;
-        }
-    }
-    
-    return PLACEMENT_NEW(&mBuffer[mCount++], _T) {};
-}
-
-template <typename _T>
-inline _T* Array<_T>::Push(const _T& item)
-{
-    if (mCount >= mCapacity) {
-        if (mAlloc) {
-            Reserve(mCapacity ? (mCapacity << 1) : 8);
-        } 
-        else {
-            ASSERT(mBuffer);
-            ASSERT_MSG(mCount < mCapacity, "Array overflow, capacity=%u", mCapacity);
-            return nullptr;
-        }
-    }
-    
-    _T* dest = &mBuffer[mCount++];
-    *dest = item;
-    return dest;
-}
-
-template <typename _T>
-template<typename _Func> inline _T* Array<_T>::PushAndSort(const _T& item, _Func sortFunc)
-{
-    Push(item);
-    uint32 itemIndex = mCount - 1;
-    if (itemIndex) {
-        for (uint32 i = itemIndex; i-- > 0;) {
-            int val = sortFunc(mBuffer[itemIndex], mBuffer[i]);
-            if (val >= 0)
-                break;
-
-            Swap<_T>(mBuffer[itemIndex], mBuffer[i]);
-            itemIndex = i;
-        }
-    }
-
-    return &mBuffer[itemIndex];    
-}
-
-template <typename _T>
-inline _T* Array<_T>::PushBatch(const _T* items, uint32 numItems)
-{
-    ASSERT(items);
-    ASSERT(numItems);
-
-    uint32 targetCount = mCount + numItems;
-    if (targetCount > mCapacity) {
-        if (mAlloc) {
-            Reserve(AlignValue(targetCount, 8u));
-        }
-        else {
-            ASSERT(mBuffer);
-            ASSERT_MSG(mCount < mCapacity, "Array overflow, capacity=%u", mCapacity);
-            return nullptr;
-        }
-    }
-
-    _T* dest = &mBuffer[mCount];
-    memcpy(dest, items, sizeof(_T)*numItems);
-    mCount += numItems;
-
-    return dest;
-}
-
-template <typename _T>
-inline void Array<_T>::RemoveAndSwap(uint32 index)
-{
-    ASSERT(mBuffer);
-    #ifdef CONFIG_CHECK_OUTOFBOUNDS
-    ASSERT_MSG(index < mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
-    #endif
-    --mCount;
-    if (index < mCount)
-        Swap<_T>(mBuffer[index], mBuffer[mCount]);
-}
-
-template <typename _T>
-inline void Array<_T>::RemoveAndShift(uint32 index)
-{
-    Pop(index);
-}
-
-template <typename _T>
-inline void Array<_T>::RemoveRangeAndShift(uint32 index, uint32 endIndex)
-{
-    if (endIndex == INVALID_INDEX)
-        endIndex = mCount;
-
-    #ifdef CONFIG_CHECK_OUTOFBOUNDS
-    ASSERT(endIndex > index);
-    ASSERT(endIndex <= mCount);
-    #endif
-
-    uint32 removeCount = endIndex - index;
-    for (uint32 i = 0; i < removeCount; i++) {
-        uint32 start = i + index;
-        uint32 end = i + endIndex;
-        if (end < mCount)
-            mBuffer[start] = mBuffer[end];
-    }
-
-    mCount -= removeCount;
-}
-
-template <typename _T>
-inline uint32 Array<_T>::Count() const
-{
-    return mCount;
-}
-
-template <typename _T>
-inline bool Array<_T>::IsEmpty() const
-{
-    return mCount == 0;
-}
-
-template <typename _T>
-inline uint32 Array<_T>::Capacity() const
-{
-    return mCapacity;
-}
-
-template <typename _T>
-inline void Array<_T>::Reserve(uint32 capacity)
-{
-    ASSERT(mAlloc);
-    if (capacity > mCapacity) {
-        mCapacity = Max(capacity, 8u);
-        mBuffer = Mem::ReallocTyped<_T>(mBuffer, mCapacity, mAlloc);
-        ASSERT(mBuffer);
-    }
-}
-
-template <typename _T>
-inline void Array<_T>::Reserve(uint32 capacity, void* buffer, [[maybe_unused]] size_t size)
-{
-    capacity = Max(capacity, 8u);
-
-    ASSERT(buffer);
-    ASSERT_MSG(mBuffer == nullptr, "Array should not be initialized before reserve by pointer");
-    ASSERT_MSG(size >= capacity*sizeof(_T), "Buffer should have at least %u bytes long (size=%u)", capacity*sizeof(_T), size);
-    
-    mAlloc = nullptr;
-    mCapacity = capacity;
-    mBuffer = (_T*)buffer;
-}    
-
-template <typename _T>
-inline void Array<_T>::Clear()
-{
-    mCount = 0;
-}
-
-template <typename _T>
-inline _T& Array<_T>::Last()
-{
-    ASSERT(mCount > 0);
-    return mBuffer[mCount - 1];
-}
-
-template <typename _T>
-inline _T Array<_T>::PopLast()
-{
-    ASSERT(mCount > 0);
-    return mBuffer[--mCount];
-}
-
-template <typename _T>
-inline _T Array<_T>::PopFirst()
-{
-    return Pop(0);
-}
-
-template <typename _T>
-inline _T Array<_T>::Pop(uint32 index)
-{
-    ASSERT(mCount > 0);
-    #ifdef CONFIG_CHECK_OUTOFBOUNDS
-    ASSERT_MSG(index < mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
-    #endif
-
-    _T item = mBuffer[index];
-    for (uint32 i = index+1, c = mCount; i < c; i++)
-        mBuffer[i-1] = mBuffer[i];
-    --mCount;
-    return item;
-}
-
-template <typename _T>
-inline void Array<_T>::Extend(const Array<_T>& arr)
-{
-    if (arr.Count()) {
-        uint32 newCount = mCount + arr.mCount;
-        uint32 newCapacity = Max(newCount, Min(mCapacity, arr.mCapacity));
-        if (newCapacity > mCapacity)
-            Reserve(newCapacity);
-        memcpy(&mBuffer[mCount], arr.mBuffer, sizeof(_T)*arr.mCount);
-        mCount = newCount;
-    }
-}
-
-template <typename _T>
-inline void Array<_T>::Extend(const _T* arr, uint32 numArrItems)
-{
-    if (numArrItems) {
-        uint32 newCount = mCount + numArrItems;
-        uint32 newCapacity = Max(newCount, mCapacity);
-        if (newCapacity > mCapacity)
-            Reserve(newCapacity);
-        memcpy(&mBuffer[mCount], arr, sizeof(_T)*numArrItems);
-        mCount = newCount;
-    }
-}
-
-template <typename _T>
-inline void Array<_T>::ShiftLeft(uint32 count)
-{
-    ASSERT(count <= mCount);
-    
-    mCount -= count;
-    if (mCount)
-        memmove(mBuffer, mBuffer + sizeof(_T)*count, sizeof(_T)*mCount);
-}
-
-template <typename _T>
-inline void Array<_T>::CopyTo(Array<_T>* otherArray) const
-{
-    ASSERT(otherArray);
-
-    if (mCapacity)
-        otherArray->Reserve(mCapacity);
-
-    if (mCount) {
-        otherArray->mCount = mCount;
-        memcpy(otherArray->mBuffer, mBuffer, sizeof(_T)*mCount);
-    }
-}
-
-template <typename _T>
-inline const _T& Array<_T>::operator[](uint32 index) const
-{
-    #ifdef CONFIG_CHECK_OUTOFBOUNDS
-    ASSERT_MSG(index < mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
-    #endif
-    return mBuffer[index];
-}
-
-template <typename _T>
-inline _T& Array<_T>::operator[](uint32 index)
-{
-    #ifdef CONFIG_CHECK_OUTOFBOUNDS
-    ASSERT_MSG(index < mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
-    #endif
-    return mBuffer[index];
-}
-
-template <typename _T>
-inline const _T* Array<_T>::Ptr() const
-{
-    return mBuffer;
-}
-
-template <typename _T>
-inline _T* Array<_T>::Ptr()
-{
-    return mBuffer;
-}
-
-template <typename _T>
-inline void Array<_T>::Detach(_T** outBuffer, uint32* outCount)
-{
-    ASSERT(outBuffer);
-    ASSERT(outCount);
-
-    *outBuffer = mBuffer;
-    *outCount = mCount;
-
-    mBuffer = nullptr;
-    mCount = 0;
-    mCapacity = 0;
-}
-
-template <typename _T>
-inline Span<_T> Array<_T>::Detach()
-{
-    _T* ptr;
-    uint32 count;
-
-    Detach(&ptr, &count);
-    return Span<_T>(ptr, count);
-}
-
-template<typename _T>
-inline bool Array<_T>::IsFull() const
-{
-    return mCount >= mCapacity;
-}    
-
-template <typename _T>
-inline void Array<_T>::Free()
-{
-    mCount = 0;
-
-    if (mAlloc) {
-        Mem::Free(mBuffer, mAlloc);
-        mCapacity = 0;
-        mBuffer = nullptr;
-    }
-}
-
-template <typename _T>
-inline void Array<_T>::Shrink()
-{
-    ASSERT(mAlloc);
-    mCapacity = Max(mCount, 8u);
-    Reserve(mCapacity);
-}
-
-template <typename _T> 
-inline uint32 Array<_T>::Find(const _T& value)
-{
-    for (uint32 i = 0; i < mCount; i++) {
-        if (mBuffer[i] == value)
-            return i;
-    }
-
-    return UINT32_MAX;
-}
-
-template<typename _T>
-template<typename _Func> inline uint32 Array<_T>::FindIf(_Func findFunc)
-{
-    for (uint32 i = 0, c = mCount; i < c; i++) {
-        if (findFunc(mBuffer[i]))
-            return i;
-    }
-
-    return UINT32_MAX;
-}
-
-template<typename _T>
-inline size_t Array<_T>::GetMemoryRequirement(uint32 capacity)
-{
-    capacity = Max(capacity, 8u);
-    return capacity * sizeof(_T);
-}
-
-template<typename _T, uint32 _MaxCount>
-inline _T* StaticArray<_T, _MaxCount>::Push()
-{
-    ASSERT_MSG(mCount < _MaxCount, "Trying to add more than _MaxCount=%u", _MaxCount);
-    return &mBuffer[mCount++];
-}
-
-template<typename _T, uint32 _MaxCount>
-inline _T* StaticArray<_T, _MaxCount>::Push(const _T& item)
-{
-    ASSERT_MSG(mCount < _MaxCount, "Trying to add more than _MaxCount=%u", _MaxCount);
-    uint32 index = mCount++;
-    mBuffer[index] = item;
-    return &mBuffer[index];
-}
-
-template <typename _T, uint32 _MaxCount>
-template<typename _Func> inline _T* StaticArray<_T, _MaxCount>::PushAndSort(const _T& item, _Func sortFunc)
-{
-    Push(item);
-    uint32 itemIndex = mCount - 1;
-    if (itemIndex) {
-        for (uint32 i = itemIndex; i-- > 0;) {
-            int val = sortFunc(mBuffer[itemIndex], mBuffer[i]);
-            if (val >= 0)
-                break;
-
-            Swap<_T>(mBuffer[itemIndex], mBuffer[i]);
-            itemIndex = i;
-        }
-    }
-
-    return &mBuffer[itemIndex];    
-}
-
-
-template<typename _T, uint32 _MaxCount>
-inline void StaticArray<_T, _MaxCount>::RemoveAndSwap(uint32 index)
-{
-    ASSERT(mBuffer);
-    #ifdef CONFIG_CHECK_OUTOFBOUNDS
-    ASSERT_MSG(index <= mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
-    #endif
-    Swap<_T>(mBuffer[index], mBuffer[--mCount]);
-}
-
-template<typename _T, uint32 _MaxCount>
-inline uint32 StaticArray<_T, _MaxCount>::Count() const
-{
-    return mCount;
-}
-
-template<typename _T, uint32 _MaxCount>
-inline bool StaticArray<_T, _MaxCount>::IsEmpty() const
-{
-    return mCount == 0;
-}
-
-template<typename _T, uint32 _MaxCount>
-inline bool StaticArray<_T, _MaxCount>::IsFull() const
-{
-    return mCount == _MaxCount;
-}
-
-template<typename _T, uint32 _MaxCount>
-inline void StaticArray<_T, _MaxCount>::Clear()
-{
-    mCount = 0;
-}
-
-template<typename _T, uint32 _MaxCount>
-inline _T& StaticArray<_T, _MaxCount>::Last()
-{
-    ASSERT(mCount > 0);
-    return mBuffer[mCount - 1];
-}
-
-template <typename _T, uint32 _MaxCount>
-inline _T StaticArray<_T, _MaxCount>::Pop(uint32 index)
-{
-    ASSERT(mCount > 0);
-    #ifdef CONFIG_CHECK_OUTOFBOUNDS
-    ASSERT_MSG(index < mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
-    #endif
-
-    _T item = mBuffer[index];
-    for (uint32 i = index+1, c = mCount; i < c; i++)
-        mBuffer[i-1] = mBuffer[i];
-    --mCount;
-    return item;
-}
-
-template <typename _T, uint32 _MaxCount>
-inline _T StaticArray<_T, _MaxCount>::PopFirst()
-{
-    Pop(0);
-}
-
-template<typename _T, uint32 _MaxCount>
-inline _T& StaticArray<_T, _MaxCount>::PopLast()
-{
-    ASSERT(mCount > 0);
-    return mBuffer[--mCount];
-}
-
-template<typename _T, uint32 _MaxCount>
-inline const _T& StaticArray<_T, _MaxCount>::operator[](uint32 index) const
-{
-    #ifdef CONFIG_CHECK_OUTOFBOUNDS
-    ASSERT_MSG(index <= mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
-    #endif
-    return mBuffer[index];
-}
-
-template<typename _T, uint32 _MaxCount>
-inline _T& StaticArray<_T, _MaxCount>::operator[](uint32 index)
-{
-    #ifdef CONFIG_CHECK_OUTOFBOUNDS
-    ASSERT_MSG(index <= mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
-    #endif
-    return mBuffer[index];
-}
-
-template<typename _T, uint32 _MaxCount>
-inline const _T* StaticArray<_T, _MaxCount>::Ptr() const
-{
-    return reinterpret_cast<const _T*>(mBuffer);
-}
-
-template<typename _T, uint32 _MaxCount>
-inline _T* StaticArray<_T, _MaxCount>::Ptr()
-{
-    return reinterpret_cast<_T*>(mBuffer);
-}
-
-template <typename _T, uint32 _MaxCount> 
-inline uint32 StaticArray<_T, _MaxCount>::Find(const _T& value)
-{
-    for (uint32 i = 0; i < mCount; i++) {
-        if (mBuffer[i] == value)
-            return i;
-    }
-    return UINT32_MAX;
-}
-
-template <typename _T, uint32 _MaxCount>
-template <typename _Func> inline uint32 StaticArray<_T, _MaxCount>::FindIf(_Func findFunc)
-{
-    for (uint32 i = 0, c = mCount; i < c; i++) {
-        if (findFunc(mBuffer[i])) {
-            return i;
-        }
-    }
-    
-    return UINT32_MAX;
-}
-
-
-
-
-
-
-//----------------------------------------------------------------------------------------------------------------------
-// MathScalar.h
-
-
-//----------------------------------------------------------------------------------------------------------------------
-// MathTypes.h
-
-
-
-PRAGMA_DIAGNOSTIC_PUSH()
-PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4201)    // nonstandard extension used : nameless struct/union
-PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4204)    // nonstandard extension used: non-constant aggregate initializer
-
-struct Float2 
-{
-    union {
-        struct 
-        {
-            float x;
-            float y;
-        };
-
-        float f[2];
-    };
-
-    Float2() = default;
-    explicit constexpr Float2(float _x, float _y) : x(_x), y(_y) {}
-    explicit constexpr Float2(float _xx) : x(_xx), y(_xx) {}
-    explicit constexpr Float2(const float* _f) : x(_f[0]), y(_f[1]) {}
-
-
-    static float  Dot(Float2 _a, Float2 _b);
-    static Float2 Norm(Float2 _a);
-    static float  Len(Float2 _a);
-    static Float2 NormLen(Float2 _a, float* outlen);
-    static Float2 Min(Float2 _a, Float2 _b);
-    static Float2 Max(Float2 _a, Float2 _b);
-    static Float2 Lerp(Float2 _a, Float2 _b, float _t);
-    static Float2 Abs(Float2 _a);
-    static Float2 Neg(Float2 _a);
-    static Float2 Add(Float2 _a, Float2 _b);
-    static Float2 Add(Float2 _a, float _b);
-    static Float2 Sub(Float2 _a, Float2 _b);
-    static Float2 Sub(Float2 _a, float _b);
-    static Float2 Mul(Float2 _a, Float2 _b);
-    static Float2 Mul(Float2 _a, float _b);
-    static Float2 CalcLinearFit2D(const Float2* _points, int _num);
-};
-
-struct Float3 
-{
-    union {
-        struct 
-        {
-            float x;
-            float y;
-            float z;
-        };
-
-        float f[3];
-    };
-
-    Float3() = default;
-    explicit constexpr Float3(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}
-    explicit constexpr Float3(float _xxx) : x(_xxx), y(_xxx), z(_xxx) {}
-    explicit constexpr Float3(const float* _f) : x(_f[0]), y(_f[1]), z(_f[2]) {}
-    explicit constexpr Float3(Float2 v, float _z = 0) : x(v.x), y(v.y), z(_z) {}
-
-
-    static Float3 Abs(Float3 _a);
-    static Float3 Neg(Float3 _a);
-    static Float3 Add(Float3 _a, Float3 _b);
-    static Float3 Add(Float3 _a, float _b);
-    static Float3 Sub(Float3 _a, Float3 _b);
-    static Float3 Sub(Float3 _a, float _b);
-    static Float3 Mul(Float3 _a, Float3 _b);
-    static Float3 Mul(Float3 _a, float _b);
-    static float  Dot(Float3 _a, Float3 _b);
-    static Float3 Cross(Float3 _a, Float3 _b);
-    static Float3 Lerp(Float3 _a, Float3 _b, float _t);
-    static Float3 SmoothLerp(Float3 _a, Float3 _b, float _dt, float _h);
-    static float  Len(Float3 _a);
-    static Float3 Norm(Float3 _a);
-    static Float3 NormLen(Float3 _a, float* _outlen);
-    static Float3 Min(Float3 _a, Float3 _b);
-    static Float3 Max(Float3 _a, Float3 _b);
-    static Float3 Rcp(Float3 _a);
-    static void   Tangent(Float3* _t, Float3* _b, Float3 _n);
-    static void   TangentAngle(Float3* _t, Float3* _b, Float3 _n, float _angle);
-    static Float3 FromLatLong(float _u, float _v);
-    static Float2 ToLatLong(Float3 _dir);
-    static Float3 CalcLinearFit3D(const Float3* _points, int _num);
-};
-
-struct Float4 
-{
-    union {
-        struct 
-        {
-            float x;
-            float y;
-            float z;
-            float w;
-        };
-
-        float f[4];
-    };
-
-    Float4() = default;
-    explicit constexpr Float4(float _x, float _y, float _z, float _w = 1.0f) : x(_x), y(_y), z(_z), w(_w) {}
-    explicit constexpr Float4(float _xxxx) : x(_xxxx), y(_xxxx), z(_xxxx), w(_xxxx) {}
-    explicit constexpr Float4(const float* _f) : x(_f[0]), y(_f[1]), z(_f[2]), w(_f[3]) {}
-    explicit constexpr Float4(Float3 v, float _w = 1.0f) : x(v.x), y(v.y), z(v.z), w(_w) {}
-    explicit constexpr Float4(Float2 v, float _z = 0, float _w = 1.0f) : x(v.x), y(v.y), z(_z), w(_w) {}
-
-    static Float4 Mul(Float4 _a, Float4 _b);
-    static Float4 Mul(Float4 _a, float _b);
-    static Float4 Add(Float4 _a, Float4 _b);
-    static Float4 Sub(Float4 _a, Float4 _b);
-};
-
-struct Color4u 
-{
-    union {
-        struct 
-        {
-            uint8 r;
-            uint8 g;
-            uint8 b;
-            uint8 a;
-        };
-
-        unsigned int n;
-    };
-
-    Color4u() = default;
-
-    explicit constexpr Color4u(uint8 _r, uint8 _g, uint8 _b, uint8 _a = 255)
-        : r(_r), g(_g), b(_b), a(_a)
-    {
-    }
-
-    explicit constexpr Color4u(float _r, float _g, float _b, float _a) :
-        r((uint8)(_r * 255.0f)),
-        g((uint8)(_g * 255.0f)),
-        b((uint8)(_b * 255.0f)),
-        a((uint8)(_a * 255.0f))
-    {
-    }
-
-    explicit constexpr Color4u(const float* f) : Color4u(f[0], f[1], f[2], f[3]) {}
-    constexpr Color4u(uint32 _n) : n(_n) {}
-
-    Color4u& operator=(uint32 _n) 
-    {
-        n = _n;
-        return *this;
-    }
-
-    static float ValueToLinear(float _a);
-    static float ValueToGamma(float _a);
-    static Float4 ToFloat4(Color4u c);
-    static Color4u  Blend(Color4u _a, Color4u _b, float _t);
-    static Float4 ToFloat4SRGB(Float4 cf);
-    static Float4 ToFloat4Linear(Float4 c);
-    static Float3 RGBtoHSV(Float3 rgb);
-    static Float3 HSVtoRGB(Float3 hsv);
-};
-
-struct Int2 
-{
-    union {
-        struct 
-        {
-            int x;
-            int y;
-        };
-
-        int n[2];
-    };
-
-    Int2() = default;
-    explicit constexpr Int2(int _x, int _y) : x(_x), y(_y) {}
-    explicit constexpr Int2(const int* _i) : x(_i[0]), y(_i[1]) {}
-    explicit constexpr Int2(int _xx) : x(_xx), y(_xx) {}
-
-    static Int2 Add(Int2 _a, Int2 _b);
-    static Int2 Sub(Int2 _a, Int2 _b);
-    static Int2 Min(Int2 _a, Int2 _b);
-    static Int2 Max(Int2 _a, Int2 _b);
-};
-
-struct Quat 
-{
-    union {
-        struct 
-        {
-            float x;
-            float y;
-            float z;
-            float w;
-        };
-
-        float f[4];
-    };
-
-    Quat() = default;
-    explicit constexpr Quat(float _x, float _y, float _z, float _w) : x(_x), y(_y), z(_z), w(_w) {}
-    explicit constexpr Quat(const float* _f) : x(_f[0]), y(_f[1]), z(_f[2]), w(_f[3]) {}
-
-    static Float3 MulXYZ(Quat _qa, Quat _qb);
-    static Quat   Mul(Quat p, Quat q);
-    static Quat   Inverse(Quat _q);
-    static float  Dot(Quat _a, Quat _b);
-    static float  Angle(Quat _a, Quat _b);
-    static Quat   Norm(Quat _q);
-    static Quat   RotateAxis(Float3 _axis, float _angle);
-    static Quat   RotateX(float _ax);
-    static Quat   RotateY(float _ay);
-    static Quat   RotateZ(float _az);
-    static Quat   Lerp(Quat _a, Quat _b, float t);
-    static Quat   Slerp(Quat _a, Quat _b, float t);
-    static Float3 ToEuler(Quat _q);
-    static Quat   FromEuler(Float3 _float3);
-    static Float3 TransformFloat3(Float3 v, Quat q);
-};
-
-struct Mat3 
-{
-    union {
-        struct 
-        {
-            float m11, m21, m31;
-            float m12, m22, m32;
-            float m13, m23, m33;
-        };
-
-        struct 
-        {
-            float fc1[3];
-            float fc2[3];
-            float fc3[3];
-        };
-
-        float f[9];
-    };
-
-
-    Mat3() = default;
-    explicit constexpr Mat3(float _m11, float _m12, float _m13, 
-                            float _m21, float _m22, float _m23, 
-                            float _m31, float _m32, float _m33) :
-      m11(_m11),     m21(_m21),     m31(_m31),
-      m12(_m12),     m22(_m22),     m32(_m32),
-      m13(_m13),     m23(_m23),     m33(_m33) 
-    {
-    }
-
-    explicit constexpr Mat3(const float* _col1, const float* _col2, const float* _col3) :
-      m11(_col1[0]),     m21(_col1[1]),     m31(_col1[2]),
-      m12(_col2[0]),     m22(_col2[1]),     m32(_col2[2]),
-      m13(_col3[0]),     m23(_col3[1]),     m33(_col3[2])
-    {
-    }
-
-    explicit constexpr Mat3(Float3 _col1, Float3 _col2, Float3 _col3) :
-        Mat3(_col1.f, _col2.f, _col3.f)
-    {
-    }  
-
-    Float3 Row1() const;
-    Float3 Row2() const;
-    Float3 Row3() const;
-    
-    static Mat3   Transpose(const Mat3& _a);
-    static Float3 MulFloat3(const Mat3& _mat, Float3 _vec);
-    static Mat3   MulInverse(const Mat3& _a, const Mat3& _b);
-    static Float3 MulFloat3Inverse(const Mat3& mat, Float3 v);
-    static Float2 MulFloat2(const Mat3& _mat, Float2 _vec);
-    static Mat3   Translate(float x, float y);
-    static Mat3   TranslateFloat2(Float2 p);
-    static Mat3   Rotate(float theta);
-    static Mat3   Scale(float sx, float sy);
-    static Mat3   ScaleRotateTranslate(float sx, float sy, float angle, float tx, float ty);
-    static Mat3   Inverse(const Mat3& _a);
-    static Mat3   Mul(const Mat3& _a, const Mat3& _b);
-    static Mat3   Abs(const Mat3& m);
-    static Mat3   FromQuat(Quat q);
-};
-
-struct Mat4 
-{
-    union {
-        struct 
-        {
-            float m11, m21, m31, m41;
-            float m12, m22, m32, m42;
-            float m13, m23, m33, m43;
-            float m14, m24, m34, m44;
-        };
-
-        struct 
-        {
-            float fc1[4];
-            float fc2[4];
-            float fc3[4];
-            float fc4[4];
-        };
-
-        float f[16];
-    };
-
-    Mat4() = default;
-    explicit constexpr Mat4(float _m11, float _m12, float _m13, float _m14, 
-                            float _m21, float _m22, float _m23, float _m24, 
-                            float _m31, float _m32, float _m33, float _m34, 
-                            float _m41, float _m42, float _m43, float _m44)
-    :   m11(_m11),     m21(_m21),     m31(_m31),     m41(_m41),
-        m12(_m12),     m22(_m22),     m32(_m32),     m42(_m42),
-        m13(_m13),     m23(_m23),     m33(_m33),     m43(_m43),
-        m14(_m14),     m24(_m24),     m34(_m34),     m44(_m44)
-    {    
-    }
-
-    explicit constexpr Mat4(const float* _col1, const float* _col2, const float* _col3, const float* _col4)
-    :   m11(_col1[0]),     m21(_col1[1]),     m31(_col1[2]),     m41(_col1[3]),
-        m12(_col2[0]),     m22(_col2[1]),     m32(_col2[2]),     m42(_col2[3]),
-        m13(_col3[0]),     m23(_col3[1]),     m33(_col3[2]),     m43(_col3[3]),
-        m14(_col4[0]),     m24(_col4[1]),     m34(_col4[2]),     m44(_col4[3])
-    {
-    }
-
-    explicit constexpr Mat4(Float4 _col1, Float4 _col2, Float4 _col3, Float4 _col4) : 
-        Mat4(_col1.f, _col2.f, _col3.f, _col4.f)
-    {
-    }
-
-    Float4 Row1() const;
-    Float4 Row2() const;
-    Float4 Row3() const;
-    Float4 Row4() const;
-
-    static Mat4   Translate(float _tx, float _ty, float _tz);
-    static Mat4   Scale(float _sx, float _sy, float _sz);
-    static Mat4   Scale(float _scale);
-    static Mat4   RotateX(float _ax);
-    static Mat4   RotateY(float _ay);
-    static Mat4   RotateZ(float _az);
-    static Mat4   RotateXY(float _ax, float _ay);
-    static Mat4   RotateXYZ(float _ax, float _ay, float _az);
-    static Mat4   RotateZYX(float _ax, float _ay, float _az);
-    static Mat4   ToQuatTranslate(Quat _quat, Float3 _translation);
-    static Mat4   ToQuatTranslateHMD(Quat _quat, Float3 _translation);
-    static Float3 MulFloat3(const Mat4& _mat, Float3 _vec);
-    static Float3 MulFloat3_xyz0(const Mat4& _mat, Float3 _vec);
-    static Float3 MulFloat3H(const Mat4& _mat, Float3 _vec);
-    static Float4 MulFloat4(const Mat4& _mat, Float4 _vec);
-    static Mat4   Transpose(const Mat4& _a);
-    static void   ProjFlipHandedness(Mat4* _dst, const Mat4& _src);
-    static void   ViewFlipHandedness(Mat4* _dst, const Mat4& _src);
-    static Mat4   FromNormal(Float3 _normal, float _scale, Float3 _pos);
-    static Mat4   FromNormalAngle(Float3 _normal, float _scale, Float3 _pos, float _angle);
-    static Mat4   ViewLookAt(Float3 eye, Float3 target, Float3 up);
-    static Mat4   ViewLookAtLH(Float3 eye, Float3 target, Float3 up);
-    static Mat4   ViewFPS(Float3 eye, float pitch, float yaw);
-    static Mat4   ViewArcBall(Float3 move, Quat rot, Float3 target_pos);
-    static Mat4   Perspective(float width, float height, float zn, float zf, bool d3dNdc = false);
-    static Mat4   PerspectiveLH(float width, float height, float zn, float zf, bool d3dNdc = false);
-    static Mat4   PerspectiveOffCenter(float xmin, float ymin, float xmax, float ymax,
-                                                 float zn, float zf, bool d3dNdc = false);
-    static Mat4   PerspectiveOffCenterLH(float xmin, float ymin, float xmax, float ymax,
-                                                   float zn, float zf, bool d3dNdc = false);
-    static Mat4   PerspectiveFOV(float fov_y, float aspect, float zn, float zf, bool d3dNdc = false);
-    static Mat4   PerspectiveFOVLH(float fov_y, float aspect, float zn, float zf, bool d3dNdc = false);
-    static Mat4   Ortho(float width, float height, float zn, float zf, float offset = 0, bool d3dNdc = false);
-    static Mat4   OrthoLH(float width, float height, float zn, float zf, float offset = 0, bool d3dNdc = false);
-    static Mat4   OrthoOffCenter(float xmin, float ymin, float xmax, float ymax, float zn,
-                                           float zf, float offset = 0, bool d3dNdc = false);
-    static Mat4   OrthoOffCenterLH(float xmin, float ymin, float xmax, float ymax, float zn,
-                                             float zf, float offset = 0, bool d3dNdc = false);
-    static Mat4   ScaleRotateTranslate(float _sx, float _sy, float _sz, 
-                                                 float _ax, float _ay, float _az,
-                                                 float _tx, float _ty, float _tz);
-    static Mat4   Mul(const Mat4& _a, const Mat4& _b);
-    static Mat4   Inverse(const Mat4& _a);
-    static Mat4   InverseTransformMat(const Mat4& _a);
-    static Quat   ToQuat(const Mat4& _mat);
-    static Mat4   FromQuat(Quat q);
-    static Mat4   ProjectPlane(Float3 planeNormal);
-};
-
-struct Rect 
-{
-    union {
-        struct 
-        {
-            float xmin, ymin;
-            float xmax, ymax;
-        };
-
-        struct 
-        {
-            float vmin[2];
-            float vmax[2];
-        };
-
-        float f[4];
-    };
-
-    Rect() = default;
-
-    explicit constexpr Rect(float _xmin, float _ymin, float _xmax, float _ymax) 
-    : xmin(_xmin), ymin(_ymin), xmax(_xmax), ymax(_ymax)
-    {
-    }
-
-    explicit constexpr Rect(const float* _vmin, const float* _vmax) 
-    : vmin { _vmin[0], _vmin[1] },
-      vmax { _vmax[0], _vmax[1] }
-    {
-    }
-
-    explicit constexpr Rect(Float2 _vmin, Float2 _vmax) :
-        Rect(_vmin.f, _vmax.f)
-    {
-    }
-
-    bool   IsEmpty() const;
-    float  Width() const;
-    float  Height() const;
-
-    static Rect   CenterExtents(Float2 center, Float2 extents);
-    static Rect   Expand(const Rect rc, Float2 expand);
-    static bool   TestPoint(const Rect rc, Float2 pt);
-    static bool   Test(const Rect rc1, const Rect rc2);
-    static void   AddPoint(Rect* rc, Float2 pt);
-    static Float2 GetCorner(const Rect* rc, int index);
-    static void   GetCorners(Float2 corners[4], const Rect* rc);
-    static Float2 Extents(const Rect rc);
-    static Float2 Center(const Rect rc);
-    static Rect   Translate(const Rect rc, Float2 pos);
-};
-
-struct RectInt 
-{
-    union {
-        struct 
-        {
-            int xmin, ymin;
-            int xmax, ymax;
-        };
-
-        struct 
-        {
-            int vmin[3];
-            int vmax[3];
-        };
-
-        int n[4];
-    };
-
-
-    RectInt() = default;
-
-    explicit constexpr RectInt(int _xmin, int _ymin, int _xmax, int _ymax) 
-        : xmin(_xmin),   ymin(_ymin),   xmax(_xmax),   ymax(_ymax)
-    {
-    }
-
-    explicit constexpr RectInt(const int* _vmin, const int* _vmax) 
-    : vmin { _vmin[0], _vmin[1] },
-      vmax { _vmax[0], _vmax[1] }
-    {
-    }
-
-    explicit constexpr RectInt(Int2 _vmin, Int2 _vmax) :
-        RectInt(_vmin.n, _vmax.n)
-    { 
-    }
-
-    bool IsEmpty() const;
-    int Width() const;
-    int Height() const;
-
-    static RectInt  Expand(const RectInt rc, Int2 expand);
-    static bool   TestPoint(const RectInt rc, Int2 pt);
-    static bool   Test(const RectInt rc1, const RectInt rc2);
-    static void   AddPoint(RectInt* rc, Int2 pt);
-    static Int2   GetCorner(const RectInt* rc, int index);
-    static void   GetCorners(Int2 corners[4], const RectInt* rc);
-};
-
-struct AABB 
-{
-    union {
-        struct 
-        {
-            float xmin, ymin, zmin;
-            float xmax, ymax, zmax;
-        };
-
-        struct 
-        {
-            float vmin[3];
-            float vmax[3];
-        };
-
-        float f[6];
-    };
-
-    AABB() = default;
-    explicit constexpr AABB(float _xmin, float _ymin, float _zmin, float _xmax, float _ymax, float _zmax) 
-    :   xmin(_xmin), ymin(_ymin), zmin(_zmin),
-        xmax(_xmax), ymax(_ymax), zmax(_zmax)
-    { 
-    }
-    explicit constexpr AABB(const float* _vmin, const float* _vmax) 
-    : vmin { _vmin[0],    _vmin[1],     _vmin[2] },
-      vmax { _vmax[0],    _vmax[1],     _vmax[2] }
-    {   
-    }
-    explicit constexpr AABB(Float3 _vmin, Float3 _vmax) :
-        AABB(_vmin.f, _vmax.f)
-    {
-    }
-
-    bool IsEmpty() const;
-    Float3 Extents() const;
-    Float3 Center() const;
-
-    static void   AddPoint(AABB* aabb, Float3 pt);
-    static AABB   Unify(const AABB& aabb1, const AABB& aabb2);
-    static bool   TestPoint(const AABB& aabb, Float3 pt);
-    static bool   Test(const AABB& aabb1, const AABB& aabb2);
-    static Float3 GetCorner(const AABB& aabb, int index);
-    static void   GetCorners(Float3 corners[8], const AABB& aabb);
-    static AABB   Translate(const AABB& aabb, Float3 offset);
-    static AABB   SetPos(const AABB& aabb, Float3 pos);
-    static AABB   Expand(const AABB& aabb, Float3 expand);
-    static AABB   Scale(const AABB& aabb, Float3 scale);
-    static AABB   Transform(const AABB& aabb, const Mat4& mat);
-};
-
-struct Plane 
-{
-    union {
-        Float4 p;
-
-        struct {
-            float normal[3];
-            float dist;
-        };
-
-        float f[4];
-    };
-
-    Plane() = default;
-    explicit constexpr Plane(float _nx, float _ny, float _nz, float _d) : p(_nx, _ny, _nz, _d) {}
-    explicit constexpr Plane(Float3 _normal, float _d) :
-        normal { _normal.x,     _normal.y,  _normal.z}, dist(_d)
-    {   
-    }
-
-    static Float3 CalcNormal(Float3 _va, Float3 _vb, Float3 _vc);
-    static Plane  From3Points(Float3 _va, Float3 _vb, Float3 _vc);
-    static Plane  FromNormalPoint(Float3 _normal, Float3 _p);
-    static float  Distance(Plane _plane, Float3 _p);
-    static Float3 ProjectPoint(Plane _plane, Float3 _p);
-    static Float3 Origin(Plane _plane);
-};
-
-struct Transform3D 
-{
-    Float3 pos;
-    Mat3 rot;
-
-    Transform3D() = default;
-    explicit constexpr Transform3D(Float3 _pos, const Mat3& _rot) : pos(_pos), rot(_rot) {}
-
-    static Transform3D Mul(const Transform3D& txa, const Transform3D& txb);
-    static Float3      MulFloat3(const Transform3D& tx, Float3 v);
-    static Float3      MulFloat3Scale(const Transform3D& tx, Float3 scale, Float3 v);
-    static Transform3D Inverse(const Transform3D& tx);
-    static Float3      MulFloat3Inverse(const Transform3D& tx, Float3 v);
-    static Transform3D MulInverse(const Transform3D& txa, const Transform3D& txb);
-    static Mat4        ToMat4(const Transform3D& tx);
-    static Transform3D Make(float x, float y, float z, float rx, float ry, float rz);
-    static Transform3D FromMat4(const Mat4& mat);
-};
-
-struct Box 
-{
-    Transform3D tx;   // transform (pos = origin of the box, rot = rotation of the box)
-    Float3 e;         // half-extent from the origin (0.5*width, 0.5*height, 0.5f*depth)
-
-    Box() = default;
-    explicit constexpr Box(const Transform3D& _tx, Float3 _e) : tx(_tx), e(_e) {}
-
-    static AABB ToAABB(const Box& box);
-};
-
-
-
-inline constexpr float M_PI           = 3.1415926535897932384626433832795f;
-inline constexpr float M_PI2          = 6.2831853071795864769252867665590f;
-inline constexpr float M_INVPI        = (1.0f / 3.1415926535897932384626433832795f);
-inline constexpr float M_HALFPI       = 1.5707963267948966192313216916398f;
-inline constexpr float M_QUARTERPI    = 0.7853981633974483096156608458199f;
-inline constexpr float M_SQRT2        = 1.4142135623730950488016887242097f;
-inline constexpr float M_LOGNAT10     = 2.3025850929940456840179914546844f;
-inline constexpr float M_INVLOGNAT10   = 1.4426950408889634073599246810019f;
-inline constexpr float M_LOGNAT2H     = 0.6931471805599453094172321214582f;
-inline constexpr float M_LOGNAT2L     = 1.90821492927058770002e-10f;
-inline constexpr float M_E            = 2.7182818284590452353602874713527f;
-inline constexpr float M_NEARZERO     = (1.0f / (float)(1 << 28));
-inline constexpr float M_FLOAT32_MIN  = (1.175494e-38f);
-inline constexpr float M_FLOAT32_MAX  = (3.402823e+38f);
-
-inline constexpr Float2 FLOAT2_ZERO  { 0.0f, 0.0f };
-inline constexpr Float2 FLOAT2_UNITX { 1.0f, 0.0f };
-inline constexpr Float2 FLOAT2_UNITY { 0.0f, 1.0f };
-
-inline constexpr Float3 FLOAT3_ZERO  { 0.0f, 0.0f, 0.0f };
-inline constexpr Float3 FLOAT3_UNIX { 1.0f, 0.0f, 0.0f };
-inline constexpr Float3 FLOAT3_UNITY { 0.0f, 1.0f, 0.0f };
-inline constexpr Float3 FLOAT3_UNITZ { 0.0f, 0.0f, 1.0f };
-
-inline constexpr Float4 FLOAT4_ZERO  { 0.0f, 0.0f, 0.0f, 1.0f };
-inline constexpr Float4 FLOAT4_UNITX { 1.0f, 0.0f, 0.0f, 1.0f };
-inline constexpr Float4 FLOAT4_UNITY { 0.0f, 1.0f, 0.0f, 1.0f };
-inline constexpr Float4 FLOAT4_UNITZ { 0.0f, 0.0f, 1.0f, 1.0f };
-
-inline constexpr Int2 INT2_ZERO {0, 0};
-inline constexpr Int2 INT2_ONE {1, 1};
-
-inline constexpr Mat3 MAT3_IDENT {
-    1.0f, 0.0f, 0.0f,
-    0.0f, 1.0f, 0.0f,
-    0.0f, 0.0f, 1.0f
-};
-
-inline constexpr Mat4 MAT4_IDENT {
-    1.0f, 0.0f, 0.0f, 0.0f,
-    0.0f, 1.0f, 0.0f, 0.0f,
-    0.0f, 0.0f, 1.0f, 0.0f,
-    0.0f, 0.0f, 0.0f, 1.0f 
-};
-
-inline constexpr Quat QUAT_INDENT {0, 0, 0, 1.0f};
-
-inline constexpr Transform3D TRANSFORM3D_IDENT { FLOAT3_ZERO, MAT3_IDENT };
-
-inline constexpr Color4u COLOR4U_WHITE  { uint8(255), uint8(255), uint8(255), uint8(255) };
-inline constexpr Color4u COLOR4U_BLACK  { uint8(0), uint8(0), uint8(0), uint8(255) };
-inline constexpr Color4u COLOR4U_RED    { uint8(255), uint8(0), uint8(0), uint8(255) };
-inline constexpr Color4u COLOR4U_YELLOW { uint8(255), uint8(255), uint8(0), uint8(255) };
-inline constexpr Color4u COLOR4U_GREEN  { uint8(0), uint8(255), uint8(0), uint8(255) };
-inline constexpr Color4u COLOR4U_BLUE   { uint8(0), uint8(0), uint8(255), uint8(255) };
-inline constexpr Color4u COLOR4U_PURPLE { uint8(255), uint8(0), uint8(255), uint8(255) };
-
-inline constexpr Rect RECT_EMPTY { M_FLOAT32_MAX, M_FLOAT32_MAX, -M_FLOAT32_MAX, -M_FLOAT32_MAX };
-inline constexpr RectInt RECTINT_EMPTY { INT32_MAX, INT32_MAX, INT32_MIN, INT32_MIN };
-inline constexpr AABB AABB_EMPTY { M_FLOAT32_MAX, M_FLOAT32_MAX, M_FLOAT32_MAX, -M_FLOAT32_MAX, -M_FLOAT32_MAX, -M_FLOAT32_MAX };
-
-PRAGMA_DIAGNOSTIC_POP()    // ignore msvc warnings
-
-
-#if defined(__SSE2__) || (COMPILER_MSVC && (ARCH_64BIT || _M_IX86_FP >= 2))
-    #include <xmmintrin.h>    // __m128
-#endif
-
-namespace M 
-{
-    #if defined(__SSE2__) || (COMPILER_MSVC && (ARCH_64BIT || _M_IX86_FP >= 2))
-    FORCE_INLINE float Sqrt(float _a);
-    FORCE_INLINE float Rsqrt(float _a);
-    #else
-    API  float Sqrt(float _a);
-    API  float Rsqrt(float _a);
-    #endif
-
-    API float CopySign(float _x, float _y);
-    API float Floor(float _f);
-    API float Cos(float _a);
-    API float ACos(float _a);
-    API float Sin(float _a);
-    API float ASin(float _a);
-    API float ATan2(float _y, float _x);
-    API float Exp(float _a);
-    API float Log(float _a);
-    FORCE_INLINE constexpr int NearestPow2(int n);
-    FORCE_INLINE constexpr bool IsPow2(int n);
-    FORCE_INLINE constexpr float ToRad(float _deg);
-    FORCE_INLINE constexpr float ToDeg(float _rad);
-    FORCE_INLINE uint32 FloatToBits(float _a);
-    FORCE_INLINE float BitsToFloat(uint32 _a);
-    FORCE_INLINE uint64 DoubleToBits(fl64 _a);
-    FORCE_INLINE double BitsToDouble(uint64 _a);
-    FORCE_INLINE uint32 Flip(uint32 _value);
-    FORCE_INLINE bool IsNAN(float _f);
-    FORCE_INLINE bool IsNAN64(double _f);
-    FORCE_INLINE bool IsFIN(float _f);
-    FORCE_INLINE bool IsFIN64(double _f);
-    FORCE_INLINE bool IsINF(float _f);
-    FORCE_INLINE bool IsINF64(double _f);
-    FORCE_INLINE float Round(float _f);
-    FORCE_INLINE float Ceil(float _f);
-    FORCE_INLINE float Lerp(float _a, float _b, float _t);
-    FORCE_INLINE float SmoothLerp(float _a, float _b, float _dt, float h);
-    FORCE_INLINE float Sign(float _a);
-    FORCE_INLINE float Abs(float _a);
-    FORCE_INLINE int Abs(int _a);
-    FORCE_INLINE int64 Abs(int64 _a);
-    FORCE_INLINE float Tan(float _a);
-    FORCE_INLINE float SinH(float _a);
-    FORCE_INLINE float CosH(float _a);
-    FORCE_INLINE float TanH(float _a);
-    FORCE_INLINE float ATan(float _a);
-    FORCE_INLINE float Pow(float _a, float _b);
-    FORCE_INLINE float Exp2(float _a);
-    FORCE_INLINE float Log2(float _a);
-    FORCE_INLINE float Trunc(float _a);
-    FORCE_INLINE float Fract(float _a);
-    FORCE_INLINE float Mod(float _a, float _b);
-    FORCE_INLINE bool IsEqual(float _a, float _b, float _epsilon = 0.00001f);
-    FORCE_INLINE bool IsEqualArray(const float* _a, const float* _b, int _num, float _epsilon = 0.00001f);
-    FORCE_INLINE float Wrap(float _a, float _wrap);
-    FORCE_INLINE float WrapRange(float x, float fmin, float fmax);
-    FORCE_INLINE int WrapRange(int x, int imin, int imax);
-    FORCE_INLINE float Step(float _a, float _edge);
-    FORCE_INLINE float Pulse(float _a, float _start, float _end);
-    FORCE_INLINE float Saturate(float _n);
-    FORCE_INLINE float SmoothStep(float _a, float _min, float _max);
-    FORCE_INLINE float LinearStep(float t, float _min, float _max);
-    FORCE_INLINE float NormalizeTime(float t, float _max);
-    FORCE_INLINE float Bias(float _time, float _bias);
-    FORCE_INLINE float Gain(float _time, float _gain);
-    FORCE_INLINE float AngleDiff(float _a, float _b);
-    FORCE_INLINE float AngleLerp(float _a, float _b, float _t);
-} // M (Math)
-
-
-
-                                                      
-#if defined(__SSE2__) || (COMPILER_MSVC && ARCH_64BIT)
-FORCE_INLINE float M::Sqrt(float x)
-{
-    float r;
-    _mm_store_ss(&r, _mm_sqrt_ss( _mm_load_ss(&x)));
-    return r;
-}
-
-FORCE_INLINE float M::Rsqrt(float x)
-{
-    float r;
-    _mm_store_ss(&r, _mm_rsqrt_ss(_mm_load_ss(&x)));
-    return r;
-}
-#endif   // __SSE2__
-
-FORCE_INLINE constexpr int M::NearestPow2(int n)
-{
-    n--;
-    n |= n >> 1;
-    n |= n >> 2;
-    n |= n >> 4;
-    n |= n >> 8;
-    n |= n >> 16;
-    n++;
-    return n;
-}
-
-FORCE_INLINE constexpr bool M::IsPow2(int n)
-{
-    return (n & (n - 1)) == 0;
-}
-
-FORCE_INLINE constexpr float M::ToRad(float _deg)
-{
-    return _deg * M_PI / 180.0f;
-}
-
-FORCE_INLINE constexpr float M::ToDeg(float _rad)
-{
-    return _rad * 180.0f / M_PI;
-}
-
-FORCE_INLINE uint32 M::FloatToBits(float _a)
-{
-    union {
-        float f;
-        uint32 ui;
-    } u = { _a };
-    return u.ui;
-}
-
-FORCE_INLINE float M::BitsToFloat(uint32 _a)
-{
-    union {
-        uint32 ui;
-        float f;
-    } u = { _a };
-    return u.f;
-}
-
-FORCE_INLINE uint64 M::DoubleToBits(fl64 _a)
-{
-    union {
-        fl64 f;
-        uint64 ui;
-    } u = { _a };
-    return u.ui;
-}
-
-FORCE_INLINE fl64 M::BitsToDouble(uint64 _a)
-{
-    union {
-        uint64 ui;
-        fl64 f;
-    } u = { _a };
-    return u.f;
-}
-
-FORCE_INLINE uint32 M::Flip(uint32 _value)
-{
-    uint32 mask = -int32(_value >> 31) | 0x80000000;
-    return _value ^ mask;
-}
-
-FORCE_INLINE bool M::IsNAN(float _f)
-{
-    const uint32 tmp = M::FloatToBits(_f) & INT32_MAX;
-    return tmp > UINT32_C(0x7f800000);
-}
-
-FORCE_INLINE bool M::IsNAN64(fl64 _f)
-{
-    const uint64 tmp = M::DoubleToBits(_f) & INT64_MAX;
-    return tmp > UINT64_C(0x7ff0000000000000);
-}
-
-FORCE_INLINE bool M::IsFIN(float _f)
-{
-    const uint32 tmp = M::FloatToBits(_f) & INT32_MAX;
-    return tmp < UINT32_C(0x7f800000);
-}
-
-FORCE_INLINE bool M::IsFIN64(fl64 _f)
-{
-    const uint64 tmp = M::DoubleToBits(_f) & INT64_MAX;
-    return tmp < UINT64_C(0x7ff0000000000000);
-}
-
-FORCE_INLINE bool M::IsINF(float _f)
-{
-    const uint32 tmp = M::FloatToBits(_f) & INT32_MAX;
-    return tmp == UINT32_C(0x7f800000);
-}
-
-FORCE_INLINE bool M::IsINF64(fl64 _f)
-{
-    const uint64 tmp = M::DoubleToBits(_f) & INT64_MAX;
-    return tmp == UINT64_C(0x7ff0000000000000);
-}
-
-FORCE_INLINE float M::Round(float _f)
-{
-    return M::Floor(_f + 0.5f);
-}
-
-FORCE_INLINE float M::Ceil(float _f)
-{
-    return -M::Floor(-_f);
-}
-
-FORCE_INLINE float M::Lerp(float _a, float _b, float _t)
-{
-    return (1.0f - _t) * _a + _t * _b;
-}
-
-FORCE_INLINE float M::SmoothLerp(float _a, float _b, float _dt, float _h)
-{
-    return _b + (_a - _b)*M::Exp2(-_dt/_h);
-}
-
-FORCE_INLINE float M::Sign(float _a)
-{
-    return _a < 0.0f ? -1.0f : 1.0f;
-}
-
-FORCE_INLINE float M::Abs(float _a)
-{
-    union {
-        float f;
-        uint32 ui;
-    } u = { _a };
-    u.ui &= 0x7FFFFFFF;
-    return u.f;
-}
-
-FORCE_INLINE int M::Abs(int _a)
-{
-    int mask = _a >> 31;
-    return (mask^_a) - mask;
-}
-
-FORCE_INLINE int64 M::Abs(int64 _a)
-{
-    int64 mask = _a >> 63;
-    return (mask^_a) - mask;
-}
-
-FORCE_INLINE float M::Tan(float _a)
-{
-    return M::Sin(_a) / M::Cos(_a);
-}
-
-FORCE_INLINE float M::SinH(float _a)
-{
-    return 0.5f * (M::Exp(_a) - M::Exp(-_a));
-}
-
-FORCE_INLINE float M::CosH(float _a)
-{
-    return 0.5f * (M::Exp(_a) + M::Exp(-_a));
-}
-
-FORCE_INLINE float M::TanH(float _a)
-{
-    const float tmp0 = M::Exp(2.0f * _a);
-    const float tmp1 = tmp0 - 1.0f;
-    const float tmp2 = tmp0 + 1.0f;
-    const float result = tmp1 / tmp2;
-
-    return result;
-}
-
-FORCE_INLINE float M::ATan(float _a)
-{
-    return M::ATan2(_a, 1.0f);
-}
-
-FORCE_INLINE float M::Pow(float _a, float _b)
-{
-    return M::Exp(_b * M::Log(_a));
-}
-
-FORCE_INLINE float M::Exp2(float _a)
-{
-    return M::Pow(2.0f, _a);
-}
-
-FORCE_INLINE float M::Log2(float _a)
-{
-    return M::Log(_a) * M_INVLOGNAT10;
-}
-
-FORCE_INLINE float M::Trunc(float _a)
-{
-    return (float)((int)_a);
-}
-
-FORCE_INLINE float M::Fract(float _a)
-{
-    return _a - M::Trunc(_a);
-}
-
-FORCE_INLINE float M::Mod(float _a, float _b)
-{
-    return _a - _b * M::Floor(_a / _b);
-}
-
-PRAGMA_DIAGNOSTIC_PUSH()
-PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wshadow")
-FORCE_INLINE bool M::IsEqual(float _a, float _b, float _epsilon)
-{
-    const float lhs = M::Abs(_a - _b);
-    float aa = M::Abs(_a);
-    float ab = M::Abs(_b);
-    float _max = aa > ab ? aa : ab;
-    const float rhs = _epsilon * ((1.0f > _max ? 1.0f : _max));
-    return lhs <= rhs;
-}
-PRAGMA_DIAGNOSTIC_POP()
-
-FORCE_INLINE bool M::IsEqualArray(const float* _a, const float* _b, int _num,
-                                             float _epsilon)
-{
-    bool result = M::IsEqual(_a[0], _b[0], _epsilon);
-    for (int ii = 1; result && ii < _num; ++ii) {
-        result = M::IsEqual(_a[ii], _b[ii], _epsilon);
-    }
-    return result;
-}
-
-FORCE_INLINE float M::Wrap(float _a, float _wrap)
-{
-    const float tmp0 = M::Mod(_a, _wrap);
-    const float result = tmp0 < 0.0f ? _wrap + tmp0 : tmp0;
-    return result;
-}
-
-FORCE_INLINE float M::WrapRange(float x, float fmin, float fmax)
-{
-    return M::Mod(x, fmax - fmin) + fmin;
-}
-
-FORCE_INLINE int M::WrapRange(int x, int imin, int imax)
-{
-    int range = imax - imin + 1;
-    if (x < imin)
-        x += range * ((imin - x) / range + 1);
-    return imin + (x - imin) % range;
-}
-
-FORCE_INLINE float M::Step(float _a, float _edge)
-{
-    return _a < _edge ? 0.0f : 1.0f;
-}
-
-FORCE_INLINE float M::Pulse(float _a, float _start, float _end)
-{
-    return M::Step(_a, _start) - M::Step(_a, _end);
-}
-
-FORCE_INLINE float M::Saturate(float _n)
-{
-    if (_n < 0) 
-        _n = 0;
-    else if (_n > 1.0f)
-        _n = 1.0f;
-    return _n;
-}
-
-FORCE_INLINE float M::SmoothStep(float _a, float _min, float _max)
-{
-    ASSERT(_min < _max);
-    float a = M::Saturate((_a - _min) / (_max - _min));
-    return a * a * (3.0f - 2.0f * a);
-}
-
-FORCE_INLINE float M::LinearStep(float t, float _min, float _max)
-{
-    ASSERT(_min < _max);
-    return M::Saturate((t - _min) / (_max - _min));
-}
-
-FORCE_INLINE float M::NormalizeTime(float t, float _max)
-{
-    ASSERT(_max > 0);
-    float nt = t / _max;
-    return nt < 1.0f ? nt : 1.0f;
-}
-
-
-FORCE_INLINE float M::Bias(float _time, float _bias)
-{
-    return _time / (((1.0f / _bias - 2.0f) * (1.0f - _time)) + 1.0f);
-}
-
-FORCE_INLINE float M::Gain(float _time, float _gain)
-{
-    if (_time < 0.5f)
-        return M::Bias(_time * 2.0f, _gain) * 0.5f;
-
-    return M::Bias(_time * 2.0f - 1.0f, 1.0f - _gain) * 0.5f + 0.5f;
-}
-
-FORCE_INLINE float M::AngleDiff(float _a, float _b)
-{
-    const float dist = M::Wrap(_b - _a, M_PI2);
-    return M::Wrap(dist * 2.0f, M_PI2) - dist;
-}
-
-FORCE_INLINE float M::AngleLerp(float _a, float _b, float _t)
-{
-    return _a + M::AngleDiff(_a, _b) * _t;
-}
-
-
-
-
-
-FORCE_INLINE Float3 Quat::MulXYZ(Quat qa, Quat qb)
-{
-    const float ax = qa.x;
-    const float ay = qa.y;
-    const float az = qa.z;
-    const float aw = qa.w;
-
-    const float bx = qb.x;
-    const float by = qb.y;
-    const float bz = qb.z;
-    const float bw = qb.w;
-
-    return Float3(aw * bx + ax * bw + ay * bz - az * by, 
-                       aw * by - ax * bz + ay * bw + az * bx,
-                       aw * bz + ax * by - ay * bx + az * bw);
-}
-
-FORCE_INLINE Float3 Quat::TransformFloat3(Float3 v, Quat q)
-{
-    Quat tmp0 = Quat::Inverse(q);
-    Quat qv = Quat(v.x, v.y, v.z, 0.0f);
-    Quat tmp1 = Quat::Mul(qv, tmp0);
-    return Quat::MulXYZ(q, tmp1);
-}
-
-
-FORCE_INLINE Quat Quat::Mul(Quat p, Quat q)
-{
-    return Quat(
-        p.f[3] * q.f[0] + p.f[0] * q.f[3] + p.f[1] * q.f[2] - p.f[2] * q.f[1],
-        p.f[3] * q.f[1] - p.f[0] * q.f[2] + p.f[1] * q.f[3] + p.f[2] * q.f[0],
-        p.f[3] * q.f[2] + p.f[0] * q.f[1] - p.f[1] * q.f[0] + p.f[2] * q.f[3],
-        p.f[3] * q.f[3] - p.f[0] * q.f[0] - p.f[1] * q.f[1] - p.f[2] * q.f[2]
-    );
-}
-
-FORCE_INLINE Quat Quat::Inverse(Quat q)
-{
-    return Quat(-q.x, -q.y, -q.z, q.w);
-}
-
-FORCE_INLINE float Quat::Dot(Quat _a, Quat _b)
-{
-    return _a.x * _b.x + _a.y * _b.y + _a.z * _b.z + _a.w * _b.w;
-}
-
-FORCE_INLINE float Quat::Angle(Quat qa, Quat qb)
-{
-    float a = M::Abs(Quat::Dot(qa, qb));
-    return M::ACos((a < 1.0f ? a : 1.0f) * 2.0f);
-}
-
-FORCE_INLINE Quat Quat::Norm(Quat q)
-{
-    const float inv_norm = M::Rsqrt(Quat::Dot(q, q));
-    return Quat(q.x*inv_norm, q.y*inv_norm, q.z*inv_norm, q.w*inv_norm);
-}
-
-FORCE_INLINE Quat Quat::RotateAxis(Float3 _axis, float _angle)
-{
-    const float ha = _angle * 0.5f;
-    const float ca = M::Cos(ha);
-    const float sa = M::Sin(ha);
-    return Quat(_axis.x * sa, _axis.y * sa, _axis.z * sa, ca);
-}
-
-FORCE_INLINE Quat Quat::RotateX(float ax)
-{
-    const float hx = ax * 0.5f;
-    const float cx = M::Cos(hx);
-    const float sx = M::Sin(hx);
-    return Quat(sx, 0.0f, 0.0f, cx);
-}
-
-FORCE_INLINE Quat Quat::RotateY(float ay)
-{
-    const float hy = ay * 0.5f;
-    const float cy = M::Cos(hy);
-    const float sy = M::Sin(hy);
-    return Quat(0.0f, sy, 0.0f, cy);
-}
-
-FORCE_INLINE Quat Quat::RotateZ(float az)
-{
-    const float hz = az * 0.5f;
-    const float cz = M::Cos(hz);
-    const float sz = M::Sin(hz);
-    return Quat(0.0f, 0.0f, sz, cz);
-}
-
-
-FORCE_INLINE Float3 Float3::Abs(Float3 _a)
-{
-    return Float3(M::Abs(_a.x), M::Abs(_a.y), M::Abs(_a.z));
-}
-
-FORCE_INLINE Float3 Float3::Neg(Float3 _a)
-{
-    return Float3(-_a.x, -_a.y, -_a.z);
-}
-
-FORCE_INLINE Float3 Float3::Add(Float3 _a, Float3 _b)
-{
-    return Float3(_a.x + _b.x, _a.y + _b.y, _a.z + _b.z);
-}
-
-FORCE_INLINE Float3 Float3::Add(Float3 _a, float _b)
-{
-    return Float3(_a.x + _b, _a.y + _b, _a.z + _b);
-}
-
-FORCE_INLINE Float3 Float3::Sub(Float3 _a, Float3 _b)
-{
-    return Float3(_a.x - _b.x, _a.y - _b.y, _a.z - _b.z);
-}
-
-FORCE_INLINE Float3 Float3::Sub(Float3 _a, float _b)
-{
-    return Float3(_a.x - _b, _a.y - _b, _a.z - _b);
-}
-
-FORCE_INLINE Float3 Float3::Mul(Float3 _a, Float3 _b)
-{
-    return Float3(_a.x * _b.x, _a.y * _b.y, _a.z * _b.z);
-}
-
-FORCE_INLINE Float3 Float3::Mul(Float3 _a, float _b)
-{
-    return Float3(_a.x * _b, _a.y * _b, _a.z * _b);
-}
-
-FORCE_INLINE float Float3::Dot(Float3 _a, Float3 _b)
-{
-    return _a.x * _b.x + _a.y * _b.y + _a.z * _b.z;
-}
-
-FORCE_INLINE Float3 Float3::Cross(Float3 _a, Float3 _b)
-{
-    return Float3(_a.y * _b.z - _a.z * _b.y, 
-                  _a.z * _b.x - _a.x * _b.z,
-                  _a.x * _b.y - _a.y * _b.x);
-}
-
-FORCE_INLINE float Float3::Len(Float3 _a)
-{
-    return M::Sqrt(Float3::Dot(_a, _a));
-}
-
-FORCE_INLINE Float3 Float3::Lerp(Float3 _a, Float3 _b, float _t)
-{
-    return Float3(M::Lerp(_a.x, _b.x, _t), M::Lerp(_a.y, _b.y, _t), M::Lerp(_a.z, _b.z, _t));
-}
-
-FORCE_INLINE Float3 Float3::SmoothLerp(Float3 _a, Float3 _b, float _dt, float _h)
-{
-    float f = M::Exp2(-_dt/_h);
-    return Float3(_b.x + (_a.x - _b.x)*f,
-                  _b.y + (_a.y - _b.y)*f,
-                  _b.z + (_a.z - _b.z)*f);
-}
-
-FORCE_INLINE Float3 Float3::Norm(Float3 _a)
-{
-    return Float3::Mul(_a, M::Rsqrt(Float3::Dot(_a, _a)));
-}
-
-FORCE_INLINE Float3 Float3::NormLen(Float3 _a, float* _outlen)
-{
-    ASSERT(_outlen);
-    const float len = Float3::Len(_a);
-    if (len > 0.0f) {
-        const float invlen = 1.0f / len;
-        *_outlen = len;
-        return Float3(_a.x * invlen, _a.y * invlen, _a.z * invlen);
-    } else {
-        ASSERT_MSG(0, "Divide by zero");
-        return Float3(0.0f, 0.0f, 0.0f);
-    }
-}
-
-FORCE_INLINE Float3 Float3::Min(Float3 _a, Float3 _b)
-{
-    float xmin = _a.x < _b.x ? _a.x : _b.x;
-    float ymin = _a.y < _b.y ? _a.y : _b.y;
-    float zmin = _a.z < _b.z ? _a.z : _b.z;
-    return Float3(xmin, ymin, zmin);
-}
-
-FORCE_INLINE Float3 Float3::Max(Float3 _a, Float3 _b)
-{
-    float xmax = _a.x > _b.x ? _a.x : _b.x;
-    float ymax = _a.y > _b.y ? _a.y : _b.y;
-    float zmax = _a.z > _b.z ? _a.z : _b.z;
-    return Float3(xmax, ymax, zmax);
-}
-
-FORCE_INLINE Float3 Float3::Rcp(Float3 _a)
-{
-    return Float3(1.0f / _a.x, 1.0f / _a.y, 1.0f / _a.z);
-}
-
-FORCE_INLINE void Float3::Tangent(Float3* _t, Float3* _b, Float3 _n)
-{
-    const float nx = _n.x;
-    const float ny = _n.y;
-    const float nz = _n.z;
-
-    if (M::Abs(nx) > M::Abs(nz)) {
-        float inv_len = 1.0f / M::Sqrt(nx * nx + nz * nz);
-        *_t = Float3(-nz * inv_len, 0.0f, nx * inv_len);
-    } else {
-        float inv_len = 1.0f / M::Sqrt(ny * ny + nz * nz);
-        *_t = Float3(0.0f, nz * inv_len, -ny * inv_len);
-    }
-
-    *_b = Float3::Cross(_n, *_t);
-}
-
-FORCE_INLINE void Float3::TangentAngle(Float3* _t, Float3* _b, Float3 _n, float _angle)
-{
-    Float3::Tangent(_t, _b, _n);
-
-    const float sa = M::Sin(_angle);
-    const float ca = M::Cos(_angle);
-
-    *_t = Float3(-sa * _b->x + ca * _t->x, -sa * _b->y + ca * _t->y, -sa * _b->z + ca * _t->z);
-
-    *_b = Float3::Cross(_n, *_t);
-}
-
-FORCE_INLINE Float3 Float3::FromLatLong(float _u, float _v)
-{
-    const float phi = _u * M_PI2;
-    const float theta = _v * M_PI;
-
-    const float st = M::Sin(theta);
-    const float sp = M::Sin(phi);
-    const float ct = M::Cos(theta);
-    const float cp = M::Cos(phi);
-
-    return Float3(-st * sp, -st * cp, ct);
-}
-
-FORCE_INLINE Float2 Float3::ToLatLong(Float3 pos)
-{
-    const float phi = M::ATan2(pos.x, pos.y);
-    const float theta = M::ACos(pos.z);
-
-    return Float2((M_PI + phi) / M_PI2, theta * M_INVPI);
-}
-
-
-FORCE_INLINE Float4 Mat4::Row1() const 
-{
-    return Float4(m11, m12, m13, m14);
-}
-
-FORCE_INLINE Float4 Mat4::Row2() const
-{
-    return Float4(m21, m22, m23, m24);
-}
-
-FORCE_INLINE Float4 Mat4::Row3() const
-{
-    return Float4(m31, m32, m33, m34);
-}
-
-FORCE_INLINE Float4 Mat4::Row4() const
-{
-    return Float4(m41, m42, m43, m44);
-}
-
-
-FORCE_INLINE Mat4 Mat4::Translate(float _tx, float _ty, float _tz)
-{
-    return Mat4(1.0f, 0.0f, 0.0f, _tx, 
-                0.0f, 1.0f, 0.0f, _ty, 
-                0.0f, 0.0f, 1.0f, _tz, 
-                0.0f, 0.0f, 0.0f, 1.0f);
-}
-
-FORCE_INLINE Mat4 Mat4::Scale(float _sx, float _sy, float _sz)
-{
-    return Mat4(_sx, 0.0f, 0.0f, 0.0f, 
-                0.0f, _sy, 0.0f, 0.0f, 
-                0.0f, 0.0f, _sz, 0.0f, 
-                0.0f, 0.0f,0.0f, 1.0f);
-}
-
-FORCE_INLINE Mat4 Mat4::Scale(float _scale)
-{
-    return Mat4::Scale(_scale, _scale, _scale);
-}
-
-FORCE_INLINE Mat4 Mat4::RotateX(float _ax)
-{
-    const float sx = M::Sin(_ax);
-    const float cx = M::Cos(_ax);
-
-    return Mat4(1.0f, 0.0f, 0.0f, 0.0f, 
-                0.0f, cx, -sx, 0.0f, 
-                0.0f, sx, cx, 0.0f, 
-                0.0f, 0.0f, 0.0f, 1.0f);
-}
-
-FORCE_INLINE Mat4 Mat4::RotateY(float _ay)
-{
-    const float sy = M::Sin(_ay);
-    const float cy = M::Cos(_ay);
-
-    return Mat4(cy, 0.0f, sy, 0.0f, 
-                0.0f, 1.0f, 0.0f, 0.0f, 
-                -sy, 0.0f, cy, 0.0f, 
-                0.0f, 0.0f, 0.0f, 1.0f);
-}
-
-FORCE_INLINE Mat4 Mat4::RotateZ(float _az)
-{
-    const float sz = M::Sin(_az);
-    const float cz = M::Cos(_az);
-
-    return Mat4(cz, -sz, 0.0f, 0.0f, 
-                sz, cz, 0.0f, 0.0f, 
-                0.0f, 0.0f, 1.0f, 0.0f, 
-                0.0f, 0.0f, 0.0f, 1.0f);
-}
-
-FORCE_INLINE Mat4 Mat4::RotateXY(float _ax, float _ay)
-{
-    const float sx = M::Sin(_ax);
-    const float cx = M::Cos(_ax);
-    const float sy = M::Sin(_ay);
-    const float cy = M::Cos(_ay);
-
-    return Mat4(cy, 0.0f, sy, 0.0f, 
-                sx * sy, cx, -sx * cy, 0.0f, 
-                -cx * sy, sx, cx * cy, 0.0f,
-                0.0f, 0.0f, 0.0f, 1.0f);
-}
-
-FORCE_INLINE Mat4 Mat4::RotateXYZ(float _ax, float _ay, float _az)
-{
-    const float sx = M::Sin(_ax);
-    const float cx = M::Cos(_ax);
-    const float sy = M::Sin(_ay);
-    const float cy = M::Cos(_ay);
-    const float sz = M::Sin(_az);
-    const float cz = M::Cos(_az);
-
-    return Mat4(cy * cz, -cy * sz, sy, 0.0f, 
-                cz * sx * sy + cx * sz, cx * cz - sx * sy * sz, -cy * sx, 0.0f, 
-                -cx * cz * sy + sx * sz, cz * sx + cx * sy * sz, cx * cy, 0.0f,
-                0.0f, 0.0f, 0.0f, 1.0f);
-}
-
-FORCE_INLINE Mat4 Mat4::RotateZYX(float _ax, float _ay, float _az)
-{
-    const float sx = M::Sin(_ax);
-    const float cx = M::Cos(_ax);
-    const float sy = M::Sin(_ay);
-    const float cy = M::Cos(_ay);
-    const float sz = M::Sin(_az);
-    const float cz = M::Cos(_az);
-
-    return Mat4(cy * cz, cz * sx * sy - cx * sz, cx * cz * sy + sx * sz, 0.0f, 
-                cy * sz, cx * cz + sx * sy * sz, -cz * sx + cx * sy * sz, 0.0f, 
-                -sy, cy * sx, cx * cy, 0.0f, 
-                0.0f, 0.0f, 0.0f, 1.0f);
-};
-
-FORCE_INLINE Mat4 Mat4::ToQuatTranslate(Quat q, Float3 translate)
-{
-    Mat4 mat = Mat4::FromQuat(q);
-    mat.m14 = -(mat.m11 * translate.x + mat.m12 * translate.y + mat.m13 * translate.z);
-    mat.m24 = -(mat.m21 * translate.x + mat.m22 * translate.y + mat.m23 * translate.z);
-    mat.m34 = -(mat.m31 * translate.x + mat.m32 * translate.y + mat.m33 * translate.z);
-    return mat;
-}
-
-FORCE_INLINE Mat4 Mat4::ToQuatTranslateHMD(Quat q, Float3 translate)
-{
-    return Mat4::ToQuatTranslate(Quat(-q.x, -q.y, q.z, q.w), translate);
-}
-
-FORCE_INLINE Float3 Mat4::MulFloat3(const Mat4& _mat, Float3 _vec)
-{
-    return Float3(_vec.x * _mat.m11 + _vec.y * _mat.m12 + _vec.z * _mat.m13 + _mat.m14,
-                  _vec.x * _mat.m21 + _vec.y * _mat.m22 + _vec.z * _mat.m23 + _mat.m24,
-                  _vec.x * _mat.m31 + _vec.y * _mat.m32 + _vec.z * _mat.m33 + _mat.m34);
-}
-
-FORCE_INLINE Float3 Mat4::MulFloat3_xyz0(const Mat4& _mat, Float3 _vec)
-{
-    return Float3(_vec.x * _mat.m11 + _vec.y * _mat.m12 + _vec.z * _mat.m13,
-                  _vec.x * _mat.m21 + _vec.y * _mat.m22 + _vec.z * _mat.m23,
-                  _vec.x * _mat.m31 + _vec.y * _mat.m32 + _vec.z * _mat.m33);
-}
-
-FORCE_INLINE Float3 Mat4::MulFloat3H(const Mat4& _mat, Float3 _vec)
-{
-    float xx = _vec.x * _mat.m11 + _vec.y * _mat.m12 + _vec.z * _mat.m13 + _mat.m14;
-    float yy = _vec.x * _mat.m21 + _vec.y * _mat.m22 + _vec.z * _mat.m23 + _mat.m24;
-    float zz = _vec.x * _mat.m31 + _vec.y * _mat.m32 + _vec.z * _mat.m33 + _mat.m34;
-    float ww = _vec.x * _mat.m41 + _vec.y * _mat.m42 + _vec.z * _mat.m43 + _mat.m44;
-    float iw = M::Sign(ww) / ww;
-    return Float3(xx * iw, yy * iw, zz * iw);
-}
-
-FORCE_INLINE Float4 Mat4::MulFloat4(const Mat4& _mat, Float4 _vec)
-{
-    return Float4(
-        _vec.x * _mat.m11 + _vec.y * _mat.m12 + _vec.z * _mat.m13 + _vec.w * _mat.m14,
-        _vec.x * _mat.m21 + _vec.y * _mat.m22 + _vec.z * _mat.m23 + _vec.w * _mat.m24,
-        _vec.x * _mat.m31 + _vec.y * _mat.m32 + _vec.z * _mat.m33 + _vec.w * _mat.m34,
-        _vec.x * _mat.m41 + _vec.y * _mat.m42 + _vec.z * _mat.m43 + _vec.w * _mat.m44);
-}
-
-FORCE_INLINE void Mat4::ProjFlipHandedness(Mat4* _dst, const Mat4& _src)
-{
-    _dst->m11 = -_src.m11;
-    _dst->m12 = -_src.m12;
-    _dst->m13 = -_src.m13;
-    _dst->m14 = -_src.m14;
-    _dst->m21 = _src.m21;
-    _dst->m22 = _src.m22;
-    _dst->m23 = _src.m23;
-    _dst->m24 = _src.m24;
-    _dst->m31 = -_src.m31;
-    _dst->m32 = -_src.m32;
-    _dst->m33 = -_src.m33;
-    _dst->m34 = -_src.m34;
-    _dst->m41 = _src.m41;
-    _dst->m42 = _src.m42;
-    _dst->m43 = _src.m43;
-    _dst->m44 = _src.m44;
-}
-
-FORCE_INLINE void Mat4::ViewFlipHandedness(Mat4* _dst, const Mat4& _src)
-{
-    _dst->m11 = -_src.m11;
-    _dst->m12 = _src.m12;
-    _dst->m13 = -_src.m13;
-    _dst->m14 = _src.m14;
-    _dst->m21 = -_src.m21;
-    _dst->m22 = _src.m22;
-    _dst->m23 = -_src.m23;
-    _dst->m24 = _src.m24;
-    _dst->m31 = -_src.m31;
-    _dst->m32 = _src.m32;
-    _dst->m33 = -_src.m33;
-    _dst->m34 = _src.m34;
-    _dst->m41 = -_src.m41;
-    _dst->m42 = _src.m42;
-    _dst->m43 = -_src.m43;
-    _dst->m44 = _src.m44;
-}
-
-FORCE_INLINE Mat4 Mat4::Transpose(const Mat4& _a)
-{
-    return Mat4(_a.m11, _a.m21, _a.m31, _a.m41,
-                _a.m12, _a.m22, _a.m32, _a.m42, 
-                _a.m13, _a.m23, _a.m33, _a.m43, 
-                _a.m14, _a.m24, _a.m34, _a.m44);
-}
-
-
-FORCE_INLINE Float4 Float4::Mul(Float4 _a, Float4 _b)
-{
-    return Float4(_a.x * _b.x, _a.y * _b.y, _a.z * _b.z, _a.w * _b.w);
-}
-
-FORCE_INLINE Float4 Float4::Mul(Float4 _a, float _b)
-{
-    return Float4(_a.x * _b, _a.y * _b, _a.z * _b, _a.w * _b);
-}
-
-FORCE_INLINE Float4 Float4::Add(Float4 _a, Float4 _b)
-{
-    return Float4(_a.x + _b.x, _a.y + _b.y, _a.z + _b.z, _a.w + _b.w);
-}
-
-FORCE_INLINE Float4 Float4::Sub(Float4 _a, Float4 _b)
-{
-    return Float4(_a.x - _b.x, _a.y - _b.y, _a.z - _b.z, _a.w - _b.w);
-}
-
-FORCE_INLINE float Color4u::ValueToLinear(float _a)
-{
-    const float lo = _a / 12.92f;
-    const float hi = M::Pow((_a + 0.055f) / 1.055f, 2.4f);
-    const float result = M::Lerp(hi, lo, _a <= 0.04045f ? 1.0f : 0.0f);
-    return result;
-}
-
-FORCE_INLINE float Color4u::ValueToGamma(float _a)
-{
-    const float lo = _a * 12.92f;
-    const float hi = M::Pow(M::Abs(_a), 1.0f / 2.4f) * 1.055f - 0.055f;
-    const float result = M::Lerp(hi, lo, _a <= 0.0031308f ? 1.0f : 0.0f);
-    return result;
-}
-
-FORCE_INLINE Float4 Color4u::ToFloat4(Color4u c)
-{
-    float rcp = 1.0f / 255.0f;
-    return Float4((float)c.r * rcp, (float)c.g * rcp, (float)c.b * rcp, (float)c.a * rcp);
-}
-
-
-FORCE_INLINE Float3 Mat3::Row1() const
-{
-    return Float3(m11, m12, m13);
-}
-
-FORCE_INLINE Float3 Mat3::Row2() const
-{
-    return Float3(m21, m22, m23);
-}
-
-FORCE_INLINE Float3 Mat3::Row3() const
-{
-    return Float3(m31, m32, m33);
-}
-
-FORCE_INLINE Mat3 Mat3::Transpose(const Mat3& _a)
-{
-    return Mat3(_a.m11, _a.m21, _a.m31, 
-                _a.m12, _a.m22, _a.m32, 
-                _a.m13, _a.m23, _a.m33);
-}
-
-FORCE_INLINE Float3 Mat3::MulFloat3(const Mat3& _mat, Float3 _vec)
-{
-    return Float3(_vec.x * _mat.m11 + _vec.y * _mat.m12 + _vec.z * _mat.m13,
-                  _vec.x * _mat.m21 + _vec.y * _mat.m22 + _vec.z * _mat.m23,
-                  _vec.x * _mat.m31 + _vec.y * _mat.m32 + _vec.z * _mat.m33);
-}
-
-FORCE_INLINE Mat3 Mat3::MulInverse(const Mat3& _a, const Mat3& _b)
-{
-    Mat3 _atrans = Mat3::Transpose(_a);
-    return Mat3::Mul(_atrans, _b);
-}
-
-FORCE_INLINE Float3 Mat3::MulFloat3Inverse(const Mat3& mat, Float3 v)
-{
-    Mat3 rmat = Mat3::Transpose(mat);
-    return Mat3::MulFloat3(rmat, v);
-}
-
-FORCE_INLINE Float2 Mat3::MulFloat2(const Mat3& _mat, Float2 _vec)
-{
-    return Float2(_vec.x * _mat.m11 + _vec.y * _mat.m12 + _mat.m13,
-                  _vec.x * _mat.m21 + _vec.y * _mat.m22 + _mat.m23);
-}
-
-FORCE_INLINE Mat3 Mat3::Translate(float x, float y)
-{
-    return Mat3(1.0f, 0.0f, x, 
-                0.0f, 1.0f, y, 
-                0.0f, 0.0f, 1.0f);
-}
-
-FORCE_INLINE Mat3 Mat3::TranslateFloat2(Float2 p)
-{
-    return Mat3::Translate(p.x, p.y);
-}
-
-FORCE_INLINE Mat3 Mat3::Rotate(float theta)
-{
-    float c = M::Cos(theta);
-    float s = M::Sin(theta);
-    return Mat3(c, -s, 0.0f, 
-                       s, c, 0.0f, 
-                       0.0f, 0.0f, 1.0f);
-}
-
-FORCE_INLINE Mat3 Mat3::Scale(float sx, float sy)
-{
-    return Mat3(sx, 0.0f, 0.0f, 
-                0.0f, sy, 0.0f, 
-                0.0f, 0.0f, 1.0f);
-}
-
-FORCE_INLINE Mat3 Mat3::ScaleRotateTranslate(float sx, float sy, float angle, float tx, float ty)
-{
-    float c = M::Cos(angle);
-    float s = M::Sin(angle);
-    return Mat3(sx*c,  -sy*s,  tx, 
-                sx*s,   sy*c,  ty, 
-                0.0f,   0.0f,  1.0f);
-}
-
-FORCE_INLINE float Float2::Dot(Float2 _a, Float2 _b)
-{
-    return _a.x * _b.x + _a.y * _b.y;
-}
-
-FORCE_INLINE float Float2::Len(Float2 _a)
-{
-    return M::Sqrt(Float2::Dot(_a, _a));
-}
-
-FORCE_INLINE Float2 Float2::Norm(Float2 _a)
-{
-    return Float2::Mul(_a, M::Rsqrt(Float2::Dot(_a, _a)));
-}
-
-FORCE_INLINE Float2 Float2::NormLen(Float2 _a, float* outlen)
-{
-    const float len = Float2::Len(_a);
-    if (len > 0.0f) {
-        *outlen = len;
-        return Float2(_a.x / len, _a.y / len);
-    } else {
-        ASSERT_MSG(0, "Divide by zero");
-        return _a;
-    }
-}
-
-FORCE_INLINE Float2 Float2::Min(Float2 _a, Float2 _b)
-{
-    return Float2(_a.x < _b.x ? _a.x : _b.x, _a.y < _b.y ? _a.y : _b.y);
-}
-
-FORCE_INLINE Float2 Float2::Max(Float2 _a, Float2 _b)
-{
-    return Float2(_a.x > _b.x ? _a.x : _b.x, _a.y > _b.y ? _a.y : _b.y );
-}
-
-FORCE_INLINE Float2 Float2::Lerp(Float2 _a, Float2 _b, float _t)
-{
-    return Float2(M::Lerp(_a.x, _b.x, _t), M::Lerp(_a.y, _b.y, _t));
-}
-
-FORCE_INLINE Float2 Float2::Abs(Float2 _a)
-{
-    return Float2(M::Abs(_a.x), M::Abs(_a.y));
-}
-
-FORCE_INLINE Float2 Float2::Neg(Float2 _a)
-{
-    return Float2(-_a.x, -_a.y);
-}
-
-FORCE_INLINE Float2 Float2::Add(Float2 _a, Float2 _b)
-{
-    return Float2(_a.x + _b.x, _a.y + _b.y);
-}
-
-FORCE_INLINE Float2 Float2::Add(Float2 _a, float _b)
-{
-    return Float2(_a.x + _b, _a.y + _b);
-}
-
-FORCE_INLINE Float2 Float2::Sub(Float2 _a, Float2 _b)
-{
-    return Float2(_a.x - _b.x, _a.y - _b.y);
-}
-
-FORCE_INLINE Float2 Float2::Sub(Float2 _a, float _b)
-{
-    return Float2(_a.x - _b, _a.y - _b);
-}
-
-FORCE_INLINE Float2 Float2::Mul(Float2 _a, Float2 _b)
-{
-    return Float2(_a.x * _b.x, _a.y * _b.y);
-}
-
-FORCE_INLINE Float2 Float2::Mul(Float2 _a, float _b)
-{
-    return Float2(_a.x * _b, _a.y * _b);
-}
-
-FORCE_INLINE Int2 Int2::Add(Int2 _a, Int2 _b)
-{
-    return Int2(_a.x + _b.x, _a.y + _b.y);
-}
-
-FORCE_INLINE Int2 Int2::Sub(Int2 _a, Int2 _b)
-{
-    return Int2(_a.x - _b.x, _a.y - _b.y);
-}
-
-FORCE_INLINE Int2 Int2::Min(Int2 _a, Int2 _b)
-{
-    return Int2(_a.x < _b.x ? _a.x : _b.x, _a.y < _b.y ? _a.y : _b.y);
-}
-
-FORCE_INLINE Int2 Int2::Max(Int2 _a, Int2 _b)
-{
-    return Int2(_a.x > _b.x ? _a.x : _b.x, _a.y > _b.y ? _a.y : _b.y);
-}
-
-
-FORCE_INLINE Rect Rect::CenterExtents(Float2 center, Float2 extents)
-{
-    return Rect(Float2::Sub(center, extents), Float2::Add(center, extents));
-}
-
-FORCE_INLINE Rect Rect::Expand(const Rect rc, Float2 expand)
-{
-    return Rect(rc.xmin - expand.x, rc.ymin - expand.y, rc.xmax + expand.x, rc.ymax + expand.y);
-}
-
-FORCE_INLINE bool Rect::TestPoint(const Rect rc, Float2 pt)
-{
-    if (pt.x < rc.xmin || pt.y < rc.ymin || pt.x > rc.xmax || pt.y > rc.ymax)
-        return false;
-    return true;
-}
-
-FORCE_INLINE bool Rect::Test(const Rect rc1, const Rect rc2)
-{
-    if (rc1.xmax < rc2.xmin || rc1.xmin > rc2.xmax)
-        return false;
-    if (rc1.ymax < rc2.ymin || rc1.ymin > rc2.ymax)
-        return false;
-    return true;
-}
-
-FORCE_INLINE void Rect::AddPoint(Rect* rc, Float2 pt)
-{
-    *rc = Rect(Float2::Min(Float2(rc->vmin), pt), Float2::Max(Float2(rc->vmax), pt));
-}
-
-FORCE_INLINE bool Rect::IsEmpty() const
-{
-    return xmin >= xmax || ymin >= ymax;
-}
-
-/*
-*   2               3
-*   -----------------
-*   |               |
-*   |               |
-*   |               |
-*   |               |
-*   |               |
-*   -----------------
-*   0               1
-*/
-FORCE_INLINE Float2 Rect::GetCorner(const Rect* rc, int index)
-{
-    return Float2((index & 1) ? rc->xmax : rc->xmin, (index & 2) ? rc->ymax : rc->ymin);
-}
-
-FORCE_INLINE void Rect::GetCorners(Float2 corners[4], const Rect* rc)
-{
-    for (int i = 0; i < 4; i++)
-        corners[0] = Rect::GetCorner(rc, i);
-}
-
-FORCE_INLINE float Rect::Width() const
-{
-    return xmax - xmin;
-}
-
-FORCE_INLINE float Rect::Height() const
-{
-    return ymax - ymin;
-}
-
-FORCE_INLINE Float2 Rect::Extents(const Rect rc)
-{
-    return Float2::Mul(Float2::Sub(Float2(rc.vmax), Float2(rc.vmin)), 0.5f);
-}
-
-FORCE_INLINE Float2 Rect::Center(const Rect rc)
-{
-    return Float2::Mul(Float2::Add(Float2(rc.vmin), Float2(rc.vmax)), 0.5f);
-}
-
-FORCE_INLINE Rect Rect::Translate(const Rect rc, Float2 pos) 
-{
-    return Rect(Float2::Add(pos, Float2(rc.vmin)), Float2::Add(pos, Float2(rc.vmax)));
-}
-
-FORCE_INLINE RectInt RectInt::Expand(const RectInt rc, Int2 expand)
-{
-    return RectInt(rc.xmin - expand.x, rc.ymin - expand.y, rc.xmax + expand.x, rc.ymax + expand.y);
-}
-
-FORCE_INLINE bool RectInt::TestPoint(const RectInt rc, Int2 pt)
-{
-    if (pt.x < rc.xmin || pt.y < rc.ymin || pt.x > rc.xmax || pt.y > rc.ymax)
-        return false;
-    return true;
-}
-
-FORCE_INLINE bool RectInt::Test(const RectInt rc1, const RectInt rc2)
-{
-    if (rc1.xmax < rc2.xmin || rc1.xmin > rc2.xmax)
-        return false;
-    if (rc1.ymax < rc2.ymin || rc1.ymin > rc2.ymax)
-        return false;
-    return true;
-}
-
-FORCE_INLINE void RectInt::AddPoint(RectInt* rc, Int2 pt)
-{
-    *rc = RectInt(Int2::Min(Int2(rc->vmin), pt), Int2::Max(Int2(rc->vmax), pt));
-}
-
-FORCE_INLINE bool RectInt::IsEmpty() const
-{
-    return xmin >= xmax || ymin >= ymax;
-}    
-
-FORCE_INLINE int RectInt::Width() const
-{
-    return xmax - xmin;
-}
-
-FORCE_INLINE int RectInt::Height() const
-{
-    return ymax - ymin;
-}
-
-/*
-*   2               3 (max)
-*   -----------------
-*   |               |
-*   |               |
-*   |               |
-*   |               |
-*   |               |
-*   -----------------
-*   0 (min)         1
-*/
-FORCE_INLINE Int2 RectInt::GetCorner(const RectInt* rc, int index)
-{
-    return Int2((index & 1) ? rc->xmax : rc->xmin, (index & 2) ? rc->ymax : rc->ymin);
-}
-
-FORCE_INLINE void RectInt::GetCorners(Int2 corners[4], const RectInt* rc)
-{
-    for (int i = 0; i < 4; i++)
-        corners[0] = GetCorner(rc, i);
-}
-
-
-FORCE_INLINE bool AABB::IsEmpty() const
-{
-    return xmin >= xmax || ymin >= ymax || zmin >= zmax;
-}
-
-FORCE_INLINE void AABB::AddPoint(AABB* aabb, Float3 pt)
-{
-    *aabb = AABB(Float3::Min(Float3(aabb->vmin), pt), Float3::Max(Float3(aabb->vmax), pt));
-}
-
-FORCE_INLINE AABB AABB::Unify(const AABB& aabb1, const AABB& aabb2)
-{
-    AABB r = aabb1;
-    AABB::AddPoint(&r, Float3(aabb2.vmin));
-    AABB::AddPoint(&r, Float3(aabb2.vmax));
-    return r;
-}
-
-FORCE_INLINE bool AABB::TestPoint(const AABB& aabb, Float3 pt)
-{
-    if (aabb.xmax < pt.x || aabb.xmin > pt.x)
-        return false;
-    if (aabb.ymax < pt.y || aabb.ymin > pt.y)
-        return false;
-    if (aabb.zmax < pt.z || aabb.zmin > pt.z)
-        return false;
-    return true;
-}
-
-FORCE_INLINE bool AABB::Test(const AABB& aabb1, const AABB& aabb2)
-{
-    if (aabb1.xmax < aabb2.xmin || aabb1.xmin > aabb2.xmax)
-        return false;
-    if (aabb1.ymax < aabb2.ymin || aabb1.ymin > aabb2.ymax)
-        return false;
-    if (aabb1.zmax < aabb2.zmin || aabb1.zmin > aabb2.zmax)
-        return false;
-    return true;    
-}
-
-/*
- *        6                 7
- *        ------------------
- *       /|               /|
- *      / |              / |
- *     /  |             /  |
- *  2 /   |          3 /   |
- *   /----------------/    |
- *   |    |           |    |
- *   |    |           |    |      +Z
- *   |    |           |    |
- *   |    |-----------|----|     |
- *   |   / 4          |   / 5    |  / +Y
- *   |  /             |  /       | /
- *   | /              | /        |/
- *   |/               |/         --------- +X
- *   ------------------
- *  0                 1
- */
-FORCE_INLINE Float3 AABB::GetCorner(const AABB& aabb, int index)
-{
-    ASSERT(index < 8);
-    return Float3((index & 1) ? aabb.xmax : aabb.xmin,
-                  (index & 4) ? aabb.ymax : aabb.ymin,
-                  (index & 2) ? aabb.zmax : aabb.zmin);
-}
-
-FORCE_INLINE void AABB::GetCorners(Float3 corners[8], const AABB& aabb)
-{
-    for (int i = 0; i < 8; i++)
-        corners[i] = AABB::GetCorner(aabb, i);
-}
-
-FORCE_INLINE Float3 AABB::Extents() const
-{
-    return Float3::Mul(Float3(xmax - xmin,  ymax - ymin, zmax - zmin), 0.5f);
-}
-
-FORCE_INLINE Float3 AABB::Center() const
-{
-    return Float3::Mul(Float3::Add(Float3(vmin), Float3(vmax)), 0.5f);
-}
-
-FORCE_INLINE AABB AABB::Translate(const AABB& aabb, Float3 offset)
-{
-    return AABB(Float3::Add(Float3(aabb.vmin), offset), Float3::Add(Float3(aabb.vmax), offset));
-}
-
-FORCE_INLINE AABB AABB::SetPos(const AABB& aabb, Float3 pos)
-{
-    Float3 e = aabb.Extents();
-    return AABB(pos.x - e.x, pos.y - e.y, pos.z - e.z, 
-                pos.x + e.x, pos.y + e.y, pos.z + e.z);
-}
-
-FORCE_INLINE AABB AABB::Expand(const AABB& aabb, Float3 expand)
-{
-    Float3 p = aabb.Center();
-    Float3 e = Float3::Add(aabb.Extents(), expand);
-    return AABB(p.x - e.x, p.y - e.y, p.z - e.z, 
-                p.x + e.x, p.y + e.y, p.z + e.z);
-}
-
-FORCE_INLINE AABB AABB::Scale(const AABB& aabb, Float3 scale)
-{
-    Float3 p = aabb.Center();
-    Float3 e = Float3::Mul(aabb.Extents(), scale);
-    return AABB(p.x - e.x, p.y - e.y, p.z - e.z, 
-                p.x + e.x, p.y + e.y, p.z + e.z);
-}
-
-FORCE_INLINE Transform3D Transform3D::Mul(const Transform3D& txa, const Transform3D& txb)
-{
-    return Transform3D(Float3::Add(Mat3::MulFloat3(txa.rot, txb.pos), txa.pos), Mat3::Mul(txa.rot, txb.rot));
-}
-
-FORCE_INLINE Float3 Transform3D::MulFloat3(const Transform3D& tx, Float3 v)
-{
-    return Float3::Add(Mat3::MulFloat3(tx.rot, v), tx.pos);
-}   
-
-FORCE_INLINE Float3 Transform3D::MulFloat3Scale(const Transform3D& tx, Float3 scale, Float3 v)
-{
-    return Float3::Add(Mat3::MulFloat3(tx.rot, Float3::Mul(v, scale)), tx.pos);
-}
-
-FORCE_INLINE Transform3D Transform3D::Inverse(const Transform3D& tx)
-{   
-    Mat3 rotInv = Mat3::Transpose(tx.rot);
-    return Transform3D(Mat3::MulFloat3(rotInv, Float3::Mul(tx.pos, -1.0f)), rotInv);
-}
-
-FORCE_INLINE Float3 Transform3D::MulFloat3Inverse(const Transform3D& tx, Float3 v)
-{   
-    Mat3 rmat = Mat3::Transpose(tx.rot);
-    return Mat3::MulFloat3(rmat, Float3::Sub(v, tx.pos));
-}
-
-FORCE_INLINE Transform3D Transform3D::MulInverse(const Transform3D& txa, const Transform3D& txb)
-{
-    return Transform3D(Mat3::MulFloat3Inverse(txa.rot, Float3::Sub(txb.pos, txa.pos)), Mat3::MulInverse(txa.rot, txb.rot));
-}
-
-FORCE_INLINE Mat4 Transform3D::ToMat4(const Transform3D& tx)
-{
-    return Mat4(Float4(Float3(tx.rot.fc1), 0.0f),
-                Float4(Float3(tx.rot.fc2), 0.0f),
-                Float4(Float3(tx.rot.fc3), 0.0f),
-                Float4(tx.pos,             1.0f));
-}
-
-FORCE_INLINE Transform3D Transform3D::Make(float x, float y, float z, float rx, float ry, float rz)
-{
-    Mat4 rot = Mat4::RotateXYZ(rx, ry, rz);
-    return Transform3D(Float3(x, y, z), Mat3(rot.fc1, rot.fc2, rot.fc3));
-}
-
-FORCE_INLINE Transform3D Transform3D::FromMat4(const Mat4& mat)
-{
-    return Transform3D(Float3(mat.fc4),  Mat3(mat.fc1, mat.fc2, mat.fc3));
-}
-
-
-                                                                                                           
-FORCE_INLINE Float2 operator+(Float2 a, Float2 b)
-{
-    return Float2::Add(a, b);
-}
-
-FORCE_INLINE Float2 operator-(Float2 a, Float2 b)
-{
-    return Float2::Sub(a, b);
-}
-
-FORCE_INLINE Float2 operator*(Float2 v, float k)
-{
-    return Float2::Mul(v, k);
-}
-
-FORCE_INLINE Float2 operator*(float k, Float2 v)
-{
-    return Float2::Mul(v, k);
-}
-
-FORCE_INLINE Float2 operator*(Float2 v0, Float2 v1)
-{
-    return Float2::Mul(v0, v1);
-}
-
-FORCE_INLINE Int2 operator+(Int2 a, Int2 b)
-{
-    return Int2::Add(a, b);
-}
-
-FORCE_INLINE Int2 operator-(Int2 a, Int2 b)
-{
-    return Int2::Sub(a, b);
-}
-
-FORCE_INLINE Float3 operator+(Float3 v1, Float3 v2)
-{
-    return Float3::Add(v1, v2);
-}
-
-FORCE_INLINE Float3 operator-(Float3 v1, Float3 v2)
-{
-    return Float3::Sub(v1, v2);
-}
-
-FORCE_INLINE Float3 operator*(Float3 v, float k)
-{
-    return Float3::Mul(v, k);
-}
-
-FORCE_INLINE Float3 operator*(float k, Float3 v)
-{
-    return Float3::Mul(v, k);
-}
-
-FORCE_INLINE Mat4 operator*(const Mat4& a, const Mat4& b)
-{
-    return Mat4::Mul(a, b);
-}
-
-FORCE_INLINE Mat3 operator*(const Mat3& a, const Mat3& b)
-{
-    return Mat3::Mul(a, b);
-}
-
-FORCE_INLINE Quat operator*(const Quat& a, const Quat& b)
-{
-    return Quat::Mul(a, b);
-}
-
-
-namespace M
-{
-    FORCE_INLINE float  Float2Dot(Float2 _a, Float2 _b) { return Float2::Dot(_a, _b); }
-    FORCE_INLINE float  Float2Len(Float2 _a) { return Float2::Len(_a); }
-    FORCE_INLINE Float2 Float2Norm(Float2 _a) { return Float2::Norm(_a); }
-    FORCE_INLINE Float2 Float2NormLen(Float2 _a, float* outlen) { return Float2::NormLen(_a, outlen); }
-    FORCE_INLINE Float2 Float2Min(Float2 _a, Float2 _b) { return Float2::Min(_a, _b); }
-    FORCE_INLINE Float2 Float2Max(Float2 _a, Float2 _b) { return Float2::Max(_a, _b); }
-    FORCE_INLINE Float2 Float2Lerp(Float2 _a, Float2 _b, float _t) { return Float2::Lerp(_a, _b, _t); }
-    FORCE_INLINE Float2 Float2Abs(Float2 _a) { return Float2::Abs(_a); }
-    FORCE_INLINE Float2 Float2Neg(Float2 _a) { return Float2::Neg(_a); }
-    FORCE_INLINE Float2 Float2Add(Float2 _a, Float2 _b) { return Float2::Add(_a, _b); }
-    FORCE_INLINE Float2 Float2Add(Float2 _a, float _b) { return Float2::Add(_a, _b); }
-    FORCE_INLINE Float2 Float2Sub(Float2 _a, Float2 _b) { return Float2::Sub(_a, _b); }
-    FORCE_INLINE Float2 Float2Sub(Float2 _a, float _b) { return Float2::Sub(_a, _b); }
-    FORCE_INLINE Float2 Float2Mul(Float2 _a, Float2 _b) { return Float2::Mul(_a, _b); }
-    FORCE_INLINE Float2 Float2Mul(Float2 _a, float _b) { return Float2::Mul(_a, _b); }
-    FORCE_INLINE Float2 Float2CalcLinearFit2D(const Float2* _points, int _num) { return Float2::CalcLinearFit2D(_points, _num); }
-
-    FORCE_INLINE Float3 Float3Abs(Float3 _a) { return Float3::Abs(_a); }
-    FORCE_INLINE Float3 Float3Neg(Float3 _a) { return Float3::Neg(_a); }
-    FORCE_INLINE Float3 Float3Add(Float3 _a, Float3 _b) { return Float3::Add(_a, _b); }
-    FORCE_INLINE Float3 Float3Add(Float3 _a, float _b) { return Float3::Add(_a, _b); }
-    FORCE_INLINE Float3 Float3Sub(Float3 _a, Float3 _b) { return Float3::Sub(_a, _b); }
-    FORCE_INLINE Float3 Float3Sub(Float3 _a, float _b) { return Float3::Sub(_a, _b); }
-    FORCE_INLINE Float3 Float3Mul(Float3 _a, Float3 _b) { return Float3::Mul(_a, _b); }
-    FORCE_INLINE Float3 Float3Mul(Float3 _a, float _b) { return Float3::Mul(_a, _b); }
-    FORCE_INLINE float  Float3Dot(Float3 _a, Float3 _b) { return Float3::Dot(_a, _b); }
-    FORCE_INLINE Float3 Float3Cross(Float3 _a, Float3 _b) { return Float3::Cross(_a, _b); }
-    FORCE_INLINE float  Float3Len(Float3 _a) { return Float3::Len(_a); }
-    FORCE_INLINE Float3 Float3Lerp(Float3 _a, Float3 _b, float _t) { return Float3::Lerp(_a, _b, _t); }
-    FORCE_INLINE Float3 Float3SmoothLerp(Float3 _a, Float3 _b, float _dt, float _h) { return Float3::SmoothLerp(_a, _b, _dt, _h); }
-    FORCE_INLINE Float3 Float3Norm(Float3 _a) { return Float3::Norm(_a); }
-    FORCE_INLINE Float3 Float3NormLen(Float3 _a, float* _outlen) { return Float3::NormLen(_a, _outlen); }
-    FORCE_INLINE Float3 Float3Min(Float3 _a, Float3 _b) { return Float3::Min(_a, _b); }
-    FORCE_INLINE Float3 Float3Max(Float3 _a, Float3 _b) { return Float3::Max(_a, _b); }
-    FORCE_INLINE Float3 Float3Rcp(Float3 _a) { return Float3::Rcp(_a); }
-    FORCE_INLINE void   Float3Tangent(Float3* _t, Float3* _b, Float3 _n) { Float3::Tangent(_t, _b, _n); }
-    FORCE_INLINE void   Float3TangentAngle(Float3* _t, Float3* _b, Float3 _n, float _angle) { Float3::TangentAngle(_t, _b, _n, _angle); }
-    FORCE_INLINE Float3 Float3FromLatLong(float _u, float _v) { return Float3::FromLatLong(_u, _v); }
-    FORCE_INLINE Float2 Float3ToLatLong(Float3 _dir) { return Float3::ToLatLong(_dir); }
-    FORCE_INLINE Float3 Float3CalcLinearFit3D(const Float3* _points, int _num) { return Float3::CalcLinearFit3D(_points, _num); }
-
-    FORCE_INLINE Float4 Float4Mul(Float4 _a, Float4 _b) { return Float4::Mul(_a, _b); }
-    FORCE_INLINE Float4 Float4Mul(Float4 _a, float _b) { return Float4::Mul(_a, _b); }
-    FORCE_INLINE Float4 Float4Add(Float4 _a, Float4 _b) { return Float4::Add(_a, _b); }
-    FORCE_INLINE Float4 Float4Sub(Float4 _a, Float4 _b) { return Float4::Sub(_a, _b); }
-
-    FORCE_INLINE float ColorValueToLinear(float _a) { return Color4u::ValueToLinear(_a); }
-    FORCE_INLINE float ColorValueToGamma(float _a) { return Color4u::ValueToGamma(_a); }
-    FORCE_INLINE Float4 ColorToFloat4(Color4u c) { return Color4u::ToFloat4(c); }
-    FORCE_INLINE Color4u  ColorBlend(Color4u _a, Color4u _b, float _t) { return Color4u::Blend(_a, _b, _t); }
-    FORCE_INLINE Float4 ColorToFloat4SRGB(Float4 cf) { return Color4u::ToFloat4SRGB(cf); }
-    FORCE_INLINE Float4 ColorToFloat4Linear(Float4 c) { return Color4u::ToFloat4Linear(c); }
-    FORCE_INLINE Float3 ColorRGBtoHSV(Float3 rgb) { return Color4u::RGBtoHSV(rgb); }
-    FORCE_INLINE Float3 ColorHSVtoRGB(Float3 hsv) { return Color4u::HSVtoRGB(hsv); }
-
-    FORCE_INLINE Int2 Int2Add(Int2 _a, Int2 _b) { return Int2::Add(_a, _b); }
-    FORCE_INLINE Int2 Int2Sub(Int2 _a, Int2 _b) { return Int2::Sub(_a, _b); }
-    FORCE_INLINE Int2 Int2Min(Int2 _a, Int2 _b) { return Int2::Min(_a, _b); }
-    FORCE_INLINE Int2 Int2Max(Int2 _a, Int2 _b) { return Int2::Max(_a, _b); }
-
-    FORCE_INLINE Float3 QuatMulXYZ(Quat _qa, Quat _qb) { return Quat::MulXYZ(_qa, _qb); }
-    FORCE_INLINE Quat   QuatMul(Quat p, Quat q) { return Quat::Mul(p, q); }
-    FORCE_INLINE Quat   QuatInverse(Quat _q) { return Quat::Inverse(_q); }
-    FORCE_INLINE float  QuatDot(Quat _a, Quat _b) { return Quat::Dot(_a, _b); }
-    FORCE_INLINE float  QuatAngle(Quat _a, Quat _b) { return Quat::Angle(_a, _b); }
-    FORCE_INLINE Quat   QuatNorm(Quat _q) { return Quat::Norm(_q); }
-    FORCE_INLINE Quat   QuatRotateAxis(Float3 _axis, float _angle) { return Quat::RotateAxis(_axis, _angle); }
-    FORCE_INLINE Quat   QuatRotateX(float _ax) { return Quat::RotateX(_ax); }
-    FORCE_INLINE Quat   QuatRotateY(float _ay) { return Quat::RotateY(_ay); }
-    FORCE_INLINE Quat   QuatRotateZ(float _az) { return Quat::RotateZ(_az); }
-    FORCE_INLINE Quat   QuatLerp(Quat _a, Quat _b, float t) { return Quat::Lerp(_a, _b, t); }
-    FORCE_INLINE Quat   QuatSlerp(Quat _a, Quat _b, float t) { return Quat::Slerp(_a, _b, t); }
-    FORCE_INLINE Float3 QuatToEuler(Quat _q) { return Quat::ToEuler(_q); }
-    FORCE_INLINE Quat   QuatFromEuler(Float3 _float3) { return Quat::FromEuler(_float3); }
-    FORCE_INLINE Float3 QuatTransformFloat3(Float3 v, Quat q) { return Quat::TransformFloat3(v, q); }
-
-    FORCE_INLINE Mat3   Mat3Transpose(const Mat3& _a) { return Mat3::Transpose(_a); }
-    FORCE_INLINE Float3 Mat3MulFloat3(const Mat3& _mat, Float3 _vec) { return Mat3::MulFloat3(_mat, _vec); }
-    FORCE_INLINE Mat3   Mat3MulInverse(const Mat3& _a, const Mat3& _b) { return Mat3::MulInverse(_a, _b); }
-    FORCE_INLINE Float3 Mat3MulFloat3Inverse(const Mat3& mat, Float3 v) { return Mat3::MulFloat3Inverse(mat, v); }
-    FORCE_INLINE Float2 Mat3MulFloat2(const Mat3& _mat, Float2 _vec) { return Mat3::MulFloat2(_mat, _vec); }
-    FORCE_INLINE Mat3   Mat3Translate(float x, float y) { return Mat3::Translate(x, y); }
-    FORCE_INLINE Mat3   Mat3TranslateFloat2(Float2 p) { return Mat3::TranslateFloat2(p); }
-    FORCE_INLINE Mat3   Mat3Rotate(float theta) { return Mat3::Rotate(theta); }
-    FORCE_INLINE Mat3   Mat3Scale(float sx, float sy) { return Mat3::Scale(sx, sy); }
-    FORCE_INLINE Mat3   Mat3ScaleRotateTranslate(float sx, float sy, float angle, float tx, float ty) { return Mat3::ScaleRotateTranslate(sx, sy, angle, tx, ty); }
-    FORCE_INLINE Mat3   Mat3Inverse(const Mat3& _a) { return Mat3::Inverse(_a); }
-    FORCE_INLINE Mat3   Mat3Mul(const Mat3& _a, const Mat3& _b) { return Mat3::Mul(_a, _b); }
-    FORCE_INLINE Mat3   Mat3Abs(const Mat3& m) { return Mat3::Abs(m); }
-    FORCE_INLINE Mat3   Mat3FromQuat(Quat q) { return Mat3::FromQuat(q); }
-
-    FORCE_INLINE Mat4   Mat4Translate(float _tx, float _ty, float _tz) { return Mat4::Translate(_tx, _ty, _tz); }
-    FORCE_INLINE Mat4   Mat4Scale(float _sx, float _sy, float _sz) { return Mat4::Scale(_sx, _sy, _sz); }
-    FORCE_INLINE Mat4   Mat4Scalef(float _scale) { return Mat4::Scale(_scale); }
-    FORCE_INLINE Mat4   Mat4RotateX(float _ax) { return Mat4::RotateX(_ax); }
-    FORCE_INLINE Mat4   Mat4RotateY(float _ay) { return Mat4::RotateY(_ay); }
-    FORCE_INLINE Mat4   Mat4RotateZ(float _az) { return Mat4::RotateZ(_az); }
-    FORCE_INLINE Mat4   Mat4RotateXY(float _ax, float _ay) { return Mat4::RotateXY(_ax, _ay); }
-    FORCE_INLINE Mat4   Mat4RotateXYZ(float _ax, float _ay, float _az) { return Mat4::RotateXYZ(_ax, _ay, _az); }
-    FORCE_INLINE Mat4   Mat4RotateZYX(float _ax, float _ay, float _az) { return Mat4::RotateZYX(_ax, _ay, _az); }
-    FORCE_INLINE Mat4   Mat4ToQuatTranslate(Quat _quat, Float3 _translation) { return Mat4::ToQuatTranslate(_quat, _translation); }
-    FORCE_INLINE Mat4   Mat4ToQuatTranslateHMD(Quat _quat, Float3 _translation) { return Mat4::ToQuatTranslateHMD(_quat, _translation); }
-    FORCE_INLINE Float3 Mat4MulFloat3(const Mat4& _mat, Float3 _vec) { return Mat4::MulFloat3(_mat, _vec); }
-    FORCE_INLINE Float3 Mat4MulFloat3_xyz0(const Mat4& _mat, Float3 _vec) { return Mat4::MulFloat3_xyz0(_mat, _vec); }
-    FORCE_INLINE Float3 Mat4MulFloat3H(const Mat4& _mat, Float3 _vec) { return Mat4::MulFloat3H(_mat, _vec); }
-    FORCE_INLINE Float4 Mat4MulFloat4(const Mat4& _mat, Float4 _vec) { return Mat4::MulFloat4(_mat, _vec); }
-    FORCE_INLINE Mat4   Mat4Transpose(const Mat4& _a) { return Mat4::Transpose(_a); }
-    FORCE_INLINE void   Mat4ProjFlipHandedness(Mat4* _dst, const Mat4& _src) { return Mat4::ProjFlipHandedness(_dst, _src); }
-    FORCE_INLINE void   Mat4ViewFlipHandedness(Mat4* _dst, const Mat4& _src) { return Mat4::ViewFlipHandedness(_dst, _src); }
-    FORCE_INLINE Mat4   Mat4FromNormal(Float3 _normal, float _scale, Float3 _pos) { return Mat4::FromNormal(_normal, _scale, _pos); }
-    FORCE_INLINE Mat4   Mat4FromNormalAngle(Float3 _normal, float _scale, Float3 _pos, float _angle) { return Mat4::FromNormalAngle(_normal, _scale, _pos, _angle); }
-    FORCE_INLINE Mat4   Mat4ViewLookAt(Float3 eye, Float3 target, Float3 up) { return Mat4::ViewLookAt(eye, target, up); }
-    FORCE_INLINE Mat4   Mat4ViewLookAtLH(Float3 eye, Float3 target, Float3 up) { return Mat4::ViewLookAtLH(eye, target, up); }
-    FORCE_INLINE Mat4   Mat4ViewFPS(Float3 eye, float pitch, float yaw) { return Mat4::ViewFPS(eye, pitch, yaw); }
-    FORCE_INLINE Mat4   Mat4ViewArcBall(Float3 move, Quat rot, Float3 targetPos) { return Mat4::ViewArcBall(move, rot, targetPos); }
-    FORCE_INLINE Mat4   Mat4Perspective(float width, float height, float zn, float zf, bool d3dNdc = false) { return Mat4::Perspective(width, height, zn, zf, d3dNdc); }
-    FORCE_INLINE Mat4   Mat4PerspectiveLH(float width, float height, float zn, float zf, bool d3dNdc = false) { return Mat4::PerspectiveLH(width, height, zn, zf, d3dNdc); }
-    FORCE_INLINE Mat4   Mat4PerspectiveOffCenter(float xmin, float ymin, float xmax, float ymax,
-                                                 float zn, float zf, bool d3dNdc = false) { return Mat4::PerspectiveOffCenter(xmin, ymin, xmax, ymax, zn, zf, d3dNdc); }
-    FORCE_INLINE Mat4   Mat4PerspectiveOffCenterLH(float xmin, float ymin, float xmax, float ymax,
-                                                   float zn, float zf, bool d3dNdc = false) { return Mat4::PerspectiveOffCenterLH(xmin, ymin, xmax, ymax, zn, zf, d3dNdc); }
-    FORCE_INLINE Mat4   Mat4PerspectiveFOV(float fov_y, float aspect, float zn, float zf, bool d3dNdc = false) { return Mat4::PerspectiveFOV(fov_y, aspect, zn, zf, d3dNdc); }
-    FORCE_INLINE Mat4   Mat4PerspectiveFOVLH(float fov_y, float aspect, float zn, float zf, bool d3dNdc = false) { return Mat4::PerspectiveFOVLH(fov_y, aspect, zn, zf, d3dNdc); }
-    FORCE_INLINE Mat4   Mat4Ortho(float width, float height, float zn, float zf, float offset = 0, bool d3dNdc = false) { return Mat4::Ortho(width, height, zn, zf, offset, d3dNdc); }
-    FORCE_INLINE Mat4   Mat4OrthoLH(float width, float height, float zn, float zf, float offset = 0, bool d3dNdc = false) { return Mat4::OrthoLH(width, height, zn, zf, offset, d3dNdc); }
-    FORCE_INLINE Mat4   Mat4OrthoOffCenter(float xmin, float ymin, float xmax, float ymax, float zn,
-                                           float zf, float offset = 0, bool d3dNdc = false) { return Mat4::OrthoOffCenter(xmin, ymin, xmax, ymax, zn, zf, offset, d3dNdc); }
-    FORCE_INLINE Mat4   Mat4OrthoOffCenterLH(float xmin, float ymin, float xmax, float ymax, float zn,
-                                             float zf, float offset = 0, bool d3dNdc = false) { return Mat4::OrthoOffCenterLH(xmin, ymin, xmax, ymax, zn, zf, offset, d3dNdc); }
-    FORCE_INLINE Mat4   Mat4ScaleRotateTranslate(float _sx, float _sy, float _sz, 
-                                                 float _ax, float _ay, float _az,
-                                                 float _tx, float _ty, float _tz) { return Mat4::ScaleRotateTranslate(_sx, _sy, _sz, _ax, _ay, _az, _tx, _ty, _tz); }
-    FORCE_INLINE Mat4   Mat4Mul(const Mat4& _a, const Mat4& _b) { return Mat4::Mul(_a, _b); }
-    FORCE_INLINE Mat4   Mat4Inverse(const Mat4& _a) { return Mat4::Inverse(_a); }
-    FORCE_INLINE Mat4   Mat4InverseTransformMat(const Mat4& _a) { return Mat4::InverseTransformMat(_a); }
-    FORCE_INLINE Quat   Mat4ToQuat(const Mat4& _mat) { return Mat4::ToQuat(_mat); }
-    FORCE_INLINE Mat4   Mat4FromQuat(Quat q) { return Mat4::FromQuat(q); }
-    FORCE_INLINE Mat4   Mat4ProjectPlane(Float3 planeNormal) { return Mat4::ProjectPlane(planeNormal); }
-
-    FORCE_INLINE Rect   RectCenterExtents(Float2 center, Float2 extents) { return Rect::CenterExtents(center, extents); }
-    FORCE_INLINE Rect   RectExpand(const Rect rc, Float2 expand) { return Rect::Expand(rc, expand); }
-    FORCE_INLINE bool   RectTestPoint(const Rect rc, Float2 pt) { return Rect::TestPoint(rc, pt); }
-    FORCE_INLINE bool   RectTest(const Rect rc1, const Rect rc2) { return Rect::Test(rc1, rc2); }
-    FORCE_INLINE void   RectAddPoint(Rect* rc, Float2 pt) { Rect::AddPoint(rc, pt); }
-    FORCE_INLINE Float2 RectGetCorner(const Rect* rc, int index) { return Rect::GetCorner(rc, index); }
-    FORCE_INLINE void   RectGetCorners(Float2 corners[4], const Rect* rc) { Rect::GetCorners(corners, rc); }
-    FORCE_INLINE Float2 RectExtents(const Rect rc) { return Rect::Extents(rc); }
-    FORCE_INLINE Float2 RectCenter(const Rect rc) { return Rect::Center(rc); }
-    FORCE_INLINE Rect   RectTranslate(const Rect rc, Float2 pos) { return Rect::Translate(rc, pos); }
-
-    FORCE_INLINE RectInt  RectIntExpand(const RectInt rc, Int2 expand) { return RectInt::Expand(rc, expand); }
-    FORCE_INLINE bool     RectIntTestPoint(const RectInt rc, Int2 pt) { return RectInt::TestPoint(rc, pt); }
-    FORCE_INLINE bool     RectIntTest(const RectInt rc1, const RectInt rc2) { return RectInt::Test(rc1, rc2); }
-    FORCE_INLINE void     RectIntAddPoint(RectInt* rc, Int2 pt) { return RectInt::AddPoint(rc, pt); }
-    FORCE_INLINE Int2     RectIntGetCorner(const RectInt* rc, int index) { return RectInt::GetCorner(rc, index); }
-    FORCE_INLINE void     RectIntGetCorners(Int2 corners[4], const RectInt* rc) { return RectInt::GetCorners(corners, rc); }
-
-    FORCE_INLINE void   AABBAddPoint(AABB* aabb, Float3 pt) { return AABB::AddPoint(aabb, pt); }
-    FORCE_INLINE AABB   AABBUnify(const AABB& aabb1, const AABB& aabb2) { return AABB::Unify(aabb1, aabb2); }
-    FORCE_INLINE bool   AABBTestPoint(const AABB& aabb, Float3 pt) { return AABB::TestPoint(aabb, pt); }
-    FORCE_INLINE bool   AABBTest(const AABB& aabb1, const AABB& aabb2) { return AABB::Test(aabb1, aabb2); }
-    FORCE_INLINE Float3 AABBGetCorner(const AABB& aabb, int index) { return AABB::GetCorner(aabb, index); }
-    FORCE_INLINE void   AABBGetCorners(Float3 corners[8], const AABB& aabb) { return AABB::GetCorners(corners, aabb); }
-    FORCE_INLINE AABB   AABBTranslate(const AABB& aabb, Float3 offset) { return AABB::Translate(aabb, offset); }
-    FORCE_INLINE AABB   AABBSetPos(const AABB& aabb, Float3 pos) { return AABB::SetPos(aabb, pos); }
-    FORCE_INLINE AABB   AABBExpand(const AABB& aabb, Float3 expand) { return AABB::Expand(aabb, expand); }
-    FORCE_INLINE AABB   AABBScale(const AABB& aabb, Float3 scale) { return AABB::Scale(aabb, scale); }
-    FORCE_INLINE AABB   AABBTransform(const AABB& aabb, const Mat4& mat) { return AABB::Transform(aabb, mat); }
-
-    FORCE_INLINE Float3 PlaneCalcNormal(Float3 _va, Float3 _vb, Float3 _vc) { return Plane::CalcNormal(_va, _vb, _vc); }
-    FORCE_INLINE Plane  PlaneFrom3Points(Float3 _va, Float3 _vb, Float3 _vc) { return Plane::From3Points(_va, _vb, _vc); }
-    FORCE_INLINE Plane  PlaneFromNormalPoint(Float3 _normal, Float3 _p) { return Plane::FromNormalPoint(_normal, _p); }
-    FORCE_INLINE float  PlaneDistance(Plane _plane, Float3 _p) { return Plane::Distance(_plane, _p); }
-    FORCE_INLINE Float3 PlaneProjectPoint(Plane _plane, Float3 _p) { return Plane::ProjectPoint(_plane, _p); }
-    FORCE_INLINE Float3 PlaneOrigin(Plane _plane) { return Plane::Origin(_plane); }
-
-    FORCE_INLINE Transform3D Transform3DMul(const Transform3D& txa, const Transform3D& txb) { return Transform3D::Mul(txa, txb); }
-    FORCE_INLINE Float3      Transform3DMulFloat3(const Transform3D& tx, Float3 v) { return Transform3D::MulFloat3(tx, v); }
-    FORCE_INLINE Float3      Transform3DMulFloat3Scale(const Transform3D& tx, Float3 scale, Float3 v) { return Transform3D::MulFloat3Scale(tx, scale, v); }
-    FORCE_INLINE Transform3D Transform3DInverse(const Transform3D& tx) { return Transform3D::Inverse(tx); }
-    FORCE_INLINE Float3      Transform3DMulFloat3Inverse(const Transform3D& tx, Float3 v) { return Transform3D::MulFloat3Inverse(tx, v); }
-    FORCE_INLINE Transform3D Transform3DMulInverse(const Transform3D& txa, const Transform3D& txb) { return Transform3D::MulInverse(txa, txb); }
-    FORCE_INLINE Mat4        Transform3DToMat4(const Transform3D& tx) { return Transform3D::ToMat4(tx); }
-    FORCE_INLINE Transform3D Transform3DMake(float x, float y, float z, float rx, float ry, float rz) { return Transform3D::Make(x, y, z, rx, ry, rz); }
-    FORCE_INLINE Transform3D Transform3DFromMat4(const Mat4& mat) { return Transform3D::FromMat4(mat); }
-
-    FORCE_INLINE AABB BoxToAABB(const Box& box) { return Box::ToAABB(box); } 
-}
-
-
-
-struct JsonContext;
-
-struct JsonErrorLocation
-{
-    uint32 line;
-    uint32 col;
-};
-
-namespace Json
-{
-    API JsonContext* Parse(const char* json5, uint32 json5Len, JsonErrorLocation* outErrLoc, MemAllocator* alloc = Mem::GetDefaultAlloc());
-    API void Destroy(JsonContext* ctx);
-}
-
-struct JsonNode
-{
-    JsonNode() = default;
-    explicit JsonNode(JsonContext* _ctx);
-    explicit JsonNode(JsonContext* _ctx, int _tokenId, int _itemIndex = 0);
-
-    bool HasChild(const char* _childNode) const;    
-
-    JsonNode GetChild(const char* _childNode) const;
-    JsonNode GetChildItem(uint32 _index = 0) const;
-    JsonNode GetNextChildItem(const JsonNode& curChildItem) const;
-    uint32 GetChildCount() const;
-
-    JsonNode GetArrayItem(uint32 _index = 0) const;
-    JsonNode GetNextArrayItem(const JsonNode& curItem) const;
-    uint32 GetArrayCount() const;
-
-    bool IsValid() const;
-    bool IsObject() const;
-    bool IsArray() const;
-
-    const char* GetKey(char* outKey, uint32 keySize) const;
-    const char* GetValue(char* outValue, uint32 valueSize) const;
-
-    template <typename _T> _T GetValue() const;
-    template <typename _T> uint32 GetArrayValues(_T* _values, uint32 _maxValues) const;
-
-    template <typename _T> _T GetChildValue(const char* _childNode, _T _defaultValue);
-    template <typename _T> uint32 GetChildArrayValues(const char* _childNode, _T* _values, uint32 _maxValues);
-
-private:
-    JsonContext* mCtx = nullptr;
-    int mTokenId = -1;
-    int mItemIndex = 0;
-};
-
-typedef struct cj5_result cj5_result;
-extern "C" {
-    int cj5_seek(cj5_result* r, int parent_id, const char* key);
-    int cj5_seek_hash(cj5_result* r, int parent_id, const uint32_t key_hash);
-    int cj5_seek_recursive(cj5_result* r, int parent_id, const char* key);
-    const char* cj5_get_string(cj5_result* r, int id, char* str, int max_str);
-    double cj5_get_double(cj5_result* r, int id);
-    float cj5_get_float(cj5_result* r, int id);
-    int cj5_get_int(cj5_result* r, int id);
-    uint32_t cj5_get_uint(cj5_result* r, int id);
-    uint64_t cj5_get_uint64(cj5_result* r, int id);
-    int64_t cj5_get_int64(cj5_result* r, int id);
-    bool cj5_get_bool(cj5_result* r, int id);
-    double cj5_seekget_double(cj5_result* r, int parent_id, const char* key, double def_val);
-    float cj5_seekget_float(cj5_result* r, int parent_id, const char* key, float def_val);
-    int cj5_seekget_array_int16(cj5_result* r, int parent_id, const char* key, int16_t* values, int max_values);
-    int cj5_seekget_array_uint16(cj5_result* r, int parent_id, const char* key, uint16_t* values, int max_values);
-    int cj5_seekget_int(cj5_result* r, int parent_id, const char* key, int def_val);
-    uint32_t cj5_seekget_uint(cj5_result* r, int parent_id, const char* key, uint32_t def_val);
-    uint64_t cj5_seekget_uint64(cj5_result* r, int parent_id, const char* key, uint64_t def_val);
-    int64_t cj5_seekget_int64(cj5_result* r, int parent_id, const char* key, int64_t def_val);
-    bool cj5_seekget_bool(cj5_result* r, int parent_id, const char* key, bool def_val);
-    const char* cj5_seekget_string(cj5_result* r, int parent_id, const char* key, char* str, int max_str, const char* def_val);
-    int cj5_seek(cj5_result* r, int parent_id, const char* key);
-    int cj5_seekget_array_double(cj5_result* r, int parent_id, const char* key, double* values, int max_values);
-    int cj5_seekget_array_float(cj5_result* r, int parent_id, const char* key, float* values, int max_values);
-    int cj5_seekget_array_int(cj5_result* r, int parent_id, const char* key, int* values, int max_values);
-    int cj5_seekget_array_uint(cj5_result* r, int parent_id, const char* key, uint32_t* values, int max_values);
-    int cj5_seekget_array_uint64(cj5_result* r, int parent_id, const char* key, uint64_t* values, int max_values);
-    int cj5_seekget_array_int64(cj5_result* r, int parent_id, const char* key, int64_t* values, int max_values);
-    int cj5_seekget_array_bool(cj5_result* r, int parent_id, const char* key, bool* values, int max_values);
-    int cj5_seekget_array_string(cj5_result* r, int parent_id, const char* key, char** strs, int max_str, int max_values);
-    int cj5_get_array_elem(cj5_result* r, int id, int index);
-    int cj5_get_array_elem_incremental(cj5_result* r, int id, int index, int prev_elem);
-}
-
-inline JsonNode::JsonNode(JsonContext* _ctx) : mCtx(_ctx), mTokenId(0), mItemIndex(0) 
-{
-    ASSERT(_ctx);
-}
-
-inline JsonNode::JsonNode(JsonContext* _ctx, int _tokenId, int _itemIndex) : mCtx(_ctx), mTokenId(_tokenId), mItemIndex(_itemIndex) 
-{
-    ASSERT(_ctx);
-}
-
-inline bool JsonNode::HasChild(const char* _childNode) const
-{
-    return cj5_seek(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode) != -1;
-}
-
-inline JsonNode JsonNode::GetChild(const char* _childNode) const
-{
-    int id = cj5_seek(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode);
-    return JsonNode(mCtx, id);
-}
-
-inline bool JsonNode::IsValid() const
-{
-    return mCtx && mTokenId > -1;
-}
-
-template <> inline uint32 JsonNode::GetArrayValues(uint32* _values, uint32 _maxValues) const
-{
-    return (uint32)cj5_seekget_array_uint(reinterpret_cast<cj5_result*>(mCtx), mTokenId, nullptr, _values, _maxValues);
-}
-
-template <> inline uint32 JsonNode::GetArrayValues(float* _values, uint32 _maxValues) const
-{
-    return (uint32)cj5_seekget_array_float(reinterpret_cast<cj5_result*>(mCtx), mTokenId, nullptr, _values, _maxValues);
-}
-
-template <> inline uint32 JsonNode::GetArrayValues(double* _values, uint32 _maxValues) const
-{
-    return (uint32)cj5_seekget_array_double(reinterpret_cast<cj5_result*>(mCtx), mTokenId, nullptr, _values, _maxValues);
-}
-
-template <> inline uint32 JsonNode::GetArrayValues(uint64* _values, uint32 _maxValues) const
-{
-    return (uint32)cj5_seekget_array_uint64(reinterpret_cast<cj5_result*>(mCtx), mTokenId, nullptr, _values, _maxValues);
-}
-
-template <> inline uint32 JsonNode::GetArrayValues(int* _values, uint32 _maxValues) const
-{
-    return (uint32)cj5_seekget_array_int(reinterpret_cast<cj5_result*>(mCtx), mTokenId, nullptr, _values, _maxValues);
-}
-
-template <> inline uint32 JsonNode::GetArrayValues(bool* _values, uint32 _maxValues) const
-{
-    return (uint32)cj5_seekget_array_bool(reinterpret_cast<cj5_result*>(mCtx), mTokenId, nullptr, _values, _maxValues);
-}
-
-template <> inline bool JsonNode::GetValue() const
-{
-    return cj5_get_bool(reinterpret_cast<cj5_result*>(mCtx), mTokenId);
-}
-
-template <> inline int JsonNode::GetValue() const
-{
-    return cj5_get_int(reinterpret_cast<cj5_result*>(mCtx), mTokenId);
-}
-
-template <> inline float JsonNode::GetValue() const
-{
-    return cj5_get_float(reinterpret_cast<cj5_result*>(mCtx), mTokenId);
-}
-
-template <> inline double JsonNode::GetValue() const
-{
-    return cj5_get_double(reinterpret_cast<cj5_result*>(mCtx), mTokenId);
-}
-
-template <> inline uint32 JsonNode::GetValue() const
-{
-    return cj5_get_uint(reinterpret_cast<cj5_result*>(mCtx), mTokenId);
-}
-
-template <> inline uint64 JsonNode::GetValue() const
-{
-    return cj5_get_uint64(reinterpret_cast<cj5_result*>(mCtx), mTokenId);
-}
-
-template <> inline Float4 JsonNode::GetValue() const
-{
-    Float4 v;
-    [[maybe_unused]] uint32 n = GetArrayValues<float>(v.f, 4);
-    ASSERT(n == 4);
-    return v;
-}
-
-template <> inline Float2 JsonNode::GetValue() const
-{
-    Float2 v;
-    [[maybe_unused]] uint32 n = GetArrayValues<float>(v.f, 2);
-    ASSERT(n == 2);
-    return v;
-}
-
-template <> inline Float3 JsonNode::GetValue() const
-{
-    Float3 v;
-    [[maybe_unused]] uint32 n = GetArrayValues<float>(v.f, 3);
-    ASSERT(n == 3);
-    return v;
-}
-
-template <> inline Int2 JsonNode::GetValue() const
-{
-    Int2 v;
-    [[maybe_unused]] uint32 n = GetArrayValues<int>(v.n, 2);
-    ASSERT(n == 2);
-    return v;
-}
-
-template <> inline uint32 JsonNode::GetChildValue(const char* _childNode, uint32 _defaultValue)
-{
-    return cj5_seekget_uint(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _defaultValue);
-}
-
-template <> inline uint64 JsonNode::GetChildValue(const char* _childNode, uint64 _defaultValue)
-{
-    return cj5_seekget_uint64(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _defaultValue);
-}
-
-template <> inline int JsonNode::GetChildValue(const char* _childNode, int _defaultValue)
-{
-    return cj5_seekget_int(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _defaultValue);
-}
-
-template <> inline float JsonNode::GetChildValue(const char* _childNode, float _defaultValue)
-{
-    return cj5_seekget_float(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _defaultValue);
-}
-
-template <> inline double JsonNode::GetChildValue(const char* _childNode, double _defaultValue)
-{
-    return cj5_seekget_double(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _defaultValue);
-}
-
-template <> inline bool JsonNode::GetChildValue(const char* _childNode, bool _defaultValue)
-{
-    return cj5_seekget_bool(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _defaultValue);
-}
-
-template <> inline Float4 JsonNode::GetChildValue(const char* _childNode, Float4 _defaultValue)
-{
-    JsonNode jArr = GetChild(_childNode);
-    return jArr.IsValid() && jArr.IsArray() ? jArr.GetValue<Float4>() : _defaultValue;
-}
-
-template <> inline Float3 JsonNode::GetChildValue(const char* _childNode, Float3 _defaultValue)
-{
-    JsonNode jArr = GetChild(_childNode);
-    return jArr.IsValid() && jArr.IsArray() ? jArr.GetValue<Float3>() : _defaultValue;
-}
-
-template <> inline Float2 JsonNode::GetChildValue(const char* _childNode, Float2 _defaultValue)
-{
-    JsonNode jArr = GetChild(_childNode);
-    return jArr.IsValid() && jArr.IsArray() ? jArr.GetValue<Float2>() : _defaultValue;
-}
-
-template <> inline Int2 JsonNode::GetChildValue(const char* _childNode, Int2 _defaultValue)
-{
-    JsonNode jArr = GetChild(_childNode);
-    return jArr.IsValid() && jArr.IsArray() ? jArr.GetValue<Int2>() : _defaultValue;
-}
-
-template <> inline uint32 JsonNode::GetChildArrayValues(const char* _childNode, uint32* _values, uint32 _maxValues)
-{
-    return (uint32)cj5_seekget_array_uint(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _values, _maxValues);
-}
-
-template <> inline uint32 JsonNode::GetChildArrayValues(const char* _childNode, int* _values, uint32 _maxValues)
-{
-    return (uint32)cj5_seekget_array_int(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _values, _maxValues);
-}
-
-template <> inline uint32 JsonNode::GetChildArrayValues(const char* _childNode, uint64* _values, uint32 _maxValues)
-{
-    return (uint32)cj5_seekget_array_uint64(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _values, _maxValues);
-}
-
-template <> inline uint32 JsonNode::GetChildArrayValues(const char* _childNode, bool* _values, uint32 _maxValues)
-{
-    return (uint32)cj5_seekget_array_bool(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _values, _maxValues);
-}
-
-template <> inline uint32 JsonNode::GetChildArrayValues(const char* _childNode, double* _values, uint32 _maxValues)
-{
-    return (uint32)cj5_seekget_array_double(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _values, _maxValues);
-}
-
-template <> inline uint32 JsonNode::GetChildArrayValues(const char* _childNode, float* _values, uint32 _maxValues)
-{
-    return (uint32)cj5_seekget_array_float(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _values, _maxValues);
-}
-
-
-
-
-
-
-struct JobsInstance;
-using JobsHandle = JobsInstance*;
-using JobsCallback = void(*)(uint32 groupIndex, void* userData);
-
-enum class JobsPriority : uint32
-{
-    High = 0,
-    Normal,
-    Low,
-    _Count
-};
-
-enum class JobsType : uint32
-{
-    ShortTask = 0,
-    LongTask,
-    _Count
-};
-
-enum class JobsStackSize : uint32
-{
-    Small = 0,  // 64kb
-    Medium,     // 512kb
-    Large,      // 2048kb
-    _Count
-};
-
-struct alignas(CACHE_LINE_SIZE) JobsSignal
-{
-    JobsSignal();
-
-    void Raise();
-    void Wait();
-    void Decrement();
-    void Increment();
-    void WaitOnCondition(bool(*condFn)(int value, int reference), int reference = 0);
-    void Set(int value = 1);
-    void Reset();
-
-private:
-    uint8 data[128];
-};
-
-struct JobsInitParams
-{
-    MemAllocator* alloc = Mem::GetDefaultAlloc();
-    uint32 numShortTaskThreads = 0; // Default: total number of cores - 1
-    uint32 numLongTaskThreads = 0;  // Default: total number of cores - 1
-    uint32 defaultShortTaskStackSize = SIZE_MB;
-    uint32 defaultLongTaskStackSize = SIZE_MB;
-    bool debugAllocations = false;
-};
-
-namespace Jobs
-{
-    API void Initialize(const JobsInitParams& initParams);
-    API void Release();
-
-    API [[nodiscard]] JobsHandle Dispatch(JobsType type, JobsCallback callback, void* userData = nullptr, 
-                                          uint32 groupSize = 1, JobsPriority prio = JobsPriority::Normal, 
-                                          JobsStackSize stackSize = JobsStackSize::Medium);
-    API void WaitForCompletionAndDelete(JobsHandle handle);
-    API void YieldCurrent();
-
-    API bool IsRunningOnCurrentThread();
-    API bool IsRunning(JobsHandle handle);
-    API void Delete(JobsHandle handle);
-
-    API void DispatchAndForget(JobsType type, JobsCallback callback, void* userData = nullptr, 
-                               uint32 groupSize = 1, JobsPriority prio = JobsPriority::Normal, 
-                               JobsStackSize stackSize = JobsStackSize::Medium);
-
-    API uint32 GetWorkerThreadsCount(JobsType type);
-}
-
-
-
-
-
-struct HashResult128
-{
-    uint64 h1;
-    uint64 h2;
-
-    bool operator==(const HashResult128& h) const { return h1 == h.h1 && h2 == h.h2; }
-    bool operator!=(const HashResult128& h) const { return h1 != h.h1 || h2 != h.h2; }
-};
-
-namespace Hash
-{
-    INLINE constexpr uint32 Fnv32(const void* data, size_t len);
-    INLINE constexpr uint32 Fnv32Str(const char* str);
-    template <typename _T> constexpr uint32 Fnv32(const _T& data);
-
-    INLINE constexpr uint32 Uint32(uint32 key);
-    INLINE constexpr uint64 Uint64(uint64 key);
-    INLINE constexpr uint32 Int64To32(uint64 key);
-
-    API uint32 CRC32(const void* data, size_t len, uint32 seed = 0);
-
-    #if CPU_X86 && defined(__SSE4_2__)
-    API uint32 CRC32_x86_Aligned(const void* data, size_t len);
-    #endif
-
-    API uint32 Murmur32(const void* key, uint32 len, uint32 seed = 0);
-    API HashResult128 Murmur128(const void* key, size_t len, uint32 seed = 0);
-}
-
-struct HashMurmur32Incremental
-{
-    HashMurmur32Incremental(uint32 seed = 0);
-
-    template <typename _T> 
-    HashMurmur32Incremental& Add(const _T& data) { return AddAny(&data, sizeof(_T)); }
-    
-    template <typename _T> 
-    HashMurmur32Incremental& Add(const _T* data, uint32 count) { return AddAny(data, sizeof(_T)*count); }
-
-    uint32 Hash();
-    HashMurmur32Incremental& AddAny(const void* data, uint32 size);
-    HashMurmur32Incremental& AddCStringArray(const char** strs, uint32 numStrings);
-
-    uint32 mHash;
-    uint32 mTail;
-    uint32 mCount;
-    uint32 mSize;
-
-private:
-    void Murmur32MixTail(const uint8** pData, uint32* pSize);
-};
-
-
-
-namespace _private { struct HashTableData; };
-
-template <typename _T>
-struct HashTable
-{
-    HashTable() : mHashTable(nullptr), mAlloc(Mem::GetDefaultAlloc()) {}
-    explicit HashTable(MemAllocator* alloc) : mHashTable(nullptr), mAlloc(alloc) {}
-    explicit HashTable(uint32 capacity, void* buff, size_t size);
-
-    void SetAllocator(MemAllocator* alloc);
-    bool Reserve(uint32 capacity);
-    bool Reserve(uint32 capacity, void* buff, size_t size);
-    void Free();
-
-    bool Grow(uint32 newCapacity);
-    bool Grow(uint32 newCapacity, void* buff, size_t size);
-
-    static size_t GetMemoryRequirement(uint32 capacity);
-    
-    _T* Add(uint32 key);
-    uint32 Add(uint32 key, const _T& value);
-    uint32 AddIfNotFound(uint32 key, const _T& value);
-    uint32 Find(uint32 key) const;
-    void Clear();
-
-    const _T& Get(uint32 index) const;
-    void Set(uint32 index, const _T& value);
-    _T& GetMutable(uint32 index);
-    void Remove(uint32 index);
-
-    const _T& FindAndFetch(uint32 key, const _T& notFoundValue = {}) const;
-    void FindAndRemove(uint32 key);
-
-    uint32 Capacity() const;
-    uint32 Count() const;
-    const uint32* Keys() const;
-    const _T* Values() const;
-    bool IsFull() const;
-
-public:
-    _private::HashTableData* mHashTable;
-    MemAllocator* mAlloc;
-};
-
-using HashTableUint = HashTable<uint32>;
-
-namespace _private
-{
-    struct HashTableData
-    {
-        uint32* keys;
-        uint8* 	values;      // Can be any POD data or opaque type
-        uint32	bitshift;
-        uint32	valueStride;
-        uint32	count;
-        uint32	capacity;
-    };
-
-    API [[nodiscard]] HashTableData* hashtableCreate(uint32 capacity, 
-                                                     uint32 valueStride,
-                                                     MemAllocator* alloc = Mem::GetDefaultAlloc());
-    API void hashtableDestroy(HashTableData* tbl, MemAllocator* alloc = Mem::GetDefaultAlloc());
-    API bool hashtableGrow(HashTableData** pTbl, MemAllocator* alloc = Mem::GetDefaultAlloc());
-    
-    API uint32 hashtableAdd(HashTableData* tbl, uint32 key, const void* value);
-    API uint32 hashtableAddKey(HashTableData* tbl, uint32 key);
-    API uint32 hashtableFind(const HashTableData* tbl, uint32 key);
-    API void hashtableClear(HashTableData* tbl);
-
-    API size_t hashtableGetMemoryRequirement(uint32 capacity, uint32 valueStride);
-    API HashTableData* hashtableCreateWithBuffer(uint32 capacity, uint32 valueStride, void* buff, size_t size);
-    API bool hashtableGrowWithBuffer(HashTableData** pTbl, void* buff, size_t size);
-} // _private
-
-
-inline constexpr uint32 kFnv1Init = 0x811c9dc5;
-inline constexpr uint32 kFnv1Prime = 0x01000193;
-
-INLINE constexpr 
-uint32 Hash::Fnv32(const void* data, size_t len)
-{
-    const char* bp = (const char*)data;
-    const char* be = bp + len;
-    
-    uint32 hval = kFnv1Init;
-    while (bp < be) {
-        hval ^= (uint32)*bp++;
-        hval *= kFnv1Prime;
-    }
-    
-    return hval;
-}
-
-INLINE constexpr 
-uint32 Hash::Fnv32Str(const char* str)
-{
-    const char* s = str;
-    
-    uint32 hval = kFnv1Init;
-    while (*s) {
-        hval ^= (uint32)*s++;
-        hval *= kFnv1Prime;
-    }
-    
-    return hval;
-}
-
-#ifdef __cplusplus
-template <typename _T> constexpr 
-uint32 Hash::Fnv32(const _T& data)
-{
-    return Hash::Fnv32(&data, sizeof(data));
-}
-#endif
-
-INLINE constexpr 
-uint32 Hash::Uint32(uint32 key)
-{
-    const uint32 c2 = 0x27d4eb2d;    // a prime or an odd constant
-    key = (key ^ 61) ^ (key >> 16);
-    key = key + (key << 3);
-    key = key ^ (key >> 4);
-    key = key * c2;
-    key = key ^ (key >> 15);
-    return key;
-}
-
-INLINE constexpr 
-uint64 Hash::Uint64(uint64 key)
-{
-    key = (~key) + (key << 21);    // key = (key << 21) - key - 1;
-    key = key ^ (key >> 24);
-    key = (key + (key << 3)) + (key << 8);    // key * 265
-    key = key ^ (key >> 14);
-    key = (key + (key << 2)) + (key << 4);    // key * 21
-    key = key ^ (key >> 28);
-    key = key + (key << 31);
-    return key;
-}
-
-INLINE constexpr 
-uint32 Hash::Int64To32(uint64 key)
-{
-    key = (~key) + (key << 18);
-    key = key ^ (key >> 31);
-    key = key * 21;
-    key = key ^ (key >> 11);
-    key = key + (key << 6);
-    key = key ^ (key >> 22);
-    return (uint32)key;
-}
-
-template <typename _T>
-inline HashTable<_T>::HashTable(uint32 capacity, void* buff, size_t size)
-{
-    mHashTable = _private::hashtableCreateWithBuffer(capacity, sizeof(_T), buff, size);
-    mAlloc = nullptr;
-    ASSERT(mHashTable);
-}    
-
-template <typename _T>
-inline void HashTable<_T>::SetAllocator(MemAllocator* alloc)
-{
-    ASSERT_MSG(!mHashTable, "hash-table already initialized with another allocator");
-    mAlloc = alloc;
-}
-
-template <typename _T>
-inline bool HashTable<_T>::Reserve(uint32 capacity)
-{
-    ASSERT_MSG(!mHashTable, "hash-table already initialized");
-    ASSERT(mAlloc);
-    mHashTable = _private::hashtableCreate(capacity, sizeof(_T), mAlloc);
-    return mHashTable ? true : false;
-}
-
-template <typename _T>
-inline bool HashTable<_T>::Reserve(uint32 capacity, void* buff, size_t size)
-{
-    ASSERT_MSG(!mHashTable, "hash-table already initialized");
-    mHashTable = _private::hashtableCreateWithBuffer(capacity, sizeof(_T), buff, size);
-    mAlloc = nullptr;
-    return mHashTable ? true : false;
-}    
-
-template <typename _T>
-inline void HashTable<_T>::Free()
-{
-    if (mHashTable && mAlloc)
-        _private::hashtableDestroy(mHashTable, mAlloc);
-    mHashTable = nullptr;
-}
-
-template <typename _T>
-inline const _T* HashTable<_T>::Values() const
-{
-    return reinterpret_cast<const _T*> (mHashTable->values);
-}
-
-template <typename _T>
-inline const uint32* HashTable<_T>::Keys() const
-{
-    return mHashTable->keys;
-}
-
-template <typename _T>
-inline uint32 HashTable<_T>::Count() const
-{
-    return mHashTable->count;
-}
-
-template <typename _T>
-inline uint32 HashTable<_T>::Capacity() const
-{
-    return mHashTable->capacity;
-}
-
-template <typename _T>
-inline const _T& HashTable<_T>::Get(uint32 index) const
-{
-    return reinterpret_cast<_T*>(mHashTable->values)[index];
-}
-
-template <typename _T>
-inline void HashTable<_T>::Set(uint32 index, const _T& value)
-{
-    reinterpret_cast<_T*>(mHashTable->values)[index] = value;
-}
-
-template <typename _T>
-inline _T& HashTable<_T>::GetMutable(uint32 index)
-{
-    return reinterpret_cast<_T*>(mHashTable->values)[index];
-}
-
-template <typename _T>
-inline void HashTable<_T>::Remove(uint32 index)
-{
-    ASSERT_MSG(index < mHashTable->capacity, "index out of range");
-
-    mHashTable->keys[index] = 0;
-    --mHashTable->count;
-}
-
-template <typename _T>
-inline void HashTable<_T>::Clear()
-{
-    _private::hashtableClear(mHashTable);
-}
-
-template <typename _T>
-inline uint32 HashTable<_T>::Find(uint32 key) const
-{
-    return _private::hashtableFind(mHashTable, key);
-}
-
-template <typename _T>
-inline uint32 HashTable<_T>::AddIfNotFound(uint32 key, const _T& value)
-{
-    uint32 index = Find(key);
-
-    if (index == INVALID_INDEX)
-        return Add(key, value);
-    else
-        return index;
-}
-
-template <typename _T>
-inline uint32 HashTable<_T>::Add(uint32 key, const _T& value)
-{
-    if (mHashTable == nullptr) {
-        ASSERT(mAlloc);
-        Reserve(32);
-        ASSERT(mHashTable);
-    }
-    
-    if (mHashTable->count == mHashTable->capacity) {
-        ASSERT_MSG(mAlloc, "Only hashtables with allocators can grow");
-        [[maybe_unused]] bool r = _private::hashtableGrow(&mHashTable, mAlloc);
-        ASSERT_ALWAYS(r, "could not grow hash-table");
-    }
-
-    uint32 h = _private::hashtableAddKey(mHashTable, key);
-    ((_T*)mHashTable->values)[h] = value;
-    return h;
-}
-
-template <typename _T>
-inline _T* HashTable<_T>::Add(uint32 key)
-{
-    ASSERT(mHashTable);
-    if (mHashTable->count == mHashTable->capacity) {
-        ASSERT_MSG(mAlloc, "HashTable full. Only hashtables with allocators can grow");
-        [[maybe_unused]] bool r = _private::hashtableGrow(&mHashTable, mAlloc);
-        ASSERT_ALWAYS(r, "could not grow hash-table");
-    }
-    uint32 h = _private::hashtableAddKey(mHashTable, key);
-
-    return &((_T*)mHashTable->values)[h];
-}
-
-template <typename _T>
-inline const _T& HashTable<_T>::FindAndFetch(uint32 key, const _T& not_found_value /*= {0}*/) const
-{
-    ASSERT(mHashTable);
-    uint32 index = _private::hashtableFind(mHashTable, key);
-    return index != UINT32_MAX ? Get(index) : not_found_value;
-}
-
-template <typename _T>
-inline void HashTable<_T>::FindAndRemove(uint32 key)
-{
-    ASSERT(mHashTable);
-    uint32 index = _private::hashtableFind(mHashTable, key);
-    if (index != UINT32_MAX)
-        Remove(index);
-}
-
-template <typename _T>
-inline bool HashTable<_T>::IsFull() const
-{
-    ASSERT(mHashTable);
-    return mHashTable->count == mHashTable->capacity;
-}
-
-template <typename _T>
-inline size_t HashTable<_T>::GetMemoryRequirement(uint32 capacity)
-{
-    return _private::hashtableGetMemoryRequirement(capacity, sizeof(_T));
-}
-
-template <typename _T>
-inline bool HashTable<_T>::Grow(uint32 newCapacity)
-{
-    ASSERT(mAlloc);
-    ASSERT(mHashTable);
-    ASSERT(newCapacity > mHashTable->capacity);
-
-    return _private::hashtableGrow(&mHashTable, mAlloc);
-}
-
-template <typename _T>
-inline bool HashTable<_T>::Grow(uint32 newCapacity, void* buff, size_t size)
-{
-    ASSERT(!mAlloc);
-    ASSERT(mHashTable);
-    ASSERT(newCapacity > mHashTable->capacity);
-
-    return _private::hashtableGrowWithBuffer(&mHashTable, buff, size);
-}
-
-
-
-#if defined(_WIN32) || defined(_WIN64)
-
-#define WIN32_MEAN_AND_LEAN
-#define VC_EXTRALEAN
-#define NOMINMAX          // Macros min(a,b) and max(a,b)
-
-#include <winsock2.h>
-#include <windows.h>
-
-#undef WIN32_MEAN_AND_LEAN
-#undef VC_EXTRALEAN
-#undef NOMINMAX
-
-#endif // _WIN32 / _WIN64
-
-
-#include <string.h>
-#include <stdarg.h>
-
-
-struct MemAllocator;
-
-namespace Str
-{
-    API char* Copy(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src);
-    API char* CopyCount(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src, uint32 count);
-    API char* Concat(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src);
-    API char* ConcatCount(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src, uint32 count);
-    NO_ASAN API uint32 Len(const char* str);
-    API uint32 PrintFmt(char* str, uint32 size, const char* fmt, ...);
-    API uint32 PrintFmtArgs(char* str, uint32 size, const char* fmt, va_list args);
-    API char* PrintFmtAlloc(MemAllocator* alloc, const char* fmt, ...);
-    API char* PrintFmtAllocArgs(MemAllocator* alloc, const char* fmt, va_list args);
-    API bool Utf8ToWide(const char* src, wchar_t* dst, size_t dstNumBytes);
-    API bool WideToUtf8(const wchar_t* src, char* dst, size_t dstNumBytes);
-    API bool IsEqual(const char* s1, const char* s2);
-    API bool IsEqualNoCase(const char* s1, const char* s2);
-    API bool IsEqualCount(const char* s1, const char* s2, uint32 count);
-    API bool IsEqualNoCaseCount(const char* s1, const char* s2, uint32 count);
-    API int Compare(const char* a, const char* b);
-    API uint32 CountMatchingFirstChars(const char* s1, const char* s2);
-    API bool StartsWith(const char* str, const char* startsWith);
-    API bool EndsWith(const char* str, const char* endsWith);
-    API char* Trim(char* dst, uint32 dstSize, const char* src);
-    API char* Trim(char* dst, uint32 dstSize, const char* src, char ch);
-    API char* RemoveWhitespace(char* dst, uint32 dstSize, const char* src);
-    API char* RemoveChar(char* dst, uint32 dstSize, const char* src, char ch);
-    API char* ReplaceChar(char* dst, uint32 dstSize, char ch, char replaceWith);
-    API char* SubStr(char* dst, uint32 dstSize, const char* str, uint32 startIdx, uint32 endIdx = 0);
-    API bool ToBool(const char* str);
-    API int ToInt(const char* str);
-    API uint32 ToUint(const char* str, uint32 radix = 10);
-    API uint64 ToUint64(const char* str, uint32 radix = 10);
-    API double ToDouble(const char* str);
-
-    API bool IsWhitespace(char ch);
-    API char ToLower(char ch);
-    API char ToUpper(char ch);
-    API char IsInRange(char ch, char from, char to);
-    API char IsNumber(char ch);
-
-    API const char* SkipWhitespace(const char* str);
-    API const char* SkipChar(const char* str, char ch);
-    API char* ToUpper(char* dst, uint32 dstSize, const char* src);
-    API char* ToLower(char* dst, uint32 dstSize, const char* src);
-
-    NO_ASAN API const char* FindChar(const char* str, char ch);
-    NO_ASAN API const char* FindCharRev(const char* str, char ch);
-    NO_ASAN API const char* FindStr(const char* RESTRICT str, const char* RESTRICT find);
-
-    API Span<char*> Split(const char* str, char ch, MemAllocator* alloc);
-    API Span<char*> SplitWhitespace(const char* str, MemAllocator* alloc);
-} // Str
-
-
-template <uint32 _Size>
-struct String 
-{
-    String();
-    String(const char* cstr);
-    String(char ch);
-    String(const String<_Size>& str);
-
-    String<_Size>& operator=(const String<_Size>& str);
-    String<_Size>& operator=(const char* cstr);
-
-    bool operator==(const char* str) const;
-    bool operator==(const String<_Size>& str) const;
-    bool operator!=(const char* str) const;
-    bool operator!=(const String<_Size>& str) const;
-
-    bool IsEmpty() const;
-    uint32 Length() const;
-    uint32 Capacity() const;
-    char* Ptr();
-    const char* CStr() const;
-    uint32 CalcLength();
-    char operator[](uint32 index) const;
-    char& operator[](uint32 index);
-
-    String<_Size>& FormatSelf(const char* fmt, ...);
-    String<_Size>& FormatArgsSelf(const char* fmt, va_list args);
-
-    static String<_Size> Format(const char* fmt, ...);
-
-    bool IsEqual(const char* cstr) const;
-    bool IsEqualNoCase(const char* cstr) const;
-    bool IsEqual(const char* cstr, uint32 count) const;
-
-    uint32 FindChar(char ch, uint32 startIndex = 0) const;
-    uint32 FindCharRev(char ch) const;
-    uint32 FindString(const char* cstr) const;
-    bool StartsWith(char ch) const;
-    bool StartsWith(const char* cstr) const;
-    bool EndsWith(char ch) const;
-    bool EndsWith(const char* cstr) const;
-
-    String<_Size>& Append(const char* cstr);
-    String<_Size>& Append(const char* cstr, uint32 count);
-    String<_Size>& Append(const String<_Size>& str);
-
-    String<_Size>& Trim();
-    String<_Size>& Trim(char ch);
-
-    String<_Size> SubStr(uint32 start, uint32 end = 0);
-
-protected:
-    char mStr[_Size];
-    uint32 mLen;
-};
-
-using String32 = String<32>;
-using String64 = String<64>;
-
-
-template <uint32 _Size>
-inline String<_Size>::String() : mLen(0)
-{
-    memset(mStr, 0x0, sizeof(mStr));
-}
-
-template <uint32 _Size>
-inline String<_Size>::String(const char* cstr)
-{
-    char* end = Str::Copy(mStr, _Size, cstr);
-    mLen = PtrToInt<uint32>(reinterpret_cast<void*>(end - mStr));
-    memset(end, 0x0, _Size - mLen);
-}
-
-template <uint32 _Size> 
-inline String<_Size>::String(char ch)
-{
-    memset(mStr, 0x0, sizeof(mStr));
-    mStr[0] = ch;
-    mLen = 1;
-}
-
-template <uint32 _Size> 
-inline String<_Size>::String(const String<_Size>& str)
-{
-    memcpy(this, &str, sizeof(str));
-    mLen = str.mLen;
-}
-
-template <uint32 _Size> 
-inline String<_Size>& String<_Size>::operator=(const String<_Size>& str)
-{
-    memcpy(this, &str, sizeof(str));
-    return *this;
-}
-
-template <uint32 _Size> 
-inline String<_Size>& String<_Size>::operator=(const char* cstr)
-{
-    char* end = Str::Copy(mStr, _Size, cstr);
-    mLen = PtrToInt<uint32>(reinterpret_cast<void*>(end - mStr));
-    return *this;
-}
-
-template <uint32 _Size> 
-inline bool String<_Size>::operator==(const char* str) const
-{
-    return Str::IsEqual(mStr, str);
-}
-
-template <uint32 _Size> 
-inline bool String<_Size>::operator==(const String<_Size>& str) const
-{
-    return mLen == str.mLen && memcmp(mStr, str.mStr, mLen) == 0;
-}
-
-template <uint32 _Size> 
-inline bool String<_Size>::operator!=(const char* str) const
-{
-    return !Str::IsEqual(mStr, str);
-}
-
-template <uint32 _Size> 
-inline bool String<_Size>::operator!=(const String<_Size>& str) const
-{
-    return mLen != str.mLen || memcmp(mStr, str.mStr, mLen) != 0;
-}
-
-template <uint32 _Size> 
-inline bool String<_Size>::IsEmpty() const
-{
-    return mLen == 0;
-}
-
-template <uint32 _Size> 
-inline uint32 String<_Size>::Length() const
-{
-    return mLen;
-}
-
-template <uint32 _Size> 
-inline uint32 String<_Size>::Capacity() const
-{
-    return _Size;
-}
-
-template <uint32 _Size> 
-inline char* String<_Size>::Ptr()
-{
-    return mStr;
-}
-
-template <uint32 _Size> 
-inline const char* String<_Size>::CStr() const
-{
-    return mStr;
-}
-
-template <uint32 _Size> 
-inline char String<_Size>::operator[](uint32 index) const
-{
-    ASSERT(index < mLen);
-    return mStr[index];
-}
-
-template <uint32 _Size> 
-inline char& String<_Size>::operator[](uint32 index)
-{
-    ASSERT(index < mLen);
-    return mStr[index];
-}
-
-template <uint32 _Size> 
-inline String<_Size>& String<_Size>::FormatSelf(const char* fmt, ...)
-{
-    va_list args;
-    va_start(args, fmt);
-    Str::PrintFmtArgs(mStr, _Size, fmt, args);
-    va_end(args);
-    mLen = Str::Len(mStr);
-    return *this;
-}
-
-template <uint32 _Size> 
-inline String<_Size> String<_Size>::Format(const char* fmt, ...)
-{
-    String<_Size> str;
-    va_list args;
-    va_start(args, fmt);
-    Str::PrintFmtArgs(str.mStr, _Size, fmt, args);
-    va_end(args);
-    str.mLen = Str::Len(str.mStr);
-    return str;
-}
-
-template <uint32 _Size> 
-inline String<_Size>& String<_Size>::FormatArgsSelf(const char* fmt, va_list args)
-{
-    Str::PrintFmtArgs(mStr, _Size, fmt, args);
-    return *this;
-}
-
-template <uint32 _Size> 
-inline bool String<_Size>::IsEqual(const char* cstr) const
-{
-    return Str::IsEqual(mStr, cstr);
-}
-
-template <uint32 _Size>
-inline bool String<_Size>::IsEqualNoCase(const char* cstr) const
-{
-    return Str::IsEqualNoCase(mStr, cstr);
-}
-
-template <uint32 _Size> 
-inline bool String<_Size>::IsEqual(const char* cstr, uint32 count) const
-{
-    return Str::IsEqualCount(mStr, cstr, count);
-}
-
-template <uint32 _Size> 
-inline uint32 String<_Size>::FindChar(char ch, uint32 startIndex) const
-{
-    ASSERT(startIndex <= mLen);
-    const char* r = Str::FindChar(mStr + startIndex, ch);
-    if (r)
-        return PtrToInt<uint32>((void*)(r - mStr));
-    else
-        return UINT32_MAX;
-}
-
-template <uint32 _Size> 
-inline uint32 String<_Size>::FindCharRev(char ch) const
-{
-    const char* r = Str::FindCharRev(mStr, ch);
-    if (r)
-        return PtrToInt<uint32>(r - mStr);
-    else
-        return UINT32_MAX;
-}
-
-template <uint32 _Size> 
-inline uint32 String<_Size>::FindString(const char* cstr) const
-{
-    const char* r = Str::FindStr(mStr, cstr);
-    if (r)
-        return PtrToInt<uint32>(r - mStr);
-    else
-        return UINT32_MAX;
-}
-
-template <uint32 _Size> 
-bool String<_Size>::StartsWith(char ch) const
-{
-    return mLen > 0 && mStr[0] == ch;
-}
-
-template <uint32 _Size> 
-bool String<_Size>::StartsWith(const char* cstr) const
-{
-    uint32 cstrLen = Str::Len(cstr);
-    return mLen >= cstrLen && Str::IsEqualCount(mStr, cstr, cstrLen);
-}
-
-template <uint32 _Size> 
-inline bool String<_Size>::EndsWith(char ch) const
-{
-    return mLen > 0 && mStr[mLen-1] == ch;
-}
-
-template <uint32 _Size> 
-inline bool String<_Size>::EndsWith(const char* cstr) const
-{
-    uint32 cstrLen = Str::Len(cstr);
-    return mLen >= cstrLen && Str::FindStr(&mStr[mLen - cstrLen], cstr) != nullptr;
-}
-
-template <uint32 _Size> 
-inline String<_Size>& String<_Size>::Append(const char* cstr)
-{
-    Str::Copy(mStr + mLen, _Size - mLen, cstr);
-    mLen += Str::Len(cstr);
-    return *this;
-}
-
-template <uint32 _Size> 
-inline String<_Size>& String<_Size>::Append(const char* cstr, uint32 count)
-{
-    ASSERT(mLen + count < _Size);
-    Str::CopyCount(mStr + mLen, _Size - mLen, cstr, count);
-    mLen += count;
-    return *this;
-}
-
-template <uint32 _Size>
-inline String<_Size>& String<_Size>::Append(const String<_Size>& str)
-{
-    ASSERT(mLen + str.mLen < _Size);
-    Str::CopyCount(mStr + mLen, _Size - mLen, str.mStr, str.mLen);
-    mLen += str.mLen;
-    return *this;
-}
-
-template <uint32 _Size> 
-inline String<_Size>& String<_Size>::Trim()
-{
-    Str::Trim(mStr, _Size, mStr);
-    mLen = Str::Len(mStr);
-    return *this;
-}
-
-template <uint32 _Size> 
-inline String<_Size>& String<_Size>::Trim(char ch)
-{
-    Str::Trim(mStr, _Size, mStr, ch);
-    mLen = Str::Len(mStr);
-    return *this;
-}
-
-template <uint32 _Size>
-inline String<_Size> String<_Size>::SubStr(uint32 start, uint32 end)
-{
-    end = (end == 0) ? mLen : end;
-
-    String<_Size> r;
-    Str::CopyCount(r.mStr, _Size, mStr + start, end - start);
-    r.mLen = end - start;
-
-    return r;
-}
-
-template <uint32 _Size>
-inline uint32 String<_Size>::CalcLength()
-{
-    mLen = Str::Len(mStr);
-    return mLen;
-}
-
-
-
 /*
     Copyright (C) 2014-2022 Igor van den Hoven ivdhoven@gmail.com
 */
@@ -10101,6 +6475,407 @@ void BlitSort(_T *array, size_t count, _Cmp cmp)
 }
 
 
+//----------------------------------------------------------------------------------------------------------------------
+// StringUtil.h
+
+
+#include <string.h>
+#include <stdarg.h>
+
+
+struct MemAllocator;
+
+namespace Str
+{
+    API char* Copy(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src);
+    API char* CopyCount(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src, uint32 count);
+    API char* Concat(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src);
+    API char* ConcatCount(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src, uint32 count);
+    NO_ASAN API uint32 Len(const char* str);
+    API uint32 PrintFmt(char* str, uint32 size, const char* fmt, ...);
+    API uint32 PrintFmtArgs(char* str, uint32 size, const char* fmt, va_list args);
+    API char* PrintFmtAlloc(MemAllocator* alloc, const char* fmt, ...);
+    API char* PrintFmtAllocArgs(MemAllocator* alloc, const char* fmt, va_list args);
+    API bool Utf8ToWide(const char* src, wchar_t* dst, size_t dstNumBytes);
+    API bool WideToUtf8(const wchar_t* src, char* dst, size_t dstNumBytes);
+    API bool IsEqual(const char* s1, const char* s2);
+    API bool IsEqualNoCase(const char* s1, const char* s2);
+    API bool IsEqualCount(const char* s1, const char* s2, uint32 count);
+    API bool IsEqualNoCaseCount(const char* s1, const char* s2, uint32 count);
+    API int Compare(const char* a, const char* b);
+    API uint32 CountMatchingFirstChars(const char* s1, const char* s2);
+    API bool StartsWith(const char* str, const char* startsWith);
+    API bool EndsWith(const char* str, const char* endsWith);
+    API char* Trim(char* dst, uint32 dstSize, const char* src);
+    API char* Trim(char* dst, uint32 dstSize, const char* src, char ch);
+    API char* RemoveWhitespace(char* dst, uint32 dstSize, const char* src);
+    API char* RemoveChar(char* dst, uint32 dstSize, const char* src, char ch);
+    API char* ReplaceChar(char* dst, uint32 dstSize, char ch, char replaceWith);
+    API char* SubStr(char* dst, uint32 dstSize, const char* str, uint32 startIdx, uint32 endIdx = 0);
+    API bool ToBool(const char* str);
+    API int ToInt(const char* str);
+    API uint32 ToUint(const char* str, uint32 radix = 10);
+    API uint64 ToUint64(const char* str, uint32 radix = 10);
+    API double ToDouble(const char* str);
+
+    API bool IsWhitespace(char ch);
+    API char ToLower(char ch);
+    API char ToUpper(char ch);
+    API char IsInRange(char ch, char from, char to);
+    API char IsNumber(char ch);
+
+    API const char* SkipWhitespace(const char* str);
+    API const char* SkipChar(const char* str, char ch);
+    API char* ToUpper(char* dst, uint32 dstSize, const char* src);
+    API char* ToLower(char* dst, uint32 dstSize, const char* src);
+
+    NO_ASAN API const char* FindChar(const char* str, char ch);
+    NO_ASAN API const char* FindCharRev(const char* str, char ch);
+    NO_ASAN API const char* FindStr(const char* RESTRICT str, const char* RESTRICT find);
+
+    API Span<char*> Split(const char* str, char ch, MemAllocator* alloc);
+    API Span<char*> SplitWhitespace(const char* str, MemAllocator* alloc);
+} // Str
+
+
+template <uint32 _Size>
+struct String 
+{
+    String();
+    String(const char* cstr);
+    String(char ch);
+    String(const String<_Size>& str);
+
+    String<_Size>& operator=(const String<_Size>& str);
+    String<_Size>& operator=(const char* cstr);
+
+    bool operator==(const char* str) const;
+    bool operator==(const String<_Size>& str) const;
+    bool operator!=(const char* str) const;
+    bool operator!=(const String<_Size>& str) const;
+
+    bool IsEmpty() const;
+    uint32 Length() const;
+    uint32 Capacity() const;
+    char* Ptr();
+    const char* CStr() const;
+    uint32 CalcLength();
+    char operator[](uint32 index) const;
+    char& operator[](uint32 index);
+
+    String<_Size>& FormatSelf(const char* fmt, ...);
+    String<_Size>& FormatArgsSelf(const char* fmt, va_list args);
+
+    static String<_Size> Format(const char* fmt, ...);
+
+    bool IsEqual(const char* cstr) const;
+    bool IsEqualNoCase(const char* cstr) const;
+    bool IsEqual(const char* cstr, uint32 count) const;
+
+    uint32 FindChar(char ch, uint32 startIndex = 0) const;
+    uint32 FindCharRev(char ch) const;
+    uint32 FindString(const char* cstr) const;
+    bool StartsWith(char ch) const;
+    bool StartsWith(const char* cstr) const;
+    bool EndsWith(char ch) const;
+    bool EndsWith(const char* cstr) const;
+
+    String<_Size>& Append(const char* cstr);
+    String<_Size>& Append(const char* cstr, uint32 count);
+    String<_Size>& Append(const String<_Size>& str);
+
+    String<_Size>& Trim();
+    String<_Size>& Trim(char ch);
+
+    String<_Size> SubStr(uint32 start, uint32 end = 0);
+
+protected:
+    char mStr[_Size];
+    uint32 mLen;
+};
+
+using String32 = String<32>;
+using String64 = String<64>;
+
+
+template <uint32 _Size>
+inline String<_Size>::String() : mLen(0)
+{
+    memset(mStr, 0x0, sizeof(mStr));
+}
+
+template <uint32 _Size>
+inline String<_Size>::String(const char* cstr)
+{
+    char* end = Str::Copy(mStr, _Size, cstr);
+    mLen = PtrToInt<uint32>(reinterpret_cast<void*>(end - mStr));
+    memset(end, 0x0, _Size - mLen);
+}
+
+template <uint32 _Size> 
+inline String<_Size>::String(char ch)
+{
+    memset(mStr, 0x0, sizeof(mStr));
+    mStr[0] = ch;
+    mLen = 1;
+}
+
+template <uint32 _Size> 
+inline String<_Size>::String(const String<_Size>& str)
+{
+    memcpy(this, &str, sizeof(str));
+    mLen = str.mLen;
+}
+
+template <uint32 _Size> 
+inline String<_Size>& String<_Size>::operator=(const String<_Size>& str)
+{
+    memcpy(this, &str, sizeof(str));
+    return *this;
+}
+
+template <uint32 _Size> 
+inline String<_Size>& String<_Size>::operator=(const char* cstr)
+{
+    char* end = Str::Copy(mStr, _Size, cstr);
+    mLen = PtrToInt<uint32>(reinterpret_cast<void*>(end - mStr));
+    return *this;
+}
+
+template <uint32 _Size> 
+inline bool String<_Size>::operator==(const char* str) const
+{
+    return Str::IsEqual(mStr, str);
+}
+
+template <uint32 _Size> 
+inline bool String<_Size>::operator==(const String<_Size>& str) const
+{
+    return mLen == str.mLen && memcmp(mStr, str.mStr, mLen) == 0;
+}
+
+template <uint32 _Size> 
+inline bool String<_Size>::operator!=(const char* str) const
+{
+    return !Str::IsEqual(mStr, str);
+}
+
+template <uint32 _Size> 
+inline bool String<_Size>::operator!=(const String<_Size>& str) const
+{
+    return mLen != str.mLen || memcmp(mStr, str.mStr, mLen) != 0;
+}
+
+template <uint32 _Size> 
+inline bool String<_Size>::IsEmpty() const
+{
+    return mLen == 0;
+}
+
+template <uint32 _Size> 
+inline uint32 String<_Size>::Length() const
+{
+    return mLen;
+}
+
+template <uint32 _Size> 
+inline uint32 String<_Size>::Capacity() const
+{
+    return _Size;
+}
+
+template <uint32 _Size> 
+inline char* String<_Size>::Ptr()
+{
+    return mStr;
+}
+
+template <uint32 _Size> 
+inline const char* String<_Size>::CStr() const
+{
+    return mStr;
+}
+
+template <uint32 _Size> 
+inline char String<_Size>::operator[](uint32 index) const
+{
+    ASSERT(index < mLen);
+    return mStr[index];
+}
+
+template <uint32 _Size> 
+inline char& String<_Size>::operator[](uint32 index)
+{
+    ASSERT(index < mLen);
+    return mStr[index];
+}
+
+template <uint32 _Size> 
+inline String<_Size>& String<_Size>::FormatSelf(const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    Str::PrintFmtArgs(mStr, _Size, fmt, args);
+    va_end(args);
+    mLen = Str::Len(mStr);
+    return *this;
+}
+
+template <uint32 _Size> 
+inline String<_Size> String<_Size>::Format(const char* fmt, ...)
+{
+    String<_Size> str;
+    va_list args;
+    va_start(args, fmt);
+    Str::PrintFmtArgs(str.mStr, _Size, fmt, args);
+    va_end(args);
+    str.mLen = Str::Len(str.mStr);
+    return str;
+}
+
+template <uint32 _Size> 
+inline String<_Size>& String<_Size>::FormatArgsSelf(const char* fmt, va_list args)
+{
+    Str::PrintFmtArgs(mStr, _Size, fmt, args);
+    return *this;
+}
+
+template <uint32 _Size> 
+inline bool String<_Size>::IsEqual(const char* cstr) const
+{
+    return Str::IsEqual(mStr, cstr);
+}
+
+template <uint32 _Size>
+inline bool String<_Size>::IsEqualNoCase(const char* cstr) const
+{
+    return Str::IsEqualNoCase(mStr, cstr);
+}
+
+template <uint32 _Size> 
+inline bool String<_Size>::IsEqual(const char* cstr, uint32 count) const
+{
+    return Str::IsEqualCount(mStr, cstr, count);
+}
+
+template <uint32 _Size> 
+inline uint32 String<_Size>::FindChar(char ch, uint32 startIndex) const
+{
+    ASSERT(startIndex <= mLen);
+    const char* r = Str::FindChar(mStr + startIndex, ch);
+    if (r)
+        return PtrToInt<uint32>((void*)(r - mStr));
+    else
+        return UINT32_MAX;
+}
+
+template <uint32 _Size> 
+inline uint32 String<_Size>::FindCharRev(char ch) const
+{
+    const char* r = Str::FindCharRev(mStr, ch);
+    if (r)
+        return PtrToInt<uint32>(r - mStr);
+    else
+        return UINT32_MAX;
+}
+
+template <uint32 _Size> 
+inline uint32 String<_Size>::FindString(const char* cstr) const
+{
+    const char* r = Str::FindStr(mStr, cstr);
+    if (r)
+        return PtrToInt<uint32>(r - mStr);
+    else
+        return UINT32_MAX;
+}
+
+template <uint32 _Size> 
+bool String<_Size>::StartsWith(char ch) const
+{
+    return mLen > 0 && mStr[0] == ch;
+}
+
+template <uint32 _Size> 
+bool String<_Size>::StartsWith(const char* cstr) const
+{
+    uint32 cstrLen = Str::Len(cstr);
+    return mLen >= cstrLen && Str::IsEqualCount(mStr, cstr, cstrLen);
+}
+
+template <uint32 _Size> 
+inline bool String<_Size>::EndsWith(char ch) const
+{
+    return mLen > 0 && mStr[mLen-1] == ch;
+}
+
+template <uint32 _Size> 
+inline bool String<_Size>::EndsWith(const char* cstr) const
+{
+    uint32 cstrLen = Str::Len(cstr);
+    return mLen >= cstrLen && Str::FindStr(&mStr[mLen - cstrLen], cstr) != nullptr;
+}
+
+template <uint32 _Size> 
+inline String<_Size>& String<_Size>::Append(const char* cstr)
+{
+    Str::Copy(mStr + mLen, _Size - mLen, cstr);
+    mLen += Str::Len(cstr);
+    return *this;
+}
+
+template <uint32 _Size> 
+inline String<_Size>& String<_Size>::Append(const char* cstr, uint32 count)
+{
+    ASSERT(mLen + count < _Size);
+    Str::CopyCount(mStr + mLen, _Size - mLen, cstr, count);
+    mLen += count;
+    return *this;
+}
+
+template <uint32 _Size>
+inline String<_Size>& String<_Size>::Append(const String<_Size>& str)
+{
+    ASSERT(mLen + str.mLen < _Size);
+    Str::CopyCount(mStr + mLen, _Size - mLen, str.mStr, str.mLen);
+    mLen += str.mLen;
+    return *this;
+}
+
+template <uint32 _Size> 
+inline String<_Size>& String<_Size>::Trim()
+{
+    Str::Trim(mStr, _Size, mStr);
+    mLen = Str::Len(mStr);
+    return *this;
+}
+
+template <uint32 _Size> 
+inline String<_Size>& String<_Size>::Trim(char ch)
+{
+    Str::Trim(mStr, _Size, mStr, ch);
+    mLen = Str::Len(mStr);
+    return *this;
+}
+
+template <uint32 _Size>
+inline String<_Size> String<_Size>::SubStr(uint32 start, uint32 end)
+{
+    end = (end == 0) ? mLen : end;
+
+    String<_Size> r;
+    Str::CopyCount(r.mStr, _Size, mStr + start, end - start);
+    r.mLen = end - start;
+
+    return r;
+}
+
+template <uint32 _Size>
+inline uint32 String<_Size>::CalcLength()
+{
+    mLen = Str::Len(mStr);
+    return mLen;
+}
+
 
 
 struct Blob
@@ -10620,835 +7395,3332 @@ inline size_t Blob::WriteStringBinary16(const char* str, uint32 len)
 
 
 
-enum class ThreadCreateFlags : uint32
+struct DebugStacktraceEntry
 {
-    None = 0,
-    Detached = 0x1
-};
-ENABLE_BITMASK(ThreadCreateFlags);
-
-enum class ThreadPriority 
-{
-    Normal = 0,
-    Idle,
-    Realtime,
-    High,
-    Low
+    char name[PATH_CHARS_MAX];
+    char filename[PATH_CHARS_MAX];
+    uint64 offsetFromSymbol;
+    uint32 offsetFromLine;
+    uint32 line;
 };
 
-using ThreadEntryFunc = int(*)(void* userData);
+using DebugFiberScopeProtectorCallback = bool(*)(void* userData);
 
-struct ThreadDesc
+namespace Debug
 {
-    ThreadEntryFunc entryFn;
-    void* userData;
-    const char* name;
-    size_t stackSize = SIZE_MB;
-    ThreadCreateFlags flags = ThreadCreateFlags::None;
-    ThreadPriority priority = ThreadPriority::Normal;
-};
+    API void Print(const char* text);
+    API void SetCaptureStacktraceForFiberProtector(bool capture);
+    API uint16 CaptureStacktrace(void** stackframes, uint16 maxStackframes, uint16 framesToSkip = 1, uint32* pHash = nullptr);
+    API void ResolveStacktrace(uint16 numStacktrace, void* const* stackframes, DebugStacktraceEntry* entries);
 
-struct alignas(64) Thread
-{
-    Thread();
+    API void StacktraceSaveStopPoint(void* funcPtr);
 
-    bool Start(const ThreadDesc& desc);
-    int  Stop();
-    bool IsRunning();
-    void SetPriority(ThreadPriority prio);
+    API void FiberScopeProtector_RegisterCallback(DebugFiberScopeProtectorCallback callback, void* userData = nullptr);
+    API uint16 FiberScopeProtector_Push(const char* name);
+    API void FiberScopeProtector_Pop(uint16 id);
+    API void FiberScopeProtector_Check();
+}
 
-    static void SwitchContext();
-    static uint32 GetCurrentId();
-    static void SetCurrentThreadPriority(ThreadPriority prio);
-    static void SetCurrentThreadName(const char* name);
-    static void GetCurrentThreadName(char* nameOut, uint32 nameSize);
-    static void Sleep(uint32 msecs);
-
-private:
-    uint8 mData[256];
-};
-
-
-struct alignas(CACHE_LINE_SIZE) Mutex
-{
-    void Initialize(uint32 spinCount = 32);
-    void Release();
-
-    void Enter();
-    void Exit();
-    bool TryEnter();
-
-private:
-    uint8 mData[128];
-};
-
-struct MutexScope
-{
-    MutexScope( ) = delete;
-    MutexScope(const MutexScope& mtx) = delete;
-    explicit MutexScope(Mutex& mtx) : mMtx(mtx) { mMtx.Enter(); }
-    ~MutexScope( ) { mMtx.Exit(); }
-
-private:
-    Mutex& mMtx;
-};
-
-
-struct alignas(CACHE_LINE_SIZE) ReadWriteMutex
-{
-    void Initialize();
-    void Release();
-
-    bool TryRead();
-    bool TryWrite();
-
-    void EnterRead();
-    void ExitRead();
-
-    void EnterWrite();
-    void ExitWrite();
-
-private:
-    #if !PLATFORM_APPLE
-    uint8 mData[64];
-    #else
-    uint8 mData[256];
+#if PLATFORM_WINDOWS && defined(TRACY_ENABLE)
+    #ifdef __cplusplus
+    extern "C" {
     #endif
-};
-
-struct ReadWriteMutexReadScope
-{
-    ReadWriteMutexReadScope() = delete;
-    ReadWriteMutexReadScope(const ReadWriteMutexReadScope&) = delete;
-    explicit ReadWriteMutexReadScope(ReadWriteMutex& mtx) : mMtx(mtx) { mMtx.EnterRead(); }
-    ~ReadWriteMutexReadScope() { mMtx.ExitRead(); }
-
-private:
-    ReadWriteMutex& mMtx;
-};
-
-struct ReadWriteMutexWriteScope
-{
-    ReadWriteMutexWriteScope() = delete;
-    ReadWriteMutexWriteScope(const ReadWriteMutexWriteScope&) = delete;
-    explicit ReadWriteMutexWriteScope(ReadWriteMutex& mtx) : mMtx(mtx) { mMtx.EnterWrite(); }
-    ~ReadWriteMutexWriteScope() { mMtx.ExitWrite(); }
-
-private:
-    ReadWriteMutex& mMtx;
-};
-
-
-struct alignas(CACHE_LINE_SIZE) SpinLockMutex
-{
-    void Enter();
-    void Exit();
-    bool TryEnter();
-
-private:
-    uint32 mLocked = 0;
-    uint8 _padding[CACHE_LINE_SIZE - sizeof(uint32)];
-};
-
-struct SpinLockMutexScope
-{
-    SpinLockMutexScope() = delete;
-    SpinLockMutexScope(const SpinLockMutexScope&) = delete;
-    inline explicit SpinLockMutexScope(SpinLockMutex& lock) : mLock(lock) { mLock.Enter(); }
-    inline ~SpinLockMutexScope() { mLock.Exit(); }
-        
-private:
-    SpinLockMutex& mLock;
-};
-
-
-struct alignas(16) Semaphore
-{
-    void Initialize();
-    void Release();
-
-    void Post(uint32 count = 1);
-    bool Wait(uint32 msecs = UINT32_MAX);
-
-private:
-    uint8 mData[128];
-};
-
-
-struct alignas(16) Signal
-{
-    void Initialize();
-    void Release();
-
-    void Raise();
-    void RaiseAll();
-    bool Wait(uint32 msecs = UINT32_MAX);
-    void Decrement(uint32 count = 1);
-    void Increment(uint32 count = 1);
-    bool WaitOnCondition(bool(*condFn)(int value, int reference), int reference = 0, uint32 msecs = UINT32_MAX);
-    void Set(int value = 1);
-
-private:
-    uint8 mData[128];
-};
-
-
-
-namespace Timer
-{
-    API void Initialize();
-    API uint64 GetTicks();
-    API uint64 LapTime(uint64* lastTime);
-    INLINE uint64 Diff(uint64 newTick, uint64 oldTick);
-    INLINE double ToSec(uint64 tick);
-    INLINE double ToMS(uint64 tick);
-    INLINE double ToUS(uint64 tick);
-}
-
-struct TimerStopWatch
-{
-    TimerStopWatch();
-
-    void Reset();
-
-    uint64 Elapsed() const;
-    double ElapsedSec() const;
-    double ElapsedMS() const;
-    double ElapsedUS() const;
-
-private:
-    uint64 mStart;
-};
-
-
-enum class MemVirtualFlags : uint32
-{
-    None = 0,
-    Watch = 0x1
-};
-ENABLE_BITMASK(MemVirtualFlags);
-
-struct MemVirtualStats
-{
-    uint64 commitedBytes;
-    uint64 reservedBytes;
-};
-
-namespace Mem
-{
-    API void* VirtualReserve(size_t size, MemVirtualFlags flags = MemVirtualFlags::None);
-    API void* VirtualCommit(void* ptr, size_t size);
-    API void VirtualDecommit(void* ptr, size_t size);
-    API void VirtualRelease(void* ptr, size_t size);
-    API MemVirtualStats VirtualGetStats();
-    API bool VirtualEnableLargePages(size_t* largePageSize);
-}
-
-enum class PathType : uint32
-{
-    Invalid = 0,
-    File,
-    Directory
-};
-
-struct PathInfo
-{
-    PathType type;
-    uint64 size;
-    uint64 lastModified;
-};
-
-namespace PathUtils
-{
-    API char* ToUnix(const char* path, char* dst, size_t dstSize);
-    API char* ToWin(const char* path, char* dst, size_t dstSize);
-    API char* GetFileExtension(const char* path, char* dst, size_t dstSize);
-    API char* GetFilenameAndExtension(const char* path, char* dst, size_t dstSize);
-    API char* GetFilename(const char* path, char* dst, size_t dstSize);
-    API char* GetDirectory(const char* path, char* dst, size_t dstSize);
-    API char* Join(char* dst, size_t dstSize, const char* pathA, const char* pathB);
-    API char* JoinUnixStyle(char* dst, size_t dstSize, const char* pathA, const char* pathB);
-}
-
-struct Path : String<PATH_CHARS_MAX>
-{
-    Path() = default;
-    Path(const char* cstr) : String<PATH_CHARS_MAX>(cstr) {}
-    Path(const String<PATH_CHARS_MAX>& str) : String<PATH_CHARS_MAX>(str) {}
-
-    Path& SetToCurrentDir();
-
-    Path& ConvertToUnix();
-    Path& ConvertToWin();
-    Path& ConvertToAbsolute();
-
-    Path GetAbsolute() const;
-    Path GetFileExtension() const;
-    Path GetFileNameAndExt() const;
-    Path GetFileName() const;
-    Path GetDirectory() const;
-
-    inline PathInfo Stat() const;
-    inline bool Exists() const;
-    inline bool IsFile() const;
-    inline bool IsDir() const;
-
-    Path& Join(const Path& path);
-    static Path Join(const Path& pathA, const Path& pathB);
-    static Path JoinUnix(const Path& pathA, const Path& pathB);
-};
-
-enum class FileOpenFlags : uint32
-{
-    None         = 0,
-    Read         = 0x01, // Open for reading
-    Write        = 0x02, // Open for writing
-    Append       = 0x03, // Append to the end of the file (write-mode only)
-    NoCache      = 0x08, // Disable IO cache, suitable for very large files, remember to align buffers to virtual memory pages
-    Writethrough = 0x10, // Write-through writes meta information to disk immediately
-    SeqScan      = 0x20, // Optimize cache for sequential read (not to be used with NOCACHE)
-    RandomAccess = 0x40, // Optimize cache for random access read (not to be used with NOCACHE)
-    Temp         = 0x80, // Indicate that the file is temperary
-};
-ENABLE_BITMASK(FileOpenFlags);
-
-enum class FileSeekMode
-{
-    Start = 0,
-    Current,
-    End 
-};
-
-struct File
-{
-    File();
-
-    bool Open(const char* filepath, FileOpenFlags flags);
-    void Close();
-
-    size_t Read(void* dst, size_t size);
-    size_t Write(const void* src, size_t size);
-    size_t Seek(size_t offset, FileSeekMode mode = FileSeekMode::Start);
-
-    template <typename _T> uint32 Read(_T* dst, uint32 count);
-    template <typename _T> uint32 Write(_T* dst, uint32 count);
-
-    size_t GetSize() const;
-    uint64 GetLastModified() const;
-    bool IsOpen() const;
-
-private:
-    uint8 mData[64];
-};
-
-struct AsyncFile
-{
-    void* data;
-    void* userData;
-    uint64 lastModifiedTime;
-    uint32 size;
-    Path filepath;
-};
-
-using AsyncFileCallback = void(*)(AsyncFile* file, bool failed);
-
-struct AsyncFileRequest
-{
-    MemAllocator* alloc = Mem::GetDefaultAlloc();// Allocator to allocate a continous chunk of file data 
-    AsyncFileCallback readFn = nullptr;  // Callback to receive async results. see 'AsyncFileCallback'. If this value is null, then you should use Wait and IsFinished to poll for data
-    void* userData = nullptr;            // user-data. Can be allocated by async functions internally as well. See 'userDataAllocatedSize'
-    uint32 userDataAllocateSize = 0;     // allocate user-data for this request and copy over the provdided userData instead of using userData pointer directly
-    uint32 sizeHint = 0;                 // If you provide a size hint, then file info will not be queried and AsyncRead will allocate this size instead
-};
-
-namespace Async
-{
-    API bool Initialize();
-    API void Release();
-
-    API AsyncFile* ReadFile(const char* filepath, const AsyncFileRequest& request = AsyncFileRequest());
-    API void Close(AsyncFile* file);
-    API bool Wait(AsyncFile* file);
-    API bool IsFinished(AsyncFile* file, bool* outError = nullptr);
-};
-
-struct SocketErrorCode 
-{
-    enum Enum
-    {
-        None = 0,
-        AddressInUse,
-        AddressNotAvailable,
-        AddressUnsupported,
-        AlreadyConnected,
-        ConnectionRefused,
-        Timeout,
-        HostUnreachable,
-        ConnectionReset,
-        SocketShutdown,
-        MessageTooLarge,
-        NotConnected,
-        Unknown
-    };
-
-    static const char* ToStr(Enum code)
-    {
-        switch (code) {
-        case AddressInUse:         return "AddressInUse";
-        case AddressNotAvailable:  return "AddressNotAvailable";
-        case AddressUnsupported:   return "AddressUnsupported";
-        case AlreadyConnected:     return "AlreadyConnected";
-        case ConnectionRefused:    return "ConnectionRefused";        
-        case Timeout:              return "Timeout";
-        case HostUnreachable:      return "HostUnreachable";
-        case ConnectionReset:      return "ConnectionReset";
-        case SocketShutdown:       return "SocketShutdown";
-        case MessageTooLarge:      return "MessageTooLarge";
-        case NotConnected:         return "NotConnected";
-        default:                   return "Unknown";
-        }
+        void DebugDbgHelpInit();
+        void DebugDbgHelpLock();
+        void DebugDbgHelpUnlock();
+    #ifdef __cplusplus
     }
-};
-
-#if PLATFORM_WINDOWS
-using SocketHandle = uint64;
-#else 
-using SocketHandle = int;
+    #endif
 #endif
 
-struct SocketTCP
+
+#if PLATFORM_WINDOWS 
+using RDBG_Id = uint32;
+
+enum class RDBG_ProcessorBreakpointType : uint8
 {
-    SocketTCP();
-
-    void Close();
-    bool IsValid() const;
-    bool IsConnected() const { return mLive; }
-    SocketErrorCode::Enum GetErrorCode() const { return mErrCode; }
-
-    uint32 Write(const void* src, uint32 size);
-    uint32 Read(void* dst, uint32 dstSize);
-
-    static SocketTCP CreateListener();
-    SocketTCP Accept(char* clientUrl = nullptr, uint32 clientUrlSize = 0);
-    bool Listen(uint16 port, uint32 maxConnections = UINT32_MAX);
-
-    static SocketTCP Connect(const char* url);
-
-private:
-    static bool ParseUrl(const char* url, char* address, size_t addressSize, char* port, size_t portSize, const char** pResource = nullptr);
-
-private:
-    SocketHandle mSock;
-    SocketErrorCode::Enum mErrCode;
-    uint16 mLive;
+    Write = 1,
+    ReadWrite = 2,
+    Execute = 3
 };
 
-struct UniqueID
+namespace RDBG
 {
-    uint8 data[16];
-
-    bool operator==(const UniqueID& uuid) const;
-
-    static bool Generate(UniqueID* uuid);
-    static bool ToString(const UniqueID& uuid, char* str, uint32 size);
-    static bool FromString(UniqueID* uuid, const char* str);
-};
-
-using OSDLL = void*;
-
-struct SysInfo
-{
-    enum class CpuFamily 
-    {
-        Unknown = 0,
-        ARM,
-        x86_64,
-        ARM64
-    };
-
-    char         cpuName[32];
-    char         cpuModel[64];
-    CpuFamily    cpuFamily;
-    size_t       pageSize;
-    size_t       physicalMemorySize;
-    uint32       coreCount;
-    uint32       cpuCapsSSE : 1;
-    uint32       cpuCapsSSE2 : 1;
-    uint32       cpuCapsSSE3 : 1;
-    uint32       cpuCapsSSE41 : 1;
-    uint32       cpuCapsSSE42: 1;
-    uint32       cpuCapsAVX : 1;
-    uint32       cpuCapsAVX2 : 1;
-    uint32       cpuCapsAVX512 : 1;
-    uint32       cpuCapsNeon : 1;
-};
-
-namespace OS
-{
-    API void PauseCPU();
-    uint64 GetCPUClock();
-
-    API [[nodiscard]] OSDLL LoadDLL(const char* filepath, char** pErrorMsg = nullptr);
-    API void UnloadDLL(OSDLL dll);
-    API void* GetSymbolAddress(OSDLL dll, const char* symbolName);
-    API size_t GetPageSize();
-    API void GetSysInfo(SysInfo* info);
-    API bool IsDebuggerPresent();
-    API void GenerateCmdLineFromArgcArgv(int argc, const char* argv[], char** outString, uint32* outStringLen, 
-                                             MemAllocator* alloc = Mem::GetDefaultAlloc(), const char* prefixCmd = nullptr);
-
-    API bool SetEnvVar(const char* name, const char* value);
-    API bool GetEnvVar(const char* name, char* outValue, uint32 valueSize);
-
-    API char* GetMyPath(char* dst, size_t dstSize);
-    API char* GetAbsolutePath(const char* path, char* dst, size_t dstSize);
-    API char* GetCurrentDir(char* dst, size_t dstSize);
-    API void  SetCurrentDir(const char* path);
-    API char* GetHomeDir(char* dst, size_t dstSize);
-    API char* GetCacheDir(char* dst, size_t dstSize, const char* appName);
-    API PathInfo GetPathInfo(const char* path);
-    API bool PathExists(const char* path);
-    API bool IsPathFile(const char* path);
-    API bool IsPathDir(const char* path);
-    API bool CreateDir(const char* path);
-    API bool MovePath(const char* src, const char* dest);
-    API bool MakeTempPath(char* dst, size_t dstSize, const char* namePrefix, const char* dir = nullptr);
-    API bool DeleteFilePath(const char* path);
+    API bool Initialize(const char* serverName, const char* remedybgPath);
+    API void Release();
+    API bool AttachToProcess(uint32 id = 0);
+    API bool DetachFromProcess();
+    API bool Break();
+    API bool Continue();
+    API bool RunToFileAtLine(const char* filename, uint32 line);
+    API RDBG_Id AddFunctionBreakpoint(const char* funcName, const char* conditionExpr = nullptr, uint32 overloadId = 0);
+    API RDBG_Id AddFileLineBreakpoint(const char* filename, uint32 line, const char* conditionExpr = nullptr);
+    API RDBG_Id AddAddressBreakpoint(uintptr_t addr, const char* conditionExpr = nullptr);
+    API RDBG_Id AddProcessorBreakpoint(const void* addr, uint8 numBytes, 
+                                       RDBG_ProcessorBreakpointType type, const char* conditionExpr = nullptr);
+    API bool EnableBreakpoint(RDBG_Id bId, bool enable);
+    API bool SetBreakpointCondition(RDBG_Id bId, const char* conditionExpr);
+    API bool DeleteBreakpoint(RDBG_Id bId);
+    API bool DeleteAllBreakpoints();
+    API RDBG_Id AddWatch(const char* expr, const char* comment, uint8 windowNum);
+    API RDBG_Id DeleteWatch(RDBG_Id wId);
+    bool DeleteAllWatches();
 }
 
-#if PLATFORM_PC
-enum class OSProcessFlags : uint32
+#endif // PLATFORM_WINDOWS
+
+
+
+
+
+struct HashResult128
 {
-    None = 0,
-    CaptureOutput = 0x1,
-    InheritHandles = 0x2,
-    DontCreateConsole = 0x4,
-    ForceCreateConsole = 0x8
+    uint64 h1;
+    uint64 h2;
+
+    bool operator==(const HashResult128& h) const { return h1 == h.h1 && h2 == h.h2; }
+    bool operator!=(const HashResult128& h) const { return h1 != h.h1 || h2 != h.h2; }
 };
-ENABLE_BITMASK(OSProcessFlags);
 
-struct OSProcess
+namespace Hash
 {
-    OSProcess();
-    ~OSProcess();
+    INLINE constexpr uint32 Fnv32(const void* data, size_t len);
+    INLINE constexpr uint32 Fnv32Str(const char* str);
+    template <typename _T> constexpr uint32 Fnv32(const _T& data);
 
-    bool Run(const char* cmdline, OSProcessFlags flags, const char* cwd = nullptr);
-    void Wait() const;
-    bool IsRunning() const;
-    void Abort();
-    bool IsValid() const;
+    INLINE constexpr uint32 Uint32(uint32 key);
+    INLINE constexpr uint64 Uint64(uint64 key);
+    INLINE constexpr uint32 Int64To32(uint64 key);
 
-    int GetExitCode() const;
-    uint32 ReadStdOut(void* data, uint32 size) const;
-    uint32 ReadStdErr(void* data, uint32 size) const;
+    API uint32 CRC32(const void* data, size_t len, uint32 seed = 0);
 
-private:
-    void* mProcess;
-    void* mStdOutPipeRead;
-    void* mStdErrPipeRead;
+    #if CPU_X86 && defined(__SSE4_2__)
+    API uint32 CRC32_x86_Aligned(const void* data, size_t len);
+    #endif
+
+    API uint32 Murmur32(const void* key, uint32 len, uint32 seed = 0);
+    API HashResult128 Murmur128(const void* key, size_t len, uint32 seed = 0);
+}
+
+struct HashMurmur32Incremental
+{
+    HashMurmur32Incremental(uint32 seed = 0);
+
+    template <typename _T> 
+    HashMurmur32Incremental& Add(const _T& data) { return AddAny(&data, sizeof(_T)); }
     
-#if PLATFORM_POSIX
-    int mExitCode;
-    int mTermSignalCode;
-#endif
+    template <typename _T> 
+    HashMurmur32Incremental& Add(const _T* data, uint32 count) { return AddAny(data, sizeof(_T)*count); }
+
+    uint32 Hash();
+    HashMurmur32Incremental& AddAny(const void* data, uint32 size);
+    HashMurmur32Incremental& AddCStringArray(const char** strs, uint32 numStrings);
+
+    uint32 mHash;
+    uint32 mTail;
+    uint32 mCount;
+    uint32 mSize;
+
+private:
+    void Murmur32MixTail(const uint8** pData, uint32* pSize);
 };
 
-#endif // PLATFORM_PC
 
-#if PLATFORM_WINDOWS
 
-enum class OSWin32ShowWindow : int
+namespace _private { struct HashTableData; };
+
+template <typename _T>
+struct HashTable
 {
-    Hide = 0,
-    Normal = 1,
-    Minimized = 2,
-    Maximized = 3,
-    NotActive = 4,
-    Show = 5,
-    Minimize = 6,
-    MinimizedNotActive = 7,
-    Restore = 9,
-    Default = 10,
-    ForceMinimize = 11
+    HashTable() : mHashTable(nullptr), mAlloc(Mem::GetDefaultAlloc()) {}
+    explicit HashTable(MemAllocator* alloc) : mHashTable(nullptr), mAlloc(alloc) {}
+    explicit HashTable(uint32 capacity, void* buff, size_t size);
+
+    void SetAllocator(MemAllocator* alloc);
+    bool Reserve(uint32 capacity);
+    bool Reserve(uint32 capacity, void* buff, size_t size);
+    void Free();
+
+    bool Grow(uint32 newCapacity);
+    bool Grow(uint32 newCapacity, void* buff, size_t size);
+
+    static size_t GetMemoryRequirement(uint32 capacity);
+    
+    _T* Add(uint32 key);
+    uint32 Add(uint32 key, const _T& value);
+    uint32 AddIfNotFound(uint32 key, const _T& value);
+    uint32 Find(uint32 key) const;
+    void Clear();
+
+    const _T& Get(uint32 index) const;
+    void Set(uint32 index, const _T& value);
+    _T& GetMutable(uint32 index);
+    void Remove(uint32 index);
+
+    const _T& FindAndFetch(uint32 key, const _T& notFoundValue = {}) const;
+    void FindAndRemove(uint32 key);
+
+    uint32 Capacity() const;
+    uint32 Count() const;
+    const uint32* Keys() const;
+    const _T* Values() const;
+    bool IsFull() const;
+
+public:
+    _private::HashTableData* mHashTable;
+    MemAllocator* mAlloc;
 };
 
-enum class OSWin32ShellExecuteResult
-{
-    Ok,
-    OutOfMemory,
-    FileNotFound,
-    PathNotFound,
-    BadFormat,
-    AccessDenied,
-    NoAssociation,
-    UnknownError
-};
-
-enum class OSWin32Folder
-{
-    Documents = 0,  // %USERPROFILE%\My Documents
-    Fonts,          // %windir%\Fonts
-    Downloads,      // %USERPROFILE%\Downloads
-    AppData,        // %USERPROFILE%\AppData\Roaming
-    LocalAppData,   // %USERPROFILE%\AppData\Local
-    ProgramFiles,   // %SystemDrive%\Program Files
-    System,         // %windir%\system32
-    Startup,        // %APPDATA%\Microsoft\Windows\Start Menu\Programs\StartUp
-    Desktop,        // %USERPROFILE%\Desktop
-    _Count
-};
-
-namespace OS
-{
-    API bool Win32IsProcessRunning(const char* execName);
-    API bool Win32GetRegisterLocalMachineString(const char* subkey, const char* value, char* dst, size_t dstSize);
-    API void Win32PrintToDebugger(const char* text); 
-    API bool Win32SetPrivilege(const char* name, bool enable = true);
-    API OSWin32ShellExecuteResult Win32ShellExecute(const char* filepath, const char* args = nullptr, 
-                                                         const char* cwd = nullptr, 
-                                                         OSWin32ShowWindow showFlag = OSWin32ShowWindow::Default, 
-                                                         const char* operation = nullptr,
-                                                         void** pInstance = nullptr);
-    API char* Win32GetFolder(OSWin32Folder folder, char* dst, size_t dstSize);
-    API void Win32EnableProgramConsoleCoding();
-}
-
-#elif PLATFORM_ANDROID
-struct _JNIEnv;
-typedef _JNIEnv JNIEnv;
-
-typedef struct ANativeActivity ANativeActivity; // <android/native_activity.h>
-
-enum class OSAndroidLogType 
-{
-    Unknown = 0,
-    Default,
-    Verbose,
-    Debug,
-    Info,
-    Warn,
-    Error,
-    Fatal,
-    Silent,
-};
-
-namespace OS
-{
-    API void AndroidPrintToLog(OSAndroidLogType logType, const char* tag, const char* text);
-    API JNIEnv* AndroidAcquireJniEnv(ANativeActivity* activity);
-    API void AndroidReleaseJniEnv(ANativeActivity* activity);    
-    API JNIEnv* AndroidGetJniEnv();
-    API Path AndroidGetCacheDirectory(ANativeActivity* activity);
-}
-#endif
+using HashTableUint = HashTable<uint32>;
 
 namespace _private
 {
-    void CountersAddThread(size_t stackSize);
-    void CountersRemoveThread(size_t stackSize);
-    void CountersAddMutex();
-    void CountersRemoveMutex();
-    void CountersAddSignal();
-    void CountersRemoveSignal();
-    void CountersAddSemaphore();
-    void CountersRemoveSemaphore();
+    struct HashTableData
+    {
+        uint32* keys;
+        uint8* 	values;      // Can be any POD data or opaque type
+        uint32	bitshift;
+        uint32	valueStride;
+        uint32	count;
+        uint32	capacity;
+    };
+
+    API [[nodiscard]] HashTableData* hashtableCreate(uint32 capacity, 
+                                                     uint32 valueStride,
+                                                     MemAllocator* alloc = Mem::GetDefaultAlloc());
+    API void hashtableDestroy(HashTableData* tbl, MemAllocator* alloc = Mem::GetDefaultAlloc());
+    API bool hashtableGrow(HashTableData** pTbl, MemAllocator* alloc = Mem::GetDefaultAlloc());
+    
+    API uint32 hashtableAdd(HashTableData* tbl, uint32 key, const void* value);
+    API uint32 hashtableAddKey(HashTableData* tbl, uint32 key);
+    API uint32 hashtableFind(const HashTableData* tbl, uint32 key);
+    API void hashtableClear(HashTableData* tbl);
+
+    API size_t hashtableGetMemoryRequirement(uint32 capacity, uint32 valueStride);
+    API HashTableData* hashtableCreateWithBuffer(uint32 capacity, uint32 valueStride, void* buff, size_t size);
+    API bool hashtableGrowWithBuffer(HashTableData** pTbl, void* buff, size_t size);
+} // _private
+
+
+inline constexpr uint32 kFnv1Init = 0x811c9dc5;
+inline constexpr uint32 kFnv1Prime = 0x01000193;
+
+INLINE constexpr 
+uint32 Hash::Fnv32(const void* data, size_t len)
+{
+    const char* bp = (const char*)data;
+    const char* be = bp + len;
+    
+    uint32 hval = kFnv1Init;
+    while (bp < be) {
+        hval ^= (uint32)*bp++;
+        hval *= kFnv1Prime;
+    }
+    
+    return hval;
 }
 
-struct SysPrimitiveStats
+INLINE constexpr 
+uint32 Hash::Fnv32Str(const char* str)
 {
-    uint32 numMutexes;
-    uint32 numSignals;
-    uint32 numSemaphores;
-    uint32 numThreads;
-    uint64 threadStackSize;
+    const char* s = str;
+    
+    uint32 hval = kFnv1Init;
+    while (*s) {
+        hval ^= (uint32)*s++;
+        hval *= kFnv1Prime;
+    }
+    
+    return hval;
+}
+
+#ifdef __cplusplus
+template <typename _T> constexpr 
+uint32 Hash::Fnv32(const _T& data)
+{
+    return Hash::Fnv32(&data, sizeof(data));
+}
+#endif
+
+INLINE constexpr 
+uint32 Hash::Uint32(uint32 key)
+{
+    const uint32 c2 = 0x27d4eb2d;    // a prime or an odd constant
+    key = (key ^ 61) ^ (key >> 16);
+    key = key + (key << 3);
+    key = key ^ (key >> 4);
+    key = key * c2;
+    key = key ^ (key >> 15);
+    return key;
+}
+
+INLINE constexpr 
+uint64 Hash::Uint64(uint64 key)
+{
+    key = (~key) + (key << 21);    // key = (key << 21) - key - 1;
+    key = key ^ (key >> 24);
+    key = (key + (key << 3)) + (key << 8);    // key * 265
+    key = key ^ (key >> 14);
+    key = (key + (key << 2)) + (key << 4);    // key * 21
+    key = key ^ (key >> 28);
+    key = key + (key << 31);
+    return key;
+}
+
+INLINE constexpr 
+uint32 Hash::Int64To32(uint64 key)
+{
+    key = (~key) + (key << 18);
+    key = key ^ (key >> 31);
+    key = key * 21;
+    key = key ^ (key >> 11);
+    key = key + (key << 6);
+    key = key ^ (key >> 22);
+    return (uint32)key;
+}
+
+template <typename _T>
+inline HashTable<_T>::HashTable(uint32 capacity, void* buff, size_t size)
+{
+    mHashTable = _private::hashtableCreateWithBuffer(capacity, sizeof(_T), buff, size);
+    mAlloc = nullptr;
+    ASSERT(mHashTable);
+}    
+
+template <typename _T>
+inline void HashTable<_T>::SetAllocator(MemAllocator* alloc)
+{
+    ASSERT_MSG(!mHashTable, "hash-table already initialized with another allocator");
+    mAlloc = alloc;
+}
+
+template <typename _T>
+inline bool HashTable<_T>::Reserve(uint32 capacity)
+{
+    ASSERT_MSG(!mHashTable, "hash-table already initialized");
+    ASSERT(mAlloc);
+    mHashTable = _private::hashtableCreate(capacity, sizeof(_T), mAlloc);
+    return mHashTable ? true : false;
+}
+
+template <typename _T>
+inline bool HashTable<_T>::Reserve(uint32 capacity, void* buff, size_t size)
+{
+    ASSERT_MSG(!mHashTable, "hash-table already initialized");
+    mHashTable = _private::hashtableCreateWithBuffer(capacity, sizeof(_T), buff, size);
+    mAlloc = nullptr;
+    return mHashTable ? true : false;
+}    
+
+template <typename _T>
+inline void HashTable<_T>::Free()
+{
+    if (mHashTable && mAlloc)
+        _private::hashtableDestroy(mHashTable, mAlloc);
+    mHashTable = nullptr;
+}
+
+template <typename _T>
+inline const _T* HashTable<_T>::Values() const
+{
+    return reinterpret_cast<const _T*> (mHashTable->values);
+}
+
+template <typename _T>
+inline const uint32* HashTable<_T>::Keys() const
+{
+    return mHashTable->keys;
+}
+
+template <typename _T>
+inline uint32 HashTable<_T>::Count() const
+{
+    return mHashTable->count;
+}
+
+template <typename _T>
+inline uint32 HashTable<_T>::Capacity() const
+{
+    return mHashTable->capacity;
+}
+
+template <typename _T>
+inline const _T& HashTable<_T>::Get(uint32 index) const
+{
+    return reinterpret_cast<_T*>(mHashTable->values)[index];
+}
+
+template <typename _T>
+inline void HashTable<_T>::Set(uint32 index, const _T& value)
+{
+    reinterpret_cast<_T*>(mHashTable->values)[index] = value;
+}
+
+template <typename _T>
+inline _T& HashTable<_T>::GetMutable(uint32 index)
+{
+    return reinterpret_cast<_T*>(mHashTable->values)[index];
+}
+
+template <typename _T>
+inline void HashTable<_T>::Remove(uint32 index)
+{
+    ASSERT_MSG(index < mHashTable->capacity, "index out of range");
+
+    mHashTable->keys[index] = 0;
+    --mHashTable->count;
+}
+
+template <typename _T>
+inline void HashTable<_T>::Clear()
+{
+    _private::hashtableClear(mHashTable);
+}
+
+template <typename _T>
+inline uint32 HashTable<_T>::Find(uint32 key) const
+{
+    return _private::hashtableFind(mHashTable, key);
+}
+
+template <typename _T>
+inline uint32 HashTable<_T>::AddIfNotFound(uint32 key, const _T& value)
+{
+    uint32 index = Find(key);
+
+    if (index == INVALID_INDEX)
+        return Add(key, value);
+    else
+        return index;
+}
+
+template <typename _T>
+inline uint32 HashTable<_T>::Add(uint32 key, const _T& value)
+{
+    if (mHashTable == nullptr) {
+        ASSERT(mAlloc);
+        Reserve(32);
+        ASSERT(mHashTable);
+    }
+    
+    if (mHashTable->count == mHashTable->capacity) {
+        ASSERT_MSG(mAlloc, "Only hashtables with allocators can grow");
+        [[maybe_unused]] bool r = _private::hashtableGrow(&mHashTable, mAlloc);
+        ASSERT_ALWAYS(r, "could not grow hash-table");
+    }
+
+    uint32 h = _private::hashtableAddKey(mHashTable, key);
+    ((_T*)mHashTable->values)[h] = value;
+    return h;
+}
+
+template <typename _T>
+inline _T* HashTable<_T>::Add(uint32 key)
+{
+    ASSERT(mHashTable);
+    if (mHashTable->count == mHashTable->capacity) {
+        ASSERT_MSG(mAlloc, "HashTable full. Only hashtables with allocators can grow");
+        [[maybe_unused]] bool r = _private::hashtableGrow(&mHashTable, mAlloc);
+        ASSERT_ALWAYS(r, "could not grow hash-table");
+    }
+    uint32 h = _private::hashtableAddKey(mHashTable, key);
+
+    return &((_T*)mHashTable->values)[h];
+}
+
+template <typename _T>
+inline const _T& HashTable<_T>::FindAndFetch(uint32 key, const _T& not_found_value /*= {0}*/) const
+{
+    ASSERT(mHashTable);
+    uint32 index = _private::hashtableFind(mHashTable, key);
+    return index != UINT32_MAX ? Get(index) : not_found_value;
+}
+
+template <typename _T>
+inline void HashTable<_T>::FindAndRemove(uint32 key)
+{
+    ASSERT(mHashTable);
+    uint32 index = _private::hashtableFind(mHashTable, key);
+    if (index != UINT32_MAX)
+        Remove(index);
+}
+
+template <typename _T>
+inline bool HashTable<_T>::IsFull() const
+{
+    ASSERT(mHashTable);
+    return mHashTable->count == mHashTable->capacity;
+}
+
+template <typename _T>
+inline size_t HashTable<_T>::GetMemoryRequirement(uint32 capacity)
+{
+    return _private::hashtableGetMemoryRequirement(capacity, sizeof(_T));
+}
+
+template <typename _T>
+inline bool HashTable<_T>::Grow(uint32 newCapacity)
+{
+    ASSERT(mAlloc);
+    ASSERT(mHashTable);
+    ASSERT(newCapacity > mHashTable->capacity);
+
+    return _private::hashtableGrow(&mHashTable, mAlloc);
+}
+
+template <typename _T>
+inline bool HashTable<_T>::Grow(uint32 newCapacity, void* buff, size_t size)
+{
+    ASSERT(!mAlloc);
+    ASSERT(mHashTable);
+    ASSERT(newCapacity > mHashTable->capacity);
+
+    return _private::hashtableGrowWithBuffer(&mHashTable, buff, size);
+}
+
+
+
+
+typedef struct ini_t ini_t;
+
+struct INIFileProperty
+{
+    void SetName(const char* name);
+    void SetValue(const char* value);
+
+    const char* GetName();
+    const char* GetValue();
+
+    void Delete();
+
+    inline bool IsValid() const    { return id != -1; }
+
+    ini_t* ini = nullptr;
+    int sectionId = -1;
+    int id = -1;
 };
 
-SysPrimitiveStats GetSystemPrimitiveStats();
-
-inline Path& Path::SetToCurrentDir()
+struct INIFileSection
 {
-    OS::GetCurrentDir(mStr, sizeof(mStr));
-    mLen = Str::Len(mStr);
-    return *this;
+    uint32 GetPropertyCount();
+    INIFileProperty GetProperty(uint32 index);
+    const char* GetPropertyName(uint32 index);
+
+    INIFileProperty NewProperty(const char* name, const char* value);
+    INIFileProperty FindProperty(const char* name);
+
+    void SetName(const char* name);
+    const char* GetName();
+
+    void Delete();
+
+    inline bool IsValid() const    { return id != -1; }
+
+    ini_t* ini = nullptr;
+    int id = -1;
+};
+
+struct INIFileContext
+{
+    uint32 GetSectionCount() const;
+    INIFileSection GetSection(uint32 index) const;
+    const char* GetSectionName(uint32 index) const;
+
+    INIFileSection GetRootSection() const;
+
+    INIFileSection NewSection(const char* name) const;
+    INIFileSection FindSection(const char* name) const;
+
+    inline bool IsValid() const    { return ini != nullptr; }
+
+    void Destroy();
+
+    ini_t* ini = nullptr;
+};
+
+namespace INIFile
+{
+    API INIFileContext Create(MemAllocator* alloc = Mem::GetDefaultAlloc());
+    API INIFileContext Load(const char* filepath, MemAllocator* alloc = Mem::GetDefaultAlloc());
+    API INIFileContext LoadFromString(const char* data, MemAllocator* alloc = Mem::GetDefaultAlloc());
+    API bool Save(const INIFileContext& ini, const char* filepath);
+    API Blob SaveToMem(const INIFileContext& ini, MemAllocator* alloc);
 }
 
-inline Path& Path::ConvertToUnix()
+
+
+
+struct JobsInstance;
+using JobsHandle = JobsInstance*;
+using JobsCallback = void(*)(uint32 groupIndex, void* userData);
+
+enum class JobsPriority : uint32
 {
-    PathUtils::ToUnix(mStr, mStr, sizeof(mStr));
-    return *this;
+    High = 0,
+    Normal,
+    Low,
+    _Count
+};
+
+enum class JobsType : uint32
+{
+    ShortTask = 0,
+    LongTask,
+    _Count
+};
+
+enum class JobsStackSize : uint32
+{
+    Small = 0,  // 64kb
+    Medium,     // 512kb
+    Large,      // 2048kb
+    _Count
+};
+
+struct alignas(CACHE_LINE_SIZE) JobsSignal
+{
+    JobsSignal();
+
+    void Raise();
+    void Wait();
+    void Decrement();
+    void Increment();
+    void WaitOnCondition(bool(*condFn)(int value, int reference), int reference = 0);
+    void Set(int value = 1);
+    void Reset();
+
+private:
+    uint8 data[128];
+};
+
+struct JobsInitParams
+{
+    MemAllocator* alloc = Mem::GetDefaultAlloc();
+    uint32 numShortTaskThreads = 0; // Default: total number of cores - 1
+    uint32 numLongTaskThreads = 0;  // Default: total number of cores - 1
+    uint32 defaultShortTaskStackSize = SIZE_MB;
+    uint32 defaultLongTaskStackSize = SIZE_MB;
+    bool debugAllocations = false;
+};
+
+namespace Jobs
+{
+    API void Initialize(const JobsInitParams& initParams);
+    API void Release();
+
+    API [[nodiscard]] JobsHandle Dispatch(JobsType type, JobsCallback callback, void* userData = nullptr, 
+                                          uint32 groupSize = 1, JobsPriority prio = JobsPriority::Normal, 
+                                          JobsStackSize stackSize = JobsStackSize::Medium);
+    API void WaitForCompletionAndDelete(JobsHandle handle);
+    API void YieldCurrent();
+
+    API bool IsRunningOnCurrentThread();
+    API bool IsRunning(JobsHandle handle);
+    API void Delete(JobsHandle handle);
+
+    API void DispatchAndForget(JobsType type, JobsCallback callback, void* userData = nullptr, 
+                               uint32 groupSize = 1, JobsPriority prio = JobsPriority::Normal, 
+                               JobsStackSize stackSize = JobsStackSize::Medium);
+
+    API uint32 GetWorkerThreadsCount(JobsType type);
 }
 
-inline Path& Path::ConvertToWin()
+
+
+//----------------------------------------------------------------------------------------------------------------------
+// MathTypes.h
+
+
+
+PRAGMA_DIAGNOSTIC_PUSH()
+PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4201)    // nonstandard extension used : nameless struct/union
+PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4204)    // nonstandard extension used: non-constant aggregate initializer
+
+struct Float2 
 {
-    PathUtils::ToWin(mStr, mStr, sizeof(mStr));
-    return *this;
+    union {
+        struct 
+        {
+            float x;
+            float y;
+        };
+
+        float f[2];
+    };
+
+    Float2() = default;
+    explicit constexpr Float2(float _x, float _y) : x(_x), y(_y) {}
+    explicit constexpr Float2(float _xx) : x(_xx), y(_xx) {}
+    explicit constexpr Float2(const float* _f) : x(_f[0]), y(_f[1]) {}
+
+
+    static float  Dot(Float2 _a, Float2 _b);
+    static Float2 Norm(Float2 _a);
+    static float  Len(Float2 _a);
+    static Float2 NormLen(Float2 _a, float* outlen);
+    static Float2 Min(Float2 _a, Float2 _b);
+    static Float2 Max(Float2 _a, Float2 _b);
+    static Float2 Lerp(Float2 _a, Float2 _b, float _t);
+    static Float2 Abs(Float2 _a);
+    static Float2 Neg(Float2 _a);
+    static Float2 Add(Float2 _a, Float2 _b);
+    static Float2 Add(Float2 _a, float _b);
+    static Float2 Sub(Float2 _a, Float2 _b);
+    static Float2 Sub(Float2 _a, float _b);
+    static Float2 Mul(Float2 _a, Float2 _b);
+    static Float2 Mul(Float2 _a, float _b);
+    static Float2 CalcLinearFit2D(const Float2* _points, int _num);
+};
+
+struct Float3 
+{
+    union {
+        struct 
+        {
+            float x;
+            float y;
+            float z;
+        };
+
+        float f[3];
+    };
+
+    Float3() = default;
+    explicit constexpr Float3(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}
+    explicit constexpr Float3(float _xxx) : x(_xxx), y(_xxx), z(_xxx) {}
+    explicit constexpr Float3(const float* _f) : x(_f[0]), y(_f[1]), z(_f[2]) {}
+    explicit constexpr Float3(Float2 v, float _z = 0) : x(v.x), y(v.y), z(_z) {}
+
+
+    static Float3 Abs(Float3 _a);
+    static Float3 Neg(Float3 _a);
+    static Float3 Add(Float3 _a, Float3 _b);
+    static Float3 Add(Float3 _a, float _b);
+    static Float3 Sub(Float3 _a, Float3 _b);
+    static Float3 Sub(Float3 _a, float _b);
+    static Float3 Mul(Float3 _a, Float3 _b);
+    static Float3 Mul(Float3 _a, float _b);
+    static float  Dot(Float3 _a, Float3 _b);
+    static Float3 Cross(Float3 _a, Float3 _b);
+    static Float3 Lerp(Float3 _a, Float3 _b, float _t);
+    static Float3 SmoothLerp(Float3 _a, Float3 _b, float _dt, float _h);
+    static float  Len(Float3 _a);
+    static Float3 Norm(Float3 _a);
+    static Float3 NormLen(Float3 _a, float* _outlen);
+    static Float3 Min(Float3 _a, Float3 _b);
+    static Float3 Max(Float3 _a, Float3 _b);
+    static Float3 Rcp(Float3 _a);
+    static void   Tangent(Float3* _t, Float3* _b, Float3 _n);
+    static void   TangentAngle(Float3* _t, Float3* _b, Float3 _n, float _angle);
+    static Float3 FromLatLong(float _u, float _v);
+    static Float2 ToLatLong(Float3 _dir);
+    static Float3 CalcLinearFit3D(const Float3* _points, int _num);
+};
+
+struct Float4 
+{
+    union {
+        struct 
+        {
+            float x;
+            float y;
+            float z;
+            float w;
+        };
+
+        float f[4];
+    };
+
+    Float4() = default;
+    explicit constexpr Float4(float _x, float _y, float _z, float _w = 1.0f) : x(_x), y(_y), z(_z), w(_w) {}
+    explicit constexpr Float4(float _xxxx) : x(_xxxx), y(_xxxx), z(_xxxx), w(_xxxx) {}
+    explicit constexpr Float4(const float* _f) : x(_f[0]), y(_f[1]), z(_f[2]), w(_f[3]) {}
+    explicit constexpr Float4(Float3 v, float _w = 1.0f) : x(v.x), y(v.y), z(v.z), w(_w) {}
+    explicit constexpr Float4(Float2 v, float _z = 0, float _w = 1.0f) : x(v.x), y(v.y), z(_z), w(_w) {}
+
+    static Float4 Mul(Float4 _a, Float4 _b);
+    static Float4 Mul(Float4 _a, float _b);
+    static Float4 Add(Float4 _a, Float4 _b);
+    static Float4 Sub(Float4 _a, Float4 _b);
+};
+
+struct Color4u 
+{
+    union {
+        struct 
+        {
+            uint8 r;
+            uint8 g;
+            uint8 b;
+            uint8 a;
+        };
+
+        unsigned int n;
+    };
+
+    Color4u() = default;
+
+    explicit constexpr Color4u(uint8 _r, uint8 _g, uint8 _b, uint8 _a = 255)
+        : r(_r), g(_g), b(_b), a(_a)
+    {
+    }
+
+    explicit constexpr Color4u(float _r, float _g, float _b, float _a) :
+        r((uint8)(_r * 255.0f)),
+        g((uint8)(_g * 255.0f)),
+        b((uint8)(_b * 255.0f)),
+        a((uint8)(_a * 255.0f))
+    {
+    }
+
+    explicit constexpr Color4u(const float* f) : Color4u(f[0], f[1], f[2], f[3]) {}
+    constexpr Color4u(uint32 _n) : n(_n) {}
+
+    Color4u& operator=(uint32 _n) 
+    {
+        n = _n;
+        return *this;
+    }
+
+    static float ValueToLinear(float _a);
+    static float ValueToGamma(float _a);
+    static Float4 ToFloat4(Color4u c);
+    static Color4u  Blend(Color4u _a, Color4u _b, float _t);
+    static Float4 ToFloat4SRGB(Float4 cf);
+    static Float4 ToFloat4Linear(Float4 c);
+    static Float3 RGBtoHSV(Float3 rgb);
+    static Float3 HSVtoRGB(Float3 hsv);
+};
+
+struct Int2 
+{
+    union {
+        struct 
+        {
+            int x;
+            int y;
+        };
+
+        int n[2];
+    };
+
+    Int2() = default;
+    explicit constexpr Int2(int _x, int _y) : x(_x), y(_y) {}
+    explicit constexpr Int2(const int* _i) : x(_i[0]), y(_i[1]) {}
+    explicit constexpr Int2(int _xx) : x(_xx), y(_xx) {}
+
+    static Int2 Add(Int2 _a, Int2 _b);
+    static Int2 Sub(Int2 _a, Int2 _b);
+    static Int2 Min(Int2 _a, Int2 _b);
+    static Int2 Max(Int2 _a, Int2 _b);
+};
+
+struct Quat 
+{
+    union {
+        struct 
+        {
+            float x;
+            float y;
+            float z;
+            float w;
+        };
+
+        float f[4];
+    };
+
+    Quat() = default;
+    explicit constexpr Quat(float _x, float _y, float _z, float _w) : x(_x), y(_y), z(_z), w(_w) {}
+    explicit constexpr Quat(const float* _f) : x(_f[0]), y(_f[1]), z(_f[2]), w(_f[3]) {}
+
+    static Float3 MulXYZ(Quat _qa, Quat _qb);
+    static Quat   Mul(Quat p, Quat q);
+    static Quat   Inverse(Quat _q);
+    static float  Dot(Quat _a, Quat _b);
+    static float  Angle(Quat _a, Quat _b);
+    static Quat   Norm(Quat _q);
+    static Quat   RotateAxis(Float3 _axis, float _angle);
+    static Quat   RotateX(float _ax);
+    static Quat   RotateY(float _ay);
+    static Quat   RotateZ(float _az);
+    static Quat   Lerp(Quat _a, Quat _b, float t);
+    static Quat   Slerp(Quat _a, Quat _b, float t);
+    static Float3 ToEuler(Quat _q);
+    static Quat   FromEuler(Float3 _float3);
+    static Float3 TransformFloat3(Float3 v, Quat q);
+};
+
+struct Mat3 
+{
+    union {
+        struct 
+        {
+            float m11, m21, m31;
+            float m12, m22, m32;
+            float m13, m23, m33;
+        };
+
+        struct 
+        {
+            float fc1[3];
+            float fc2[3];
+            float fc3[3];
+        };
+
+        float f[9];
+    };
+
+
+    Mat3() = default;
+    explicit constexpr Mat3(float _m11, float _m12, float _m13, 
+                            float _m21, float _m22, float _m23, 
+                            float _m31, float _m32, float _m33) :
+      m11(_m11),     m21(_m21),     m31(_m31),
+      m12(_m12),     m22(_m22),     m32(_m32),
+      m13(_m13),     m23(_m23),     m33(_m33) 
+    {
+    }
+
+    explicit constexpr Mat3(const float* _col1, const float* _col2, const float* _col3) :
+      m11(_col1[0]),     m21(_col1[1]),     m31(_col1[2]),
+      m12(_col2[0]),     m22(_col2[1]),     m32(_col2[2]),
+      m13(_col3[0]),     m23(_col3[1]),     m33(_col3[2])
+    {
+    }
+
+    explicit constexpr Mat3(Float3 _col1, Float3 _col2, Float3 _col3) :
+        Mat3(_col1.f, _col2.f, _col3.f)
+    {
+    }  
+
+    Float3 Row1() const;
+    Float3 Row2() const;
+    Float3 Row3() const;
+    
+    static Mat3   Transpose(const Mat3& _a);
+    static Float3 MulFloat3(const Mat3& _mat, Float3 _vec);
+    static Mat3   MulInverse(const Mat3& _a, const Mat3& _b);
+    static Float3 MulFloat3Inverse(const Mat3& mat, Float3 v);
+    static Float2 MulFloat2(const Mat3& _mat, Float2 _vec);
+    static Mat3   Translate(float x, float y);
+    static Mat3   TranslateFloat2(Float2 p);
+    static Mat3   Rotate(float theta);
+    static Mat3   Scale(float sx, float sy);
+    static Mat3   ScaleRotateTranslate(float sx, float sy, float angle, float tx, float ty);
+    static Mat3   Inverse(const Mat3& _a);
+    static Mat3   Mul(const Mat3& _a, const Mat3& _b);
+    static Mat3   Abs(const Mat3& m);
+    static Mat3   FromQuat(Quat q);
+};
+
+struct Mat4 
+{
+    union {
+        struct 
+        {
+            float m11, m21, m31, m41;
+            float m12, m22, m32, m42;
+            float m13, m23, m33, m43;
+            float m14, m24, m34, m44;
+        };
+
+        struct 
+        {
+            float fc1[4];
+            float fc2[4];
+            float fc3[4];
+            float fc4[4];
+        };
+
+        float f[16];
+    };
+
+    Mat4() = default;
+    explicit constexpr Mat4(float _m11, float _m12, float _m13, float _m14, 
+                            float _m21, float _m22, float _m23, float _m24, 
+                            float _m31, float _m32, float _m33, float _m34, 
+                            float _m41, float _m42, float _m43, float _m44)
+    :   m11(_m11),     m21(_m21),     m31(_m31),     m41(_m41),
+        m12(_m12),     m22(_m22),     m32(_m32),     m42(_m42),
+        m13(_m13),     m23(_m23),     m33(_m33),     m43(_m43),
+        m14(_m14),     m24(_m24),     m34(_m34),     m44(_m44)
+    {    
+    }
+
+    explicit constexpr Mat4(const float* _col1, const float* _col2, const float* _col3, const float* _col4)
+    :   m11(_col1[0]),     m21(_col1[1]),     m31(_col1[2]),     m41(_col1[3]),
+        m12(_col2[0]),     m22(_col2[1]),     m32(_col2[2]),     m42(_col2[3]),
+        m13(_col3[0]),     m23(_col3[1]),     m33(_col3[2]),     m43(_col3[3]),
+        m14(_col4[0]),     m24(_col4[1]),     m34(_col4[2]),     m44(_col4[3])
+    {
+    }
+
+    explicit constexpr Mat4(Float4 _col1, Float4 _col2, Float4 _col3, Float4 _col4) : 
+        Mat4(_col1.f, _col2.f, _col3.f, _col4.f)
+    {
+    }
+
+    Float4 Row1() const;
+    Float4 Row2() const;
+    Float4 Row3() const;
+    Float4 Row4() const;
+
+    static Mat4   Translate(float _tx, float _ty, float _tz);
+    static Mat4   Scale(float _sx, float _sy, float _sz);
+    static Mat4   Scale(float _scale);
+    static Mat4   RotateX(float _ax);
+    static Mat4   RotateY(float _ay);
+    static Mat4   RotateZ(float _az);
+    static Mat4   RotateXY(float _ax, float _ay);
+    static Mat4   RotateXYZ(float _ax, float _ay, float _az);
+    static Mat4   RotateZYX(float _ax, float _ay, float _az);
+    static Mat4   ToQuatTranslate(Quat _quat, Float3 _translation);
+    static Mat4   ToQuatTranslateHMD(Quat _quat, Float3 _translation);
+    static Float3 MulFloat3(const Mat4& _mat, Float3 _vec);
+    static Float3 MulFloat3_xyz0(const Mat4& _mat, Float3 _vec);
+    static Float3 MulFloat3H(const Mat4& _mat, Float3 _vec);
+    static Float4 MulFloat4(const Mat4& _mat, Float4 _vec);
+    static Mat4   Transpose(const Mat4& _a);
+    static void   ProjFlipHandedness(Mat4* _dst, const Mat4& _src);
+    static void   ViewFlipHandedness(Mat4* _dst, const Mat4& _src);
+    static Mat4   FromNormal(Float3 _normal, float _scale, Float3 _pos);
+    static Mat4   FromNormalAngle(Float3 _normal, float _scale, Float3 _pos, float _angle);
+    static Mat4   ViewLookAt(Float3 eye, Float3 target, Float3 up);
+    static Mat4   ViewLookAtLH(Float3 eye, Float3 target, Float3 up);
+    static Mat4   ViewFPS(Float3 eye, float pitch, float yaw);
+    static Mat4   ViewArcBall(Float3 move, Quat rot, Float3 target_pos);
+    static Mat4   Perspective(float width, float height, float zn, float zf, bool d3dNdc = false);
+    static Mat4   PerspectiveLH(float width, float height, float zn, float zf, bool d3dNdc = false);
+    static Mat4   PerspectiveOffCenter(float xmin, float ymin, float xmax, float ymax,
+                                                 float zn, float zf, bool d3dNdc = false);
+    static Mat4   PerspectiveOffCenterLH(float xmin, float ymin, float xmax, float ymax,
+                                                   float zn, float zf, bool d3dNdc = false);
+    static Mat4   PerspectiveFOV(float fov_y, float aspect, float zn, float zf, bool d3dNdc = false);
+    static Mat4   PerspectiveFOVLH(float fov_y, float aspect, float zn, float zf, bool d3dNdc = false);
+    static Mat4   Ortho(float width, float height, float zn, float zf, float offset = 0, bool d3dNdc = false);
+    static Mat4   OrthoLH(float width, float height, float zn, float zf, float offset = 0, bool d3dNdc = false);
+    static Mat4   OrthoOffCenter(float xmin, float ymin, float xmax, float ymax, float zn,
+                                           float zf, float offset = 0, bool d3dNdc = false);
+    static Mat4   OrthoOffCenterLH(float xmin, float ymin, float xmax, float ymax, float zn,
+                                             float zf, float offset = 0, bool d3dNdc = false);
+    static Mat4   ScaleRotateTranslate(float _sx, float _sy, float _sz, 
+                                                 float _ax, float _ay, float _az,
+                                                 float _tx, float _ty, float _tz);
+    static Mat4   Mul(const Mat4& _a, const Mat4& _b);
+    static Mat4   Inverse(const Mat4& _a);
+    static Mat4   InverseTransformMat(const Mat4& _a);
+    static Quat   ToQuat(const Mat4& _mat);
+    static Mat4   FromQuat(Quat q);
+    static Mat4   ProjectPlane(Float3 planeNormal);
+};
+
+struct RectFloat 
+{
+    union {
+        struct 
+        {
+            float xmin, ymin;
+            float xmax, ymax;
+        };
+
+        struct 
+        {
+            float vmin[2];
+            float vmax[2];
+        };
+
+        float f[4];
+    };
+
+    RectFloat() = default;
+
+    explicit constexpr RectFloat(float _xmin, float _ymin, float _xmax, float _ymax) 
+    : xmin(_xmin), ymin(_ymin), xmax(_xmax), ymax(_ymax)
+    {
+    }
+
+    explicit constexpr RectFloat(const float* _vmin, const float* _vmax) 
+    : vmin { _vmin[0], _vmin[1] },
+      vmax { _vmax[0], _vmax[1] }
+    {
+    }
+
+    explicit constexpr RectFloat(Float2 _vmin, Float2 _vmax) :
+        RectFloat(_vmin.f, _vmax.f)
+    {
+    }
+
+    bool   IsEmpty() const;
+    float  Width() const;
+    float  Height() const;
+
+    static RectFloat   CenterExtents(Float2 center, Float2 extents);
+    static RectFloat   Expand(const RectFloat rc, Float2 expand);
+    static bool   TestPoint(const RectFloat rc, Float2 pt);
+    static bool   Test(const RectFloat rc1, const RectFloat rc2);
+    static void   AddPoint(RectFloat* rc, Float2 pt);
+    static Float2 GetCorner(const RectFloat* rc, int index);
+    static void   GetCorners(Float2 corners[4], const RectFloat* rc);
+    static Float2 Extents(const RectFloat rc);
+    static Float2 Center(const RectFloat rc);
+    static RectFloat   Translate(const RectFloat rc, Float2 pos);
+};
+
+struct RectInt 
+{
+    union {
+        struct 
+        {
+            int xmin, ymin;
+            int xmax, ymax;
+        };
+
+        struct 
+        {
+            int vmin[3];
+            int vmax[3];
+        };
+
+        int n[4];
+    };
+
+
+    RectInt() = default;
+
+    explicit constexpr RectInt(int _xmin, int _ymin, int _xmax, int _ymax) 
+        : xmin(_xmin),   ymin(_ymin),   xmax(_xmax),   ymax(_ymax)
+    {
+    }
+
+    explicit constexpr RectInt(const int* _vmin, const int* _vmax) 
+    : vmin { _vmin[0], _vmin[1] },
+      vmax { _vmax[0], _vmax[1] }
+    {
+    }
+
+    explicit constexpr RectInt(Int2 _vmin, Int2 _vmax) :
+        RectInt(_vmin.n, _vmax.n)
+    { 
+    }
+
+    bool IsEmpty() const;
+    int Width() const;
+    int Height() const;
+
+    static RectInt  Expand(const RectInt rc, Int2 expand);
+    static bool   TestPoint(const RectInt rc, Int2 pt);
+    static bool   Test(const RectInt rc1, const RectInt rc2);
+    static void   AddPoint(RectInt* rc, Int2 pt);
+    static Int2   GetCorner(const RectInt* rc, int index);
+    static void   GetCorners(Int2 corners[4], const RectInt* rc);
+};
+
+struct AABB 
+{
+    union {
+        struct 
+        {
+            float xmin, ymin, zmin;
+            float xmax, ymax, zmax;
+        };
+
+        struct 
+        {
+            float vmin[3];
+            float vmax[3];
+        };
+
+        float f[6];
+    };
+
+    AABB() = default;
+    explicit constexpr AABB(float _xmin, float _ymin, float _zmin, float _xmax, float _ymax, float _zmax) 
+    :   xmin(_xmin), ymin(_ymin), zmin(_zmin),
+        xmax(_xmax), ymax(_ymax), zmax(_zmax)
+    { 
+    }
+    explicit constexpr AABB(const float* _vmin, const float* _vmax) 
+    : vmin { _vmin[0],    _vmin[1],     _vmin[2] },
+      vmax { _vmax[0],    _vmax[1],     _vmax[2] }
+    {   
+    }
+    explicit constexpr AABB(Float3 _vmin, Float3 _vmax) :
+        AABB(_vmin.f, _vmax.f)
+    {
+    }
+
+    bool IsEmpty() const;
+    Float3 Extents() const;
+    Float3 Center() const;
+
+    static void   AddPoint(AABB* aabb, Float3 pt);
+    static AABB   Unify(const AABB& aabb1, const AABB& aabb2);
+    static bool   TestPoint(const AABB& aabb, Float3 pt);
+    static bool   Test(const AABB& aabb1, const AABB& aabb2);
+    static Float3 GetCorner(const AABB& aabb, int index);
+    static void   GetCorners(Float3 corners[8], const AABB& aabb);
+    static AABB   Translate(const AABB& aabb, Float3 offset);
+    static AABB   SetPos(const AABB& aabb, Float3 pos);
+    static AABB   Expand(const AABB& aabb, Float3 expand);
+    static AABB   Scale(const AABB& aabb, Float3 scale);
+    static AABB   Transform(const AABB& aabb, const Mat4& mat);
+};
+
+struct Plane 
+{
+    union {
+        Float4 p;
+
+        struct {
+            float normal[3];
+            float dist;
+        };
+
+        float f[4];
+    };
+
+    Plane() = default;
+    explicit constexpr Plane(float _nx, float _ny, float _nz, float _d) : p(_nx, _ny, _nz, _d) {}
+    explicit constexpr Plane(Float3 _normal, float _d) :
+        normal { _normal.x,     _normal.y,  _normal.z}, dist(_d)
+    {   
+    }
+
+    static Float3 CalcNormal(Float3 _va, Float3 _vb, Float3 _vc);
+    static Plane  From3Points(Float3 _va, Float3 _vb, Float3 _vc);
+    static Plane  FromNormalPoint(Float3 _normal, Float3 _p);
+    static float  Distance(Plane _plane, Float3 _p);
+    static Float3 ProjectPoint(Plane _plane, Float3 _p);
+    static Float3 Origin(Plane _plane);
+};
+
+struct Transform3D 
+{
+    Float3 pos;
+    Mat3 rot;
+
+    Transform3D() = default;
+    explicit constexpr Transform3D(Float3 _pos, const Mat3& _rot) : pos(_pos), rot(_rot) {}
+
+    static Transform3D Mul(const Transform3D& txa, const Transform3D& txb);
+    static Float3      MulFloat3(const Transform3D& tx, Float3 v);
+    static Float3      MulFloat3Scale(const Transform3D& tx, Float3 scale, Float3 v);
+    static Transform3D Inverse(const Transform3D& tx);
+    static Float3      MulFloat3Inverse(const Transform3D& tx, Float3 v);
+    static Transform3D MulInverse(const Transform3D& txa, const Transform3D& txb);
+    static Mat4        ToMat4(const Transform3D& tx);
+    static Transform3D Make(float x, float y, float z, float rx, float ry, float rz);
+    static Transform3D FromMat4(const Mat4& mat);
+};
+
+struct Box 
+{
+    Transform3D tx;   // transform (pos = origin of the box, rot = rotation of the box)
+    Float3 e;         // half-extent from the origin (0.5*width, 0.5*height, 0.5f*depth)
+
+    Box() = default;
+    explicit constexpr Box(const Transform3D& _tx, Float3 _e) : tx(_tx), e(_e) {}
+
+    static AABB ToAABB(const Box& box);
+};
+
+
+
+inline constexpr float M_PI           = 3.1415926535897932384626433832795f;
+inline constexpr float M_PI2          = 6.2831853071795864769252867665590f;
+inline constexpr float M_INVPI        = (1.0f / 3.1415926535897932384626433832795f);
+inline constexpr float M_HALFPI       = 1.5707963267948966192313216916398f;
+inline constexpr float M_QUARTERPI    = 0.7853981633974483096156608458199f;
+inline constexpr float M_SQRT2        = 1.4142135623730950488016887242097f;
+inline constexpr float M_LOGNAT10     = 2.3025850929940456840179914546844f;
+inline constexpr float M_INVLOGNAT10   = 1.4426950408889634073599246810019f;
+inline constexpr float M_LOGNAT2H     = 0.6931471805599453094172321214582f;
+inline constexpr float M_LOGNAT2L     = 1.90821492927058770002e-10f;
+inline constexpr float M_E            = 2.7182818284590452353602874713527f;
+inline constexpr float M_NEARZERO     = (1.0f / (float)(1 << 28));
+inline constexpr float M_FLOAT32_MIN  = (1.175494e-38f);
+inline constexpr float M_FLOAT32_MAX  = (3.402823e+38f);
+
+inline constexpr Float2 FLOAT2_ZERO  { 0.0f, 0.0f };
+inline constexpr Float2 FLOAT2_UNITX { 1.0f, 0.0f };
+inline constexpr Float2 FLOAT2_UNITY { 0.0f, 1.0f };
+
+inline constexpr Float3 FLOAT3_ZERO  { 0.0f, 0.0f, 0.0f };
+inline constexpr Float3 FLOAT3_UNIX { 1.0f, 0.0f, 0.0f };
+inline constexpr Float3 FLOAT3_UNITY { 0.0f, 1.0f, 0.0f };
+inline constexpr Float3 FLOAT3_UNITZ { 0.0f, 0.0f, 1.0f };
+
+inline constexpr Float4 FLOAT4_ZERO  { 0.0f, 0.0f, 0.0f, 1.0f };
+inline constexpr Float4 FLOAT4_UNITX { 1.0f, 0.0f, 0.0f, 1.0f };
+inline constexpr Float4 FLOAT4_UNITY { 0.0f, 1.0f, 0.0f, 1.0f };
+inline constexpr Float4 FLOAT4_UNITZ { 0.0f, 0.0f, 1.0f, 1.0f };
+
+inline constexpr Int2 INT2_ZERO {0, 0};
+inline constexpr Int2 INT2_ONE {1, 1};
+
+inline constexpr Mat3 MAT3_IDENT {
+    1.0f, 0.0f, 0.0f,
+    0.0f, 1.0f, 0.0f,
+    0.0f, 0.0f, 1.0f
+};
+
+inline constexpr Mat4 MAT4_IDENT {
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 1.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 1.0f, 0.0f,
+    0.0f, 0.0f, 0.0f, 1.0f 
+};
+
+inline constexpr Quat QUAT_INDENT {0, 0, 0, 1.0f};
+
+inline constexpr Transform3D TRANSFORM3D_IDENT { FLOAT3_ZERO, MAT3_IDENT };
+
+inline constexpr Color4u COLOR4U_WHITE  { uint8(255), uint8(255), uint8(255), uint8(255) };
+inline constexpr Color4u COLOR4U_BLACK  { uint8(0), uint8(0), uint8(0), uint8(255) };
+inline constexpr Color4u COLOR4U_RED    { uint8(255), uint8(0), uint8(0), uint8(255) };
+inline constexpr Color4u COLOR4U_YELLOW { uint8(255), uint8(255), uint8(0), uint8(255) };
+inline constexpr Color4u COLOR4U_GREEN  { uint8(0), uint8(255), uint8(0), uint8(255) };
+inline constexpr Color4u COLOR4U_BLUE   { uint8(0), uint8(0), uint8(255), uint8(255) };
+inline constexpr Color4u COLOR4U_PURPLE { uint8(255), uint8(0), uint8(255), uint8(255) };
+
+inline constexpr RectFloat RECTFLOAT_EMPTY { M_FLOAT32_MAX, M_FLOAT32_MAX, -M_FLOAT32_MAX, -M_FLOAT32_MAX };
+inline constexpr RectInt RECTINT_EMPTY { INT32_MAX, INT32_MAX, INT32_MIN, INT32_MIN };
+inline constexpr AABB AABB_EMPTY { M_FLOAT32_MAX, M_FLOAT32_MAX, M_FLOAT32_MAX, -M_FLOAT32_MAX, -M_FLOAT32_MAX, -M_FLOAT32_MAX };
+
+PRAGMA_DIAGNOSTIC_POP()    // ignore msvc warnings
+
+
+struct JsonContext;
+
+struct JsonErrorLocation
+{
+    uint32 line;
+    uint32 col;
+};
+
+namespace Json
+{
+    API JsonContext* Parse(const char* json5, uint32 json5Len, JsonErrorLocation* outErrLoc, MemAllocator* alloc = Mem::GetDefaultAlloc());
+    API void Destroy(JsonContext* ctx);
 }
 
-inline Path& Path::ConvertToAbsolute()
+struct JsonNode
 {
-    char abspath[PATH_CHARS_MAX];
-    OS::GetAbsolutePath(mStr, abspath, sizeof(abspath));
-    return *this = abspath;
+    JsonNode() = default;
+    explicit JsonNode(JsonContext* _ctx);
+    explicit JsonNode(JsonContext* _ctx, int _tokenId, int _itemIndex = 0);
+
+    bool HasChild(const char* _childNode) const;    
+
+    JsonNode GetChild(const char* _childNode) const;
+    JsonNode GetChildItem(uint32 _index = 0) const;
+    JsonNode GetNextChildItem(const JsonNode& curChildItem) const;
+    uint32 GetChildCount() const;
+
+    JsonNode GetArrayItem(uint32 _index = 0) const;
+    JsonNode GetNextArrayItem(const JsonNode& curItem) const;
+    uint32 GetArrayCount() const;
+
+    bool IsValid() const;
+    bool IsObject() const;
+    bool IsArray() const;
+
+    const char* GetKey(char* outKey, uint32 keySize) const;
+    const char* GetValue(char* outValue, uint32 valueSize) const;
+
+    template <typename _T> _T GetValue() const;
+    template <typename _T> uint32 GetArrayValues(_T* _values, uint32 _maxValues) const;
+
+    template <typename _T> _T GetChildValue(const char* _childNode, _T _defaultValue);
+    template <typename _T> uint32 GetChildArrayValues(const char* _childNode, _T* _values, uint32 _maxValues);
+
+private:
+    JsonContext* mCtx = nullptr;
+    int mTokenId = -1;
+    int mItemIndex = 0;
+};
+
+typedef struct cj5_result cj5_result;
+extern "C" {
+    int cj5_seek(cj5_result* r, int parent_id, const char* key);
+    int cj5_seek_hash(cj5_result* r, int parent_id, const uint32_t key_hash);
+    int cj5_seek_recursive(cj5_result* r, int parent_id, const char* key);
+    const char* cj5_get_string(cj5_result* r, int id, char* str, int max_str);
+    double cj5_get_double(cj5_result* r, int id);
+    float cj5_get_float(cj5_result* r, int id);
+    int cj5_get_int(cj5_result* r, int id);
+    uint32_t cj5_get_uint(cj5_result* r, int id);
+    uint64_t cj5_get_uint64(cj5_result* r, int id);
+    int64_t cj5_get_int64(cj5_result* r, int id);
+    bool cj5_get_bool(cj5_result* r, int id);
+    double cj5_seekget_double(cj5_result* r, int parent_id, const char* key, double def_val);
+    float cj5_seekget_float(cj5_result* r, int parent_id, const char* key, float def_val);
+    int cj5_seekget_array_int16(cj5_result* r, int parent_id, const char* key, int16_t* values, int max_values);
+    int cj5_seekget_array_uint16(cj5_result* r, int parent_id, const char* key, uint16_t* values, int max_values);
+    int cj5_seekget_int(cj5_result* r, int parent_id, const char* key, int def_val);
+    uint32_t cj5_seekget_uint(cj5_result* r, int parent_id, const char* key, uint32_t def_val);
+    uint64_t cj5_seekget_uint64(cj5_result* r, int parent_id, const char* key, uint64_t def_val);
+    int64_t cj5_seekget_int64(cj5_result* r, int parent_id, const char* key, int64_t def_val);
+    bool cj5_seekget_bool(cj5_result* r, int parent_id, const char* key, bool def_val);
+    const char* cj5_seekget_string(cj5_result* r, int parent_id, const char* key, char* str, int max_str, const char* def_val);
+    int cj5_seek(cj5_result* r, int parent_id, const char* key);
+    int cj5_seekget_array_double(cj5_result* r, int parent_id, const char* key, double* values, int max_values);
+    int cj5_seekget_array_float(cj5_result* r, int parent_id, const char* key, float* values, int max_values);
+    int cj5_seekget_array_int(cj5_result* r, int parent_id, const char* key, int* values, int max_values);
+    int cj5_seekget_array_uint(cj5_result* r, int parent_id, const char* key, uint32_t* values, int max_values);
+    int cj5_seekget_array_uint64(cj5_result* r, int parent_id, const char* key, uint64_t* values, int max_values);
+    int cj5_seekget_array_int64(cj5_result* r, int parent_id, const char* key, int64_t* values, int max_values);
+    int cj5_seekget_array_bool(cj5_result* r, int parent_id, const char* key, bool* values, int max_values);
+    int cj5_seekget_array_string(cj5_result* r, int parent_id, const char* key, char** strs, int max_str, int max_values);
+    int cj5_get_array_elem(cj5_result* r, int id, int index);
+    int cj5_get_array_elem_incremental(cj5_result* r, int id, int index, int prev_elem);
 }
 
-inline Path Path::GetAbsolute() const 
+inline JsonNode::JsonNode(JsonContext* _ctx) : mCtx(_ctx), mTokenId(0), mItemIndex(0) 
 {
-    Path p;
-    OS::GetAbsolutePath(mStr, p.mStr, sizeof(p.mStr));
-    p.mLen = Str::Len(p.mStr);
-    return p;
+    ASSERT(_ctx);
 }
 
-inline Path Path::GetFileExtension() const
+inline JsonNode::JsonNode(JsonContext* _ctx, int _tokenId, int _itemIndex) : mCtx(_ctx), mTokenId(_tokenId), mItemIndex(_itemIndex) 
 {
-    Path p;
-    PathUtils::GetFileExtension(mStr, p.mStr, sizeof(p.mStr));
-    p.mLen = Str::Len(p.mStr);
-    return p;
+    ASSERT(_ctx);
 }
 
-inline Path Path::GetFileNameAndExt() const
+inline bool JsonNode::HasChild(const char* _childNode) const
 {
-    Path p;
-    PathUtils::GetFilenameAndExtension(mStr, p.mStr, sizeof(p.mStr));
-    p.mLen = Str::Len(p.mStr);
-    return p;
+    return cj5_seek(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode) != -1;
 }
 
-inline Path Path::GetFileName() const
+inline JsonNode JsonNode::GetChild(const char* _childNode) const
 {
-    Path p;
-    PathUtils::GetFilename(mStr, p.mStr, sizeof(p.mStr));
-    p.mLen = Str::Len(p.mStr);
-    return p;
+    int id = cj5_seek(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode);
+    return JsonNode(mCtx, id);
 }
 
-inline Path Path::GetDirectory() const
+inline bool JsonNode::IsValid() const
 {
-    Path p;
-    PathUtils::GetDirectory(mStr, p.mStr, sizeof(p.mStr));
-    p.mLen = Str::Len(p.mStr);
-    return p;
+    return mCtx && mTokenId > -1;
 }
 
-inline Path& Path::Join(const Path& path)
+template <> inline uint32 JsonNode::GetArrayValues(uint32* _values, uint32 _maxValues) const
 {
-    PathUtils::Join(mStr, sizeof(mStr), mStr, path.mStr);
-    mLen = Str::Len(mStr);
-    return *this;
+    return (uint32)cj5_seekget_array_uint(reinterpret_cast<cj5_result*>(mCtx), mTokenId, nullptr, _values, _maxValues);
 }
 
-inline Path Path::Join(const Path& pathA, const Path& pathB)
+template <> inline uint32 JsonNode::GetArrayValues(float* _values, uint32 _maxValues) const
 {
-    Path p;
-    PathUtils::Join(p.mStr, sizeof(p.mStr), pathA.mStr, pathB.mStr);
-    p.mLen = Str::Len(p.mStr);
-    return p;
+    return (uint32)cj5_seekget_array_float(reinterpret_cast<cj5_result*>(mCtx), mTokenId, nullptr, _values, _maxValues);
 }
 
-inline Path Path::JoinUnix(const Path& pathA, const Path& pathB)
+template <> inline uint32 JsonNode::GetArrayValues(double* _values, uint32 _maxValues) const
 {
-    Path p;
-    PathUtils::JoinUnixStyle(p.mStr, sizeof(p.mStr), pathA.mStr, pathB.mStr);
-    p.mLen = Str::Len(p.mStr);
-    return p;
+    return (uint32)cj5_seekget_array_double(reinterpret_cast<cj5_result*>(mCtx), mTokenId, nullptr, _values, _maxValues);
 }
 
-inline PathInfo Path::Stat() const
+template <> inline uint32 JsonNode::GetArrayValues(uint64* _values, uint32 _maxValues) const
 {
-    return OS::GetPathInfo(mStr);
+    return (uint32)cj5_seekget_array_uint64(reinterpret_cast<cj5_result*>(mCtx), mTokenId, nullptr, _values, _maxValues);
 }
 
-inline bool Path::Exists() const
+template <> inline uint32 JsonNode::GetArrayValues(int* _values, uint32 _maxValues) const
 {
-    return OS::PathExists(mStr);
+    return (uint32)cj5_seekget_array_int(reinterpret_cast<cj5_result*>(mCtx), mTokenId, nullptr, _values, _maxValues);
 }
 
-inline bool Path::IsFile() const
+template <> inline uint32 JsonNode::GetArrayValues(bool* _values, uint32 _maxValues) const
 {
-    return OS::GetPathInfo(mStr).type == PathType::File;
+    return (uint32)cj5_seekget_array_bool(reinterpret_cast<cj5_result*>(mCtx), mTokenId, nullptr, _values, _maxValues);
 }
 
-inline bool Path::IsDir() const
+template <> inline bool JsonNode::GetValue() const
 {
-    return OS::GetPathInfo(mStr).type == PathType::Directory;
+    return cj5_get_bool(reinterpret_cast<cj5_result*>(mCtx), mTokenId);
 }
 
-inline bool OS::PathExists(const char* path)
+template <> inline int JsonNode::GetValue() const
 {
-    return OS::GetPathInfo(path).type != PathType::Invalid;
+    return cj5_get_int(reinterpret_cast<cj5_result*>(mCtx), mTokenId);
 }
 
-inline bool OS::IsPathFile(const char* path)
+template <> inline float JsonNode::GetValue() const
 {
-    return OS::GetPathInfo(path).type == PathType::File;
+    return cj5_get_float(reinterpret_cast<cj5_result*>(mCtx), mTokenId);
 }
 
-inline bool OS::IsPathDir(const char* path)
+template <> inline double JsonNode::GetValue() const
 {
-    return OS::GetPathInfo(path).type == PathType::Directory;
+    return cj5_get_double(reinterpret_cast<cj5_result*>(mCtx), mTokenId);
 }
 
-INLINE uint64 Timer::Diff(uint64 newTick, uint64 oldTick)
+template <> inline uint32 JsonNode::GetValue() const
 {
-    return (newTick > oldTick) ? (newTick - oldTick) : 1;
+    return cj5_get_uint(reinterpret_cast<cj5_result*>(mCtx), mTokenId);
 }
 
-INLINE double Timer::ToSec(uint64 tick)
+template <> inline uint64 JsonNode::GetValue() const
 {
-    return (double)tick / 1000000000.0;
+    return cj5_get_uint64(reinterpret_cast<cj5_result*>(mCtx), mTokenId);
 }
 
-INLINE double Timer::ToMS(uint64 tick)
+template <> inline Float4 JsonNode::GetValue() const
 {
-    return (double)tick / 1000000.0;
+    Float4 v;
+    [[maybe_unused]] uint32 n = GetArrayValues<float>(v.f, 4);
+    ASSERT(n == 4);
+    return v;
 }
 
-INLINE double Timer::ToUS(uint64 tick)
+template <> inline Float2 JsonNode::GetValue() const
 {
-    return (double)tick / 1000.0;
+    Float2 v;
+    [[maybe_unused]] uint32 n = GetArrayValues<float>(v.f, 2);
+    ASSERT(n == 2);
+    return v;
 }
 
-inline TimerStopWatch::TimerStopWatch()
+template <> inline Float3 JsonNode::GetValue() const
 {
-    mStart = Timer::GetTicks();
+    Float3 v;
+    [[maybe_unused]] uint32 n = GetArrayValues<float>(v.f, 3);
+    ASSERT(n == 3);
+    return v;
 }
 
-inline void TimerStopWatch::Reset()
+template <> inline Int2 JsonNode::GetValue() const
 {
-    mStart = Timer::GetTicks();
+    Int2 v;
+    [[maybe_unused]] uint32 n = GetArrayValues<int>(v.n, 2);
+    ASSERT(n == 2);
+    return v;
 }
 
-inline uint64 TimerStopWatch::Elapsed() const
+template <> inline uint32 JsonNode::GetChildValue(const char* _childNode, uint32 _defaultValue)
 {
-    return Timer::Diff(Timer::GetTicks(), mStart);
+    return cj5_seekget_uint(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _defaultValue);
 }
 
-inline double TimerStopWatch::ElapsedSec() const
+template <> inline uint64 JsonNode::GetChildValue(const char* _childNode, uint64 _defaultValue)
 {
-    return Timer::ToSec(Elapsed());
+    return cj5_seekget_uint64(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _defaultValue);
 }
 
-inline double TimerStopWatch::ElapsedMS() const
+template <> inline int JsonNode::GetChildValue(const char* _childNode, int _defaultValue)
 {
-    return Timer::ToMS(Elapsed());
+    return cj5_seekget_int(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _defaultValue);
 }
 
-inline double TimerStopWatch::ElapsedUS() const
+template <> inline float JsonNode::GetChildValue(const char* _childNode, float _defaultValue)
 {
-    return Timer::ToUS(Elapsed());
+    return cj5_seekget_float(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _defaultValue);
 }
 
-template <typename _T> inline uint32 File::Read(_T* dst, uint32 count)
+template <> inline double JsonNode::GetChildValue(const char* _childNode, double _defaultValue)
 {
-    return static_cast<uint32>(Read((void*)dst, sizeof(_T)*count)/sizeof(_T));
+    return cj5_seekget_double(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _defaultValue);
 }
 
-template <typename _T> inline uint32 File::Write(_T* dst, uint32 count)
+template <> inline bool JsonNode::GetChildValue(const char* _childNode, bool _defaultValue)
 {
-    return static_cast<uint32>(Write((const void*)dst, sizeof(_T)*count)/sizeof(_T));
+    return cj5_seekget_bool(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _defaultValue);
 }
 
+template <> inline Float4 JsonNode::GetChildValue(const char* _childNode, Float4 _defaultValue)
+{
+    JsonNode jArr = GetChild(_childNode);
+    return jArr.IsValid() && jArr.IsArray() ? jArr.GetValue<Float4>() : _defaultValue;
+}
+
+template <> inline Float3 JsonNode::GetChildValue(const char* _childNode, Float3 _defaultValue)
+{
+    JsonNode jArr = GetChild(_childNode);
+    return jArr.IsValid() && jArr.IsArray() ? jArr.GetValue<Float3>() : _defaultValue;
+}
+
+template <> inline Float2 JsonNode::GetChildValue(const char* _childNode, Float2 _defaultValue)
+{
+    JsonNode jArr = GetChild(_childNode);
+    return jArr.IsValid() && jArr.IsArray() ? jArr.GetValue<Float2>() : _defaultValue;
+}
+
+template <> inline Int2 JsonNode::GetChildValue(const char* _childNode, Int2 _defaultValue)
+{
+    JsonNode jArr = GetChild(_childNode);
+    return jArr.IsValid() && jArr.IsArray() ? jArr.GetValue<Int2>() : _defaultValue;
+}
+
+template <> inline uint32 JsonNode::GetChildArrayValues(const char* _childNode, uint32* _values, uint32 _maxValues)
+{
+    return (uint32)cj5_seekget_array_uint(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _values, _maxValues);
+}
+
+template <> inline uint32 JsonNode::GetChildArrayValues(const char* _childNode, int* _values, uint32 _maxValues)
+{
+    return (uint32)cj5_seekget_array_int(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _values, _maxValues);
+}
+
+template <> inline uint32 JsonNode::GetChildArrayValues(const char* _childNode, uint64* _values, uint32 _maxValues)
+{
+    return (uint32)cj5_seekget_array_uint64(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _values, _maxValues);
+}
+
+template <> inline uint32 JsonNode::GetChildArrayValues(const char* _childNode, bool* _values, uint32 _maxValues)
+{
+    return (uint32)cj5_seekget_array_bool(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _values, _maxValues);
+}
+
+template <> inline uint32 JsonNode::GetChildArrayValues(const char* _childNode, double* _values, uint32 _maxValues)
+{
+    return (uint32)cj5_seekget_array_double(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _values, _maxValues);
+}
+
+template <> inline uint32 JsonNode::GetChildArrayValues(const char* _childNode, float* _values, uint32 _maxValues)
+{
+    return (uint32)cj5_seekget_array_float(reinterpret_cast<cj5_result*>(mCtx), mTokenId, _childNode, _values, _maxValues);
+}
+
+
+
+
+
+
+enum class LogLevel
+{
+    Default = 0,
+    Error,
+    Warning,
+    Info,
+    Verbose,
+    Debug,
+    _Count
+};
+
+struct LogEntry
+{
+    LogLevel    type;
+    uint32      channels;
+    uint32      textLen;
+    uint32      sourceFileLen;
+    uint32      line;
+    const char* text;
+    const char* sourceFile;
+};
+
+using LogCallback = void(*)(const LogEntry& entry, void* userData);
+
+namespace Log
+{
+    API void RegisterCallback(LogCallback callback, void* userData);
+    API void UnregisterCallback(LogCallback callback);
+    API void SetSettings(LogLevel logLevel, bool breakOnErrors, bool treatWarningsAsErrors);
+
+    namespace _private
+    {
+        API void PrintInfo(uint32 channels, const char* source_file, uint32 line, const char* fmt, ...);
+        API void PrintDebug(uint32 channels, const char* source_file, uint32 line, const char* fmt, ...);
+        API void PrintVerbose(uint32 channels, const char* source_file, uint32 line, const char* fmt, ...);
+        API void PrintWarning(uint32 channels, const char* source_file, uint32 line, const char* fmt, ...);
+        API void PrintError(uint32 channels, const char* source_file, uint32 line, const char* fmt, ...);
+    }
+};
+
+#define LOG_INFO(_text, ...)      Log::_private::PrintInfo(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define LOG_DEBUG(_text, ...)     Log::_private::PrintDebug(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define LOG_VERBOSE(_text, ...)   Log::_private::PrintVerbose(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define LOG_WARNING(_text, ...)   Log::_private::PrintWarning(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define LOG_ERROR(_text, ...)     Log::_private::PrintError(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
+
+
+
+
+//----------------------------------------------------------------------------------------------------------------------
+// MathScalar.h
+
+
+
+#if defined(__SSE2__) || (COMPILER_MSVC && (ARCH_64BIT || _M_IX86_FP >= 2))
+    #include <xmmintrin.h>    // __m128
+#endif
+
+namespace M 
+{
+    #if defined(__SSE2__) || (COMPILER_MSVC && (ARCH_64BIT || _M_IX86_FP >= 2))
+    FORCE_INLINE float Sqrt(float _a);
+    FORCE_INLINE float Rsqrt(float _a);
+    #else
+    API  float Sqrt(float _a);
+    API  float Rsqrt(float _a);
+    #endif
+
+    API float CopySign(float _x, float _y);
+    API float Floor(float _f);
+    API float Cos(float _a);
+    API float ACos(float _a);
+    API float Sin(float _a);
+    API float ASin(float _a);
+    API float ATan2(float _y, float _x);
+    API float Exp(float _a);
+    API float Log(float _a);
+    FORCE_INLINE constexpr int NearestPow2(int n);
+    FORCE_INLINE constexpr bool IsPow2(int n);
+    FORCE_INLINE constexpr float ToRad(float _deg);
+    FORCE_INLINE constexpr float ToDeg(float _rad);
+    FORCE_INLINE uint32 FloatToBits(float _a);
+    FORCE_INLINE float BitsToFloat(uint32 _a);
+    FORCE_INLINE uint64 DoubleToBits(fl64 _a);
+    FORCE_INLINE double BitsToDouble(uint64 _a);
+    FORCE_INLINE uint32 Flip(uint32 _value);
+    FORCE_INLINE bool IsNAN(float _f);
+    FORCE_INLINE bool IsNAN64(double _f);
+    FORCE_INLINE bool IsFIN(float _f);
+    FORCE_INLINE bool IsFIN64(double _f);
+    FORCE_INLINE bool IsINF(float _f);
+    FORCE_INLINE bool IsINF64(double _f);
+    FORCE_INLINE float Round(float _f);
+    FORCE_INLINE float Ceil(float _f);
+    FORCE_INLINE float Lerp(float _a, float _b, float _t);
+    FORCE_INLINE float SmoothLerp(float _a, float _b, float _dt, float h);
+    FORCE_INLINE float Sign(float _a);
+    FORCE_INLINE float Abs(float _a);
+    FORCE_INLINE int Abs(int _a);
+    FORCE_INLINE int64 Abs(int64 _a);
+    FORCE_INLINE float Tan(float _a);
+    FORCE_INLINE float SinH(float _a);
+    FORCE_INLINE float CosH(float _a);
+    FORCE_INLINE float TanH(float _a);
+    FORCE_INLINE float ATan(float _a);
+    FORCE_INLINE float Pow(float _a, float _b);
+    FORCE_INLINE float Exp2(float _a);
+    FORCE_INLINE float Log2(float _a);
+    FORCE_INLINE float Trunc(float _a);
+    FORCE_INLINE float Fract(float _a);
+    FORCE_INLINE float Mod(float _a, float _b);
+    FORCE_INLINE bool IsEqual(float _a, float _b, float _epsilon = 0.00001f);
+    FORCE_INLINE bool IsEqualArray(const float* _a, const float* _b, int _num, float _epsilon = 0.00001f);
+    FORCE_INLINE float Wrap(float _a, float _wrap);
+    FORCE_INLINE float WrapRange(float x, float fmin, float fmax);
+    FORCE_INLINE int WrapRange(int x, int imin, int imax);
+    FORCE_INLINE float Step(float _a, float _edge);
+    FORCE_INLINE float Pulse(float _a, float _start, float _end);
+    FORCE_INLINE float Saturate(float _n);
+    FORCE_INLINE float SmoothStep(float _a, float _min, float _max);
+    FORCE_INLINE float LinearStep(float t, float _min, float _max);
+    FORCE_INLINE float NormalizeTime(float t, float _max);
+    FORCE_INLINE float Bias(float _time, float _bias);
+    FORCE_INLINE float Gain(float _time, float _gain);
+    FORCE_INLINE float AngleDiff(float _a, float _b);
+    FORCE_INLINE float AngleLerp(float _a, float _b, float _t);
+} // M (Math)
+
+
+
+                                                      
+#if defined(__SSE2__) || (COMPILER_MSVC && ARCH_64BIT)
+FORCE_INLINE float M::Sqrt(float x)
+{
+    float r;
+    _mm_store_ss(&r, _mm_sqrt_ss( _mm_load_ss(&x)));
+    return r;
+}
+
+FORCE_INLINE float M::Rsqrt(float x)
+{
+    float r;
+    _mm_store_ss(&r, _mm_rsqrt_ss(_mm_load_ss(&x)));
+    return r;
+}
+#endif   // __SSE2__
+
+FORCE_INLINE constexpr int M::NearestPow2(int n)
+{
+    n--;
+    n |= n >> 1;
+    n |= n >> 2;
+    n |= n >> 4;
+    n |= n >> 8;
+    n |= n >> 16;
+    n++;
+    return n;
+}
+
+FORCE_INLINE constexpr bool M::IsPow2(int n)
+{
+    return (n & (n - 1)) == 0;
+}
+
+FORCE_INLINE constexpr float M::ToRad(float _deg)
+{
+    return _deg * M_PI / 180.0f;
+}
+
+FORCE_INLINE constexpr float M::ToDeg(float _rad)
+{
+    return _rad * 180.0f / M_PI;
+}
+
+FORCE_INLINE uint32 M::FloatToBits(float _a)
+{
+    union {
+        float f;
+        uint32 ui;
+    } u = { _a };
+    return u.ui;
+}
+
+FORCE_INLINE float M::BitsToFloat(uint32 _a)
+{
+    union {
+        uint32 ui;
+        float f;
+    } u = { _a };
+    return u.f;
+}
+
+FORCE_INLINE uint64 M::DoubleToBits(fl64 _a)
+{
+    union {
+        fl64 f;
+        uint64 ui;
+    } u = { _a };
+    return u.ui;
+}
+
+FORCE_INLINE fl64 M::BitsToDouble(uint64 _a)
+{
+    union {
+        uint64 ui;
+        fl64 f;
+    } u = { _a };
+    return u.f;
+}
+
+FORCE_INLINE uint32 M::Flip(uint32 _value)
+{
+    uint32 mask = -int32(_value >> 31) | 0x80000000;
+    return _value ^ mask;
+}
+
+FORCE_INLINE bool M::IsNAN(float _f)
+{
+    const uint32 tmp = M::FloatToBits(_f) & INT32_MAX;
+    return tmp > UINT32_C(0x7f800000);
+}
+
+FORCE_INLINE bool M::IsNAN64(fl64 _f)
+{
+    const uint64 tmp = M::DoubleToBits(_f) & INT64_MAX;
+    return tmp > UINT64_C(0x7ff0000000000000);
+}
+
+FORCE_INLINE bool M::IsFIN(float _f)
+{
+    const uint32 tmp = M::FloatToBits(_f) & INT32_MAX;
+    return tmp < UINT32_C(0x7f800000);
+}
+
+FORCE_INLINE bool M::IsFIN64(fl64 _f)
+{
+    const uint64 tmp = M::DoubleToBits(_f) & INT64_MAX;
+    return tmp < UINT64_C(0x7ff0000000000000);
+}
+
+FORCE_INLINE bool M::IsINF(float _f)
+{
+    const uint32 tmp = M::FloatToBits(_f) & INT32_MAX;
+    return tmp == UINT32_C(0x7f800000);
+}
+
+FORCE_INLINE bool M::IsINF64(fl64 _f)
+{
+    const uint64 tmp = M::DoubleToBits(_f) & INT64_MAX;
+    return tmp == UINT64_C(0x7ff0000000000000);
+}
+
+FORCE_INLINE float M::Round(float _f)
+{
+    return M::Floor(_f + 0.5f);
+}
+
+FORCE_INLINE float M::Ceil(float _f)
+{
+    return -M::Floor(-_f);
+}
+
+FORCE_INLINE float M::Lerp(float _a, float _b, float _t)
+{
+    return (1.0f - _t) * _a + _t * _b;
+}
+
+FORCE_INLINE float M::SmoothLerp(float _a, float _b, float _dt, float _h)
+{
+    return _b + (_a - _b)*M::Exp2(-_dt/_h);
+}
+
+FORCE_INLINE float M::Sign(float _a)
+{
+    return _a < 0.0f ? -1.0f : 1.0f;
+}
+
+FORCE_INLINE float M::Abs(float _a)
+{
+    union {
+        float f;
+        uint32 ui;
+    } u = { _a };
+    u.ui &= 0x7FFFFFFF;
+    return u.f;
+}
+
+FORCE_INLINE int M::Abs(int _a)
+{
+    int mask = _a >> 31;
+    return (mask^_a) - mask;
+}
+
+FORCE_INLINE int64 M::Abs(int64 _a)
+{
+    int64 mask = _a >> 63;
+    return (mask^_a) - mask;
+}
+
+FORCE_INLINE float M::Tan(float _a)
+{
+    return M::Sin(_a) / M::Cos(_a);
+}
+
+FORCE_INLINE float M::SinH(float _a)
+{
+    return 0.5f * (M::Exp(_a) - M::Exp(-_a));
+}
+
+FORCE_INLINE float M::CosH(float _a)
+{
+    return 0.5f * (M::Exp(_a) + M::Exp(-_a));
+}
+
+FORCE_INLINE float M::TanH(float _a)
+{
+    const float tmp0 = M::Exp(2.0f * _a);
+    const float tmp1 = tmp0 - 1.0f;
+    const float tmp2 = tmp0 + 1.0f;
+    const float result = tmp1 / tmp2;
+
+    return result;
+}
+
+FORCE_INLINE float M::ATan(float _a)
+{
+    return M::ATan2(_a, 1.0f);
+}
+
+FORCE_INLINE float M::Pow(float _a, float _b)
+{
+    return M::Exp(_b * M::Log(_a));
+}
+
+FORCE_INLINE float M::Exp2(float _a)
+{
+    return M::Pow(2.0f, _a);
+}
+
+FORCE_INLINE float M::Log2(float _a)
+{
+    return M::Log(_a) * M_INVLOGNAT10;
+}
+
+FORCE_INLINE float M::Trunc(float _a)
+{
+    return (float)((int)_a);
+}
+
+FORCE_INLINE float M::Fract(float _a)
+{
+    return _a - M::Trunc(_a);
+}
+
+FORCE_INLINE float M::Mod(float _a, float _b)
+{
+    return _a - _b * M::Floor(_a / _b);
+}
+
+PRAGMA_DIAGNOSTIC_PUSH()
+PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wshadow")
+FORCE_INLINE bool M::IsEqual(float _a, float _b, float _epsilon)
+{
+    const float lhs = M::Abs(_a - _b);
+    float aa = M::Abs(_a);
+    float ab = M::Abs(_b);
+    float _max = aa > ab ? aa : ab;
+    const float rhs = _epsilon * ((1.0f > _max ? 1.0f : _max));
+    return lhs <= rhs;
+}
+PRAGMA_DIAGNOSTIC_POP()
+
+FORCE_INLINE bool M::IsEqualArray(const float* _a, const float* _b, int _num,
+                                             float _epsilon)
+{
+    bool result = M::IsEqual(_a[0], _b[0], _epsilon);
+    for (int ii = 1; result && ii < _num; ++ii) {
+        result = M::IsEqual(_a[ii], _b[ii], _epsilon);
+    }
+    return result;
+}
+
+FORCE_INLINE float M::Wrap(float _a, float _wrap)
+{
+    const float tmp0 = M::Mod(_a, _wrap);
+    const float result = tmp0 < 0.0f ? _wrap + tmp0 : tmp0;
+    return result;
+}
+
+FORCE_INLINE float M::WrapRange(float x, float fmin, float fmax)
+{
+    return M::Mod(x, fmax - fmin) + fmin;
+}
+
+FORCE_INLINE int M::WrapRange(int x, int imin, int imax)
+{
+    int range = imax - imin + 1;
+    if (x < imin)
+        x += range * ((imin - x) / range + 1);
+    return imin + (x - imin) % range;
+}
+
+FORCE_INLINE float M::Step(float _a, float _edge)
+{
+    return _a < _edge ? 0.0f : 1.0f;
+}
+
+FORCE_INLINE float M::Pulse(float _a, float _start, float _end)
+{
+    return M::Step(_a, _start) - M::Step(_a, _end);
+}
+
+FORCE_INLINE float M::Saturate(float _n)
+{
+    if (_n < 0) 
+        _n = 0;
+    else if (_n > 1.0f)
+        _n = 1.0f;
+    return _n;
+}
+
+FORCE_INLINE float M::SmoothStep(float _a, float _min, float _max)
+{
+    ASSERT(_min < _max);
+    float a = M::Saturate((_a - _min) / (_max - _min));
+    return a * a * (3.0f - 2.0f * a);
+}
+
+FORCE_INLINE float M::LinearStep(float t, float _min, float _max)
+{
+    ASSERT(_min < _max);
+    return M::Saturate((t - _min) / (_max - _min));
+}
+
+FORCE_INLINE float M::NormalizeTime(float t, float _max)
+{
+    ASSERT(_max > 0);
+    float nt = t / _max;
+    return nt < 1.0f ? nt : 1.0f;
+}
+
+
+FORCE_INLINE float M::Bias(float _time, float _bias)
+{
+    return _time / (((1.0f / _bias - 2.0f) * (1.0f - _time)) + 1.0f);
+}
+
+FORCE_INLINE float M::Gain(float _time, float _gain)
+{
+    if (_time < 0.5f)
+        return M::Bias(_time * 2.0f, _gain) * 0.5f;
+
+    return M::Bias(_time * 2.0f - 1.0f, 1.0f - _gain) * 0.5f + 0.5f;
+}
+
+FORCE_INLINE float M::AngleDiff(float _a, float _b)
+{
+    const float dist = M::Wrap(_b - _a, M_PI2);
+    return M::Wrap(dist * 2.0f, M_PI2) - dist;
+}
+
+FORCE_INLINE float M::AngleLerp(float _a, float _b, float _t)
+{
+    return _a + M::AngleDiff(_a, _b) * _t;
+}
+
+
+
+
+
+FORCE_INLINE Float3 Quat::MulXYZ(Quat qa, Quat qb)
+{
+    const float ax = qa.x;
+    const float ay = qa.y;
+    const float az = qa.z;
+    const float aw = qa.w;
+
+    const float bx = qb.x;
+    const float by = qb.y;
+    const float bz = qb.z;
+    const float bw = qb.w;
+
+    return Float3(aw * bx + ax * bw + ay * bz - az * by, 
+                       aw * by - ax * bz + ay * bw + az * bx,
+                       aw * bz + ax * by - ay * bx + az * bw);
+}
+
+FORCE_INLINE Float3 Quat::TransformFloat3(Float3 v, Quat q)
+{
+    Quat tmp0 = Quat::Inverse(q);
+    Quat qv = Quat(v.x, v.y, v.z, 0.0f);
+    Quat tmp1 = Quat::Mul(qv, tmp0);
+    return Quat::MulXYZ(q, tmp1);
+}
+
+
+FORCE_INLINE Quat Quat::Mul(Quat p, Quat q)
+{
+    return Quat(
+        p.f[3] * q.f[0] + p.f[0] * q.f[3] + p.f[1] * q.f[2] - p.f[2] * q.f[1],
+        p.f[3] * q.f[1] - p.f[0] * q.f[2] + p.f[1] * q.f[3] + p.f[2] * q.f[0],
+        p.f[3] * q.f[2] + p.f[0] * q.f[1] - p.f[1] * q.f[0] + p.f[2] * q.f[3],
+        p.f[3] * q.f[3] - p.f[0] * q.f[0] - p.f[1] * q.f[1] - p.f[2] * q.f[2]
+    );
+}
+
+FORCE_INLINE Quat Quat::Inverse(Quat q)
+{
+    return Quat(-q.x, -q.y, -q.z, q.w);
+}
+
+FORCE_INLINE float Quat::Dot(Quat _a, Quat _b)
+{
+    return _a.x * _b.x + _a.y * _b.y + _a.z * _b.z + _a.w * _b.w;
+}
+
+FORCE_INLINE float Quat::Angle(Quat qa, Quat qb)
+{
+    float a = M::Abs(Quat::Dot(qa, qb));
+    return M::ACos((a < 1.0f ? a : 1.0f) * 2.0f);
+}
+
+FORCE_INLINE Quat Quat::Norm(Quat q)
+{
+    const float inv_norm = M::Rsqrt(Quat::Dot(q, q));
+    return Quat(q.x*inv_norm, q.y*inv_norm, q.z*inv_norm, q.w*inv_norm);
+}
+
+FORCE_INLINE Quat Quat::RotateAxis(Float3 _axis, float _angle)
+{
+    const float ha = _angle * 0.5f;
+    const float ca = M::Cos(ha);
+    const float sa = M::Sin(ha);
+    return Quat(_axis.x * sa, _axis.y * sa, _axis.z * sa, ca);
+}
+
+FORCE_INLINE Quat Quat::RotateX(float ax)
+{
+    const float hx = ax * 0.5f;
+    const float cx = M::Cos(hx);
+    const float sx = M::Sin(hx);
+    return Quat(sx, 0.0f, 0.0f, cx);
+}
+
+FORCE_INLINE Quat Quat::RotateY(float ay)
+{
+    const float hy = ay * 0.5f;
+    const float cy = M::Cos(hy);
+    const float sy = M::Sin(hy);
+    return Quat(0.0f, sy, 0.0f, cy);
+}
+
+FORCE_INLINE Quat Quat::RotateZ(float az)
+{
+    const float hz = az * 0.5f;
+    const float cz = M::Cos(hz);
+    const float sz = M::Sin(hz);
+    return Quat(0.0f, 0.0f, sz, cz);
+}
+
+
+FORCE_INLINE Float3 Float3::Abs(Float3 _a)
+{
+    return Float3(M::Abs(_a.x), M::Abs(_a.y), M::Abs(_a.z));
+}
+
+FORCE_INLINE Float3 Float3::Neg(Float3 _a)
+{
+    return Float3(-_a.x, -_a.y, -_a.z);
+}
+
+FORCE_INLINE Float3 Float3::Add(Float3 _a, Float3 _b)
+{
+    return Float3(_a.x + _b.x, _a.y + _b.y, _a.z + _b.z);
+}
+
+FORCE_INLINE Float3 Float3::Add(Float3 _a, float _b)
+{
+    return Float3(_a.x + _b, _a.y + _b, _a.z + _b);
+}
+
+FORCE_INLINE Float3 Float3::Sub(Float3 _a, Float3 _b)
+{
+    return Float3(_a.x - _b.x, _a.y - _b.y, _a.z - _b.z);
+}
+
+FORCE_INLINE Float3 Float3::Sub(Float3 _a, float _b)
+{
+    return Float3(_a.x - _b, _a.y - _b, _a.z - _b);
+}
+
+FORCE_INLINE Float3 Float3::Mul(Float3 _a, Float3 _b)
+{
+    return Float3(_a.x * _b.x, _a.y * _b.y, _a.z * _b.z);
+}
+
+FORCE_INLINE Float3 Float3::Mul(Float3 _a, float _b)
+{
+    return Float3(_a.x * _b, _a.y * _b, _a.z * _b);
+}
+
+FORCE_INLINE float Float3::Dot(Float3 _a, Float3 _b)
+{
+    return _a.x * _b.x + _a.y * _b.y + _a.z * _b.z;
+}
+
+FORCE_INLINE Float3 Float3::Cross(Float3 _a, Float3 _b)
+{
+    return Float3(_a.y * _b.z - _a.z * _b.y, 
+                  _a.z * _b.x - _a.x * _b.z,
+                  _a.x * _b.y - _a.y * _b.x);
+}
+
+FORCE_INLINE float Float3::Len(Float3 _a)
+{
+    return M::Sqrt(Float3::Dot(_a, _a));
+}
+
+FORCE_INLINE Float3 Float3::Lerp(Float3 _a, Float3 _b, float _t)
+{
+    return Float3(M::Lerp(_a.x, _b.x, _t), M::Lerp(_a.y, _b.y, _t), M::Lerp(_a.z, _b.z, _t));
+}
+
+FORCE_INLINE Float3 Float3::SmoothLerp(Float3 _a, Float3 _b, float _dt, float _h)
+{
+    float f = M::Exp2(-_dt/_h);
+    return Float3(_b.x + (_a.x - _b.x)*f,
+                  _b.y + (_a.y - _b.y)*f,
+                  _b.z + (_a.z - _b.z)*f);
+}
+
+FORCE_INLINE Float3 Float3::Norm(Float3 _a)
+{
+    return Float3::Mul(_a, M::Rsqrt(Float3::Dot(_a, _a)));
+}
+
+FORCE_INLINE Float3 Float3::NormLen(Float3 _a, float* _outlen)
+{
+    ASSERT(_outlen);
+    const float len = Float3::Len(_a);
+    if (len > 0.0f) {
+        const float invlen = 1.0f / len;
+        *_outlen = len;
+        return Float3(_a.x * invlen, _a.y * invlen, _a.z * invlen);
+    } else {
+        ASSERT_MSG(0, "Divide by zero");
+        return Float3(0.0f, 0.0f, 0.0f);
+    }
+}
+
+FORCE_INLINE Float3 Float3::Min(Float3 _a, Float3 _b)
+{
+    float xmin = _a.x < _b.x ? _a.x : _b.x;
+    float ymin = _a.y < _b.y ? _a.y : _b.y;
+    float zmin = _a.z < _b.z ? _a.z : _b.z;
+    return Float3(xmin, ymin, zmin);
+}
+
+FORCE_INLINE Float3 Float3::Max(Float3 _a, Float3 _b)
+{
+    float xmax = _a.x > _b.x ? _a.x : _b.x;
+    float ymax = _a.y > _b.y ? _a.y : _b.y;
+    float zmax = _a.z > _b.z ? _a.z : _b.z;
+    return Float3(xmax, ymax, zmax);
+}
+
+FORCE_INLINE Float3 Float3::Rcp(Float3 _a)
+{
+    return Float3(1.0f / _a.x, 1.0f / _a.y, 1.0f / _a.z);
+}
+
+FORCE_INLINE void Float3::Tangent(Float3* _t, Float3* _b, Float3 _n)
+{
+    const float nx = _n.x;
+    const float ny = _n.y;
+    const float nz = _n.z;
+
+    if (M::Abs(nx) > M::Abs(nz)) {
+        float inv_len = 1.0f / M::Sqrt(nx * nx + nz * nz);
+        *_t = Float3(-nz * inv_len, 0.0f, nx * inv_len);
+    } else {
+        float inv_len = 1.0f / M::Sqrt(ny * ny + nz * nz);
+        *_t = Float3(0.0f, nz * inv_len, -ny * inv_len);
+    }
+
+    *_b = Float3::Cross(_n, *_t);
+}
+
+FORCE_INLINE void Float3::TangentAngle(Float3* _t, Float3* _b, Float3 _n, float _angle)
+{
+    Float3::Tangent(_t, _b, _n);
+
+    const float sa = M::Sin(_angle);
+    const float ca = M::Cos(_angle);
+
+    *_t = Float3(-sa * _b->x + ca * _t->x, -sa * _b->y + ca * _t->y, -sa * _b->z + ca * _t->z);
+
+    *_b = Float3::Cross(_n, *_t);
+}
+
+FORCE_INLINE Float3 Float3::FromLatLong(float _u, float _v)
+{
+    const float phi = _u * M_PI2;
+    const float theta = _v * M_PI;
+
+    const float st = M::Sin(theta);
+    const float sp = M::Sin(phi);
+    const float ct = M::Cos(theta);
+    const float cp = M::Cos(phi);
+
+    return Float3(-st * sp, -st * cp, ct);
+}
+
+FORCE_INLINE Float2 Float3::ToLatLong(Float3 pos)
+{
+    const float phi = M::ATan2(pos.x, pos.y);
+    const float theta = M::ACos(pos.z);
+
+    return Float2((M_PI + phi) / M_PI2, theta * M_INVPI);
+}
+
+
+FORCE_INLINE Float4 Mat4::Row1() const 
+{
+    return Float4(m11, m12, m13, m14);
+}
+
+FORCE_INLINE Float4 Mat4::Row2() const
+{
+    return Float4(m21, m22, m23, m24);
+}
+
+FORCE_INLINE Float4 Mat4::Row3() const
+{
+    return Float4(m31, m32, m33, m34);
+}
+
+FORCE_INLINE Float4 Mat4::Row4() const
+{
+    return Float4(m41, m42, m43, m44);
+}
+
+
+FORCE_INLINE Mat4 Mat4::Translate(float _tx, float _ty, float _tz)
+{
+    return Mat4(1.0f, 0.0f, 0.0f, _tx, 
+                0.0f, 1.0f, 0.0f, _ty, 
+                0.0f, 0.0f, 1.0f, _tz, 
+                0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+FORCE_INLINE Mat4 Mat4::Scale(float _sx, float _sy, float _sz)
+{
+    return Mat4(_sx, 0.0f, 0.0f, 0.0f, 
+                0.0f, _sy, 0.0f, 0.0f, 
+                0.0f, 0.0f, _sz, 0.0f, 
+                0.0f, 0.0f,0.0f, 1.0f);
+}
+
+FORCE_INLINE Mat4 Mat4::Scale(float _scale)
+{
+    return Mat4::Scale(_scale, _scale, _scale);
+}
+
+FORCE_INLINE Mat4 Mat4::RotateX(float _ax)
+{
+    const float sx = M::Sin(_ax);
+    const float cx = M::Cos(_ax);
+
+    return Mat4(1.0f, 0.0f, 0.0f, 0.0f, 
+                0.0f, cx, -sx, 0.0f, 
+                0.0f, sx, cx, 0.0f, 
+                0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+FORCE_INLINE Mat4 Mat4::RotateY(float _ay)
+{
+    const float sy = M::Sin(_ay);
+    const float cy = M::Cos(_ay);
+
+    return Mat4(cy, 0.0f, sy, 0.0f, 
+                0.0f, 1.0f, 0.0f, 0.0f, 
+                -sy, 0.0f, cy, 0.0f, 
+                0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+FORCE_INLINE Mat4 Mat4::RotateZ(float _az)
+{
+    const float sz = M::Sin(_az);
+    const float cz = M::Cos(_az);
+
+    return Mat4(cz, -sz, 0.0f, 0.0f, 
+                sz, cz, 0.0f, 0.0f, 
+                0.0f, 0.0f, 1.0f, 0.0f, 
+                0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+FORCE_INLINE Mat4 Mat4::RotateXY(float _ax, float _ay)
+{
+    const float sx = M::Sin(_ax);
+    const float cx = M::Cos(_ax);
+    const float sy = M::Sin(_ay);
+    const float cy = M::Cos(_ay);
+
+    return Mat4(cy, 0.0f, sy, 0.0f, 
+                sx * sy, cx, -sx * cy, 0.0f, 
+                -cx * sy, sx, cx * cy, 0.0f,
+                0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+FORCE_INLINE Mat4 Mat4::RotateXYZ(float _ax, float _ay, float _az)
+{
+    const float sx = M::Sin(_ax);
+    const float cx = M::Cos(_ax);
+    const float sy = M::Sin(_ay);
+    const float cy = M::Cos(_ay);
+    const float sz = M::Sin(_az);
+    const float cz = M::Cos(_az);
+
+    return Mat4(cy * cz, -cy * sz, sy, 0.0f, 
+                cz * sx * sy + cx * sz, cx * cz - sx * sy * sz, -cy * sx, 0.0f, 
+                -cx * cz * sy + sx * sz, cz * sx + cx * sy * sz, cx * cy, 0.0f,
+                0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+FORCE_INLINE Mat4 Mat4::RotateZYX(float _ax, float _ay, float _az)
+{
+    const float sx = M::Sin(_ax);
+    const float cx = M::Cos(_ax);
+    const float sy = M::Sin(_ay);
+    const float cy = M::Cos(_ay);
+    const float sz = M::Sin(_az);
+    const float cz = M::Cos(_az);
+
+    return Mat4(cy * cz, cz * sx * sy - cx * sz, cx * cz * sy + sx * sz, 0.0f, 
+                cy * sz, cx * cz + sx * sy * sz, -cz * sx + cx * sy * sz, 0.0f, 
+                -sy, cy * sx, cx * cy, 0.0f, 
+                0.0f, 0.0f, 0.0f, 1.0f);
+};
+
+FORCE_INLINE Mat4 Mat4::ToQuatTranslate(Quat q, Float3 translate)
+{
+    Mat4 mat = Mat4::FromQuat(q);
+    mat.m14 = -(mat.m11 * translate.x + mat.m12 * translate.y + mat.m13 * translate.z);
+    mat.m24 = -(mat.m21 * translate.x + mat.m22 * translate.y + mat.m23 * translate.z);
+    mat.m34 = -(mat.m31 * translate.x + mat.m32 * translate.y + mat.m33 * translate.z);
+    return mat;
+}
+
+FORCE_INLINE Mat4 Mat4::ToQuatTranslateHMD(Quat q, Float3 translate)
+{
+    return Mat4::ToQuatTranslate(Quat(-q.x, -q.y, q.z, q.w), translate);
+}
+
+FORCE_INLINE Float3 Mat4::MulFloat3(const Mat4& _mat, Float3 _vec)
+{
+    return Float3(_vec.x * _mat.m11 + _vec.y * _mat.m12 + _vec.z * _mat.m13 + _mat.m14,
+                  _vec.x * _mat.m21 + _vec.y * _mat.m22 + _vec.z * _mat.m23 + _mat.m24,
+                  _vec.x * _mat.m31 + _vec.y * _mat.m32 + _vec.z * _mat.m33 + _mat.m34);
+}
+
+FORCE_INLINE Float3 Mat4::MulFloat3_xyz0(const Mat4& _mat, Float3 _vec)
+{
+    return Float3(_vec.x * _mat.m11 + _vec.y * _mat.m12 + _vec.z * _mat.m13,
+                  _vec.x * _mat.m21 + _vec.y * _mat.m22 + _vec.z * _mat.m23,
+                  _vec.x * _mat.m31 + _vec.y * _mat.m32 + _vec.z * _mat.m33);
+}
+
+FORCE_INLINE Float3 Mat4::MulFloat3H(const Mat4& _mat, Float3 _vec)
+{
+    float xx = _vec.x * _mat.m11 + _vec.y * _mat.m12 + _vec.z * _mat.m13 + _mat.m14;
+    float yy = _vec.x * _mat.m21 + _vec.y * _mat.m22 + _vec.z * _mat.m23 + _mat.m24;
+    float zz = _vec.x * _mat.m31 + _vec.y * _mat.m32 + _vec.z * _mat.m33 + _mat.m34;
+    float ww = _vec.x * _mat.m41 + _vec.y * _mat.m42 + _vec.z * _mat.m43 + _mat.m44;
+    float iw = M::Sign(ww) / ww;
+    return Float3(xx * iw, yy * iw, zz * iw);
+}
+
+FORCE_INLINE Float4 Mat4::MulFloat4(const Mat4& _mat, Float4 _vec)
+{
+    return Float4(
+        _vec.x * _mat.m11 + _vec.y * _mat.m12 + _vec.z * _mat.m13 + _vec.w * _mat.m14,
+        _vec.x * _mat.m21 + _vec.y * _mat.m22 + _vec.z * _mat.m23 + _vec.w * _mat.m24,
+        _vec.x * _mat.m31 + _vec.y * _mat.m32 + _vec.z * _mat.m33 + _vec.w * _mat.m34,
+        _vec.x * _mat.m41 + _vec.y * _mat.m42 + _vec.z * _mat.m43 + _vec.w * _mat.m44);
+}
+
+FORCE_INLINE void Mat4::ProjFlipHandedness(Mat4* _dst, const Mat4& _src)
+{
+    _dst->m11 = -_src.m11;
+    _dst->m12 = -_src.m12;
+    _dst->m13 = -_src.m13;
+    _dst->m14 = -_src.m14;
+    _dst->m21 = _src.m21;
+    _dst->m22 = _src.m22;
+    _dst->m23 = _src.m23;
+    _dst->m24 = _src.m24;
+    _dst->m31 = -_src.m31;
+    _dst->m32 = -_src.m32;
+    _dst->m33 = -_src.m33;
+    _dst->m34 = -_src.m34;
+    _dst->m41 = _src.m41;
+    _dst->m42 = _src.m42;
+    _dst->m43 = _src.m43;
+    _dst->m44 = _src.m44;
+}
+
+FORCE_INLINE void Mat4::ViewFlipHandedness(Mat4* _dst, const Mat4& _src)
+{
+    _dst->m11 = -_src.m11;
+    _dst->m12 = _src.m12;
+    _dst->m13 = -_src.m13;
+    _dst->m14 = _src.m14;
+    _dst->m21 = -_src.m21;
+    _dst->m22 = _src.m22;
+    _dst->m23 = -_src.m23;
+    _dst->m24 = _src.m24;
+    _dst->m31 = -_src.m31;
+    _dst->m32 = _src.m32;
+    _dst->m33 = -_src.m33;
+    _dst->m34 = _src.m34;
+    _dst->m41 = -_src.m41;
+    _dst->m42 = _src.m42;
+    _dst->m43 = -_src.m43;
+    _dst->m44 = _src.m44;
+}
+
+FORCE_INLINE Mat4 Mat4::Transpose(const Mat4& _a)
+{
+    return Mat4(_a.m11, _a.m21, _a.m31, _a.m41,
+                _a.m12, _a.m22, _a.m32, _a.m42, 
+                _a.m13, _a.m23, _a.m33, _a.m43, 
+                _a.m14, _a.m24, _a.m34, _a.m44);
+}
+
+
+FORCE_INLINE Float4 Float4::Mul(Float4 _a, Float4 _b)
+{
+    return Float4(_a.x * _b.x, _a.y * _b.y, _a.z * _b.z, _a.w * _b.w);
+}
+
+FORCE_INLINE Float4 Float4::Mul(Float4 _a, float _b)
+{
+    return Float4(_a.x * _b, _a.y * _b, _a.z * _b, _a.w * _b);
+}
+
+FORCE_INLINE Float4 Float4::Add(Float4 _a, Float4 _b)
+{
+    return Float4(_a.x + _b.x, _a.y + _b.y, _a.z + _b.z, _a.w + _b.w);
+}
+
+FORCE_INLINE Float4 Float4::Sub(Float4 _a, Float4 _b)
+{
+    return Float4(_a.x - _b.x, _a.y - _b.y, _a.z - _b.z, _a.w - _b.w);
+}
+
+FORCE_INLINE float Color4u::ValueToLinear(float _a)
+{
+    const float lo = _a / 12.92f;
+    const float hi = M::Pow((_a + 0.055f) / 1.055f, 2.4f);
+    const float result = M::Lerp(hi, lo, _a <= 0.04045f ? 1.0f : 0.0f);
+    return result;
+}
+
+FORCE_INLINE float Color4u::ValueToGamma(float _a)
+{
+    const float lo = _a * 12.92f;
+    const float hi = M::Pow(M::Abs(_a), 1.0f / 2.4f) * 1.055f - 0.055f;
+    const float result = M::Lerp(hi, lo, _a <= 0.0031308f ? 1.0f : 0.0f);
+    return result;
+}
+
+FORCE_INLINE Float4 Color4u::ToFloat4(Color4u c)
+{
+    float rcp = 1.0f / 255.0f;
+    return Float4((float)c.r * rcp, (float)c.g * rcp, (float)c.b * rcp, (float)c.a * rcp);
+}
+
+
+FORCE_INLINE Float3 Mat3::Row1() const
+{
+    return Float3(m11, m12, m13);
+}
+
+FORCE_INLINE Float3 Mat3::Row2() const
+{
+    return Float3(m21, m22, m23);
+}
+
+FORCE_INLINE Float3 Mat3::Row3() const
+{
+    return Float3(m31, m32, m33);
+}
+
+FORCE_INLINE Mat3 Mat3::Transpose(const Mat3& _a)
+{
+    return Mat3(_a.m11, _a.m21, _a.m31, 
+                _a.m12, _a.m22, _a.m32, 
+                _a.m13, _a.m23, _a.m33);
+}
+
+FORCE_INLINE Float3 Mat3::MulFloat3(const Mat3& _mat, Float3 _vec)
+{
+    return Float3(_vec.x * _mat.m11 + _vec.y * _mat.m12 + _vec.z * _mat.m13,
+                  _vec.x * _mat.m21 + _vec.y * _mat.m22 + _vec.z * _mat.m23,
+                  _vec.x * _mat.m31 + _vec.y * _mat.m32 + _vec.z * _mat.m33);
+}
+
+FORCE_INLINE Mat3 Mat3::MulInverse(const Mat3& _a, const Mat3& _b)
+{
+    Mat3 _atrans = Mat3::Transpose(_a);
+    return Mat3::Mul(_atrans, _b);
+}
+
+FORCE_INLINE Float3 Mat3::MulFloat3Inverse(const Mat3& mat, Float3 v)
+{
+    Mat3 rmat = Mat3::Transpose(mat);
+    return Mat3::MulFloat3(rmat, v);
+}
+
+FORCE_INLINE Float2 Mat3::MulFloat2(const Mat3& _mat, Float2 _vec)
+{
+    return Float2(_vec.x * _mat.m11 + _vec.y * _mat.m12 + _mat.m13,
+                  _vec.x * _mat.m21 + _vec.y * _mat.m22 + _mat.m23);
+}
+
+FORCE_INLINE Mat3 Mat3::Translate(float x, float y)
+{
+    return Mat3(1.0f, 0.0f, x, 
+                0.0f, 1.0f, y, 
+                0.0f, 0.0f, 1.0f);
+}
+
+FORCE_INLINE Mat3 Mat3::TranslateFloat2(Float2 p)
+{
+    return Mat3::Translate(p.x, p.y);
+}
+
+FORCE_INLINE Mat3 Mat3::Rotate(float theta)
+{
+    float c = M::Cos(theta);
+    float s = M::Sin(theta);
+    return Mat3(c, -s, 0.0f, 
+                       s, c, 0.0f, 
+                       0.0f, 0.0f, 1.0f);
+}
+
+FORCE_INLINE Mat3 Mat3::Scale(float sx, float sy)
+{
+    return Mat3(sx, 0.0f, 0.0f, 
+                0.0f, sy, 0.0f, 
+                0.0f, 0.0f, 1.0f);
+}
+
+FORCE_INLINE Mat3 Mat3::ScaleRotateTranslate(float sx, float sy, float angle, float tx, float ty)
+{
+    float c = M::Cos(angle);
+    float s = M::Sin(angle);
+    return Mat3(sx*c,  -sy*s,  tx, 
+                sx*s,   sy*c,  ty, 
+                0.0f,   0.0f,  1.0f);
+}
+
+FORCE_INLINE float Float2::Dot(Float2 _a, Float2 _b)
+{
+    return _a.x * _b.x + _a.y * _b.y;
+}
+
+FORCE_INLINE float Float2::Len(Float2 _a)
+{
+    return M::Sqrt(Float2::Dot(_a, _a));
+}
+
+FORCE_INLINE Float2 Float2::Norm(Float2 _a)
+{
+    return Float2::Mul(_a, M::Rsqrt(Float2::Dot(_a, _a)));
+}
+
+FORCE_INLINE Float2 Float2::NormLen(Float2 _a, float* outlen)
+{
+    const float len = Float2::Len(_a);
+    if (len > 0.0f) {
+        *outlen = len;
+        return Float2(_a.x / len, _a.y / len);
+    } else {
+        ASSERT_MSG(0, "Divide by zero");
+        return _a;
+    }
+}
+
+FORCE_INLINE Float2 Float2::Min(Float2 _a, Float2 _b)
+{
+    return Float2(_a.x < _b.x ? _a.x : _b.x, _a.y < _b.y ? _a.y : _b.y);
+}
+
+FORCE_INLINE Float2 Float2::Max(Float2 _a, Float2 _b)
+{
+    return Float2(_a.x > _b.x ? _a.x : _b.x, _a.y > _b.y ? _a.y : _b.y );
+}
+
+FORCE_INLINE Float2 Float2::Lerp(Float2 _a, Float2 _b, float _t)
+{
+    return Float2(M::Lerp(_a.x, _b.x, _t), M::Lerp(_a.y, _b.y, _t));
+}
+
+FORCE_INLINE Float2 Float2::Abs(Float2 _a)
+{
+    return Float2(M::Abs(_a.x), M::Abs(_a.y));
+}
+
+FORCE_INLINE Float2 Float2::Neg(Float2 _a)
+{
+    return Float2(-_a.x, -_a.y);
+}
+
+FORCE_INLINE Float2 Float2::Add(Float2 _a, Float2 _b)
+{
+    return Float2(_a.x + _b.x, _a.y + _b.y);
+}
+
+FORCE_INLINE Float2 Float2::Add(Float2 _a, float _b)
+{
+    return Float2(_a.x + _b, _a.y + _b);
+}
+
+FORCE_INLINE Float2 Float2::Sub(Float2 _a, Float2 _b)
+{
+    return Float2(_a.x - _b.x, _a.y - _b.y);
+}
+
+FORCE_INLINE Float2 Float2::Sub(Float2 _a, float _b)
+{
+    return Float2(_a.x - _b, _a.y - _b);
+}
+
+FORCE_INLINE Float2 Float2::Mul(Float2 _a, Float2 _b)
+{
+    return Float2(_a.x * _b.x, _a.y * _b.y);
+}
+
+FORCE_INLINE Float2 Float2::Mul(Float2 _a, float _b)
+{
+    return Float2(_a.x * _b, _a.y * _b);
+}
+
+FORCE_INLINE Int2 Int2::Add(Int2 _a, Int2 _b)
+{
+    return Int2(_a.x + _b.x, _a.y + _b.y);
+}
+
+FORCE_INLINE Int2 Int2::Sub(Int2 _a, Int2 _b)
+{
+    return Int2(_a.x - _b.x, _a.y - _b.y);
+}
+
+FORCE_INLINE Int2 Int2::Min(Int2 _a, Int2 _b)
+{
+    return Int2(_a.x < _b.x ? _a.x : _b.x, _a.y < _b.y ? _a.y : _b.y);
+}
+
+FORCE_INLINE Int2 Int2::Max(Int2 _a, Int2 _b)
+{
+    return Int2(_a.x > _b.x ? _a.x : _b.x, _a.y > _b.y ? _a.y : _b.y);
+}
+
+
+FORCE_INLINE RectFloat RectFloat::CenterExtents(Float2 center, Float2 extents)
+{
+    return RectFloat(Float2::Sub(center, extents), Float2::Add(center, extents));
+}
+
+FORCE_INLINE RectFloat RectFloat::Expand(const RectFloat rc, Float2 expand)
+{
+    return RectFloat(rc.xmin - expand.x, rc.ymin - expand.y, rc.xmax + expand.x, rc.ymax + expand.y);
+}
+
+FORCE_INLINE bool RectFloat::TestPoint(const RectFloat rc, Float2 pt)
+{
+    if (pt.x < rc.xmin || pt.y < rc.ymin || pt.x > rc.xmax || pt.y > rc.ymax)
+        return false;
+    return true;
+}
+
+FORCE_INLINE bool RectFloat::Test(const RectFloat rc1, const RectFloat rc2)
+{
+    if (rc1.xmax < rc2.xmin || rc1.xmin > rc2.xmax)
+        return false;
+    if (rc1.ymax < rc2.ymin || rc1.ymin > rc2.ymax)
+        return false;
+    return true;
+}
+
+FORCE_INLINE void RectFloat::AddPoint(RectFloat* rc, Float2 pt)
+{
+    *rc = RectFloat(Float2::Min(Float2(rc->vmin), pt), Float2::Max(Float2(rc->vmax), pt));
+}
+
+FORCE_INLINE bool RectFloat::IsEmpty() const
+{
+    return xmin >= xmax || ymin >= ymax;
+}
+
+/*
+*   2               3
+*   -----------------
+*   |               |
+*   |               |
+*   |               |
+*   |               |
+*   |               |
+*   -----------------
+*   0               1
+*/
+FORCE_INLINE Float2 RectFloat::GetCorner(const RectFloat* rc, int index)
+{
+    return Float2((index & 1) ? rc->xmax : rc->xmin, (index & 2) ? rc->ymax : rc->ymin);
+}
+
+FORCE_INLINE void RectFloat::GetCorners(Float2 corners[4], const RectFloat* rc)
+{
+    for (int i = 0; i < 4; i++)
+        corners[0] = RectFloat::GetCorner(rc, i);
+}
+
+FORCE_INLINE float RectFloat::Width() const
+{
+    return xmax - xmin;
+}
+
+FORCE_INLINE float RectFloat::Height() const
+{
+    return ymax - ymin;
+}
+
+FORCE_INLINE Float2 RectFloat::Extents(const RectFloat rc)
+{
+    return Float2::Mul(Float2::Sub(Float2(rc.vmax), Float2(rc.vmin)), 0.5f);
+}
+
+FORCE_INLINE Float2 RectFloat::Center(const RectFloat rc)
+{
+    return Float2::Mul(Float2::Add(Float2(rc.vmin), Float2(rc.vmax)), 0.5f);
+}
+
+FORCE_INLINE RectFloat RectFloat::Translate(const RectFloat rc, Float2 pos) 
+{
+    return RectFloat(Float2::Add(pos, Float2(rc.vmin)), Float2::Add(pos, Float2(rc.vmax)));
+}
+
+FORCE_INLINE RectInt RectInt::Expand(const RectInt rc, Int2 expand)
+{
+    return RectInt(rc.xmin - expand.x, rc.ymin - expand.y, rc.xmax + expand.x, rc.ymax + expand.y);
+}
+
+FORCE_INLINE bool RectInt::TestPoint(const RectInt rc, Int2 pt)
+{
+    if (pt.x < rc.xmin || pt.y < rc.ymin || pt.x > rc.xmax || pt.y > rc.ymax)
+        return false;
+    return true;
+}
+
+FORCE_INLINE bool RectInt::Test(const RectInt rc1, const RectInt rc2)
+{
+    if (rc1.xmax < rc2.xmin || rc1.xmin > rc2.xmax)
+        return false;
+    if (rc1.ymax < rc2.ymin || rc1.ymin > rc2.ymax)
+        return false;
+    return true;
+}
+
+FORCE_INLINE void RectInt::AddPoint(RectInt* rc, Int2 pt)
+{
+    *rc = RectInt(Int2::Min(Int2(rc->vmin), pt), Int2::Max(Int2(rc->vmax), pt));
+}
+
+FORCE_INLINE bool RectInt::IsEmpty() const
+{
+    return xmin >= xmax || ymin >= ymax;
+}    
+
+FORCE_INLINE int RectInt::Width() const
+{
+    return xmax - xmin;
+}
+
+FORCE_INLINE int RectInt::Height() const
+{
+    return ymax - ymin;
+}
+
+/*
+*   2               3 (max)
+*   -----------------
+*   |               |
+*   |               |
+*   |               |
+*   |               |
+*   |               |
+*   -----------------
+*   0 (min)         1
+*/
+FORCE_INLINE Int2 RectInt::GetCorner(const RectInt* rc, int index)
+{
+    return Int2((index & 1) ? rc->xmax : rc->xmin, (index & 2) ? rc->ymax : rc->ymin);
+}
+
+FORCE_INLINE void RectInt::GetCorners(Int2 corners[4], const RectInt* rc)
+{
+    for (int i = 0; i < 4; i++)
+        corners[0] = GetCorner(rc, i);
+}
+
+
+FORCE_INLINE bool AABB::IsEmpty() const
+{
+    return xmin >= xmax || ymin >= ymax || zmin >= zmax;
+}
+
+FORCE_INLINE void AABB::AddPoint(AABB* aabb, Float3 pt)
+{
+    *aabb = AABB(Float3::Min(Float3(aabb->vmin), pt), Float3::Max(Float3(aabb->vmax), pt));
+}
+
+FORCE_INLINE AABB AABB::Unify(const AABB& aabb1, const AABB& aabb2)
+{
+    AABB r = aabb1;
+    AABB::AddPoint(&r, Float3(aabb2.vmin));
+    AABB::AddPoint(&r, Float3(aabb2.vmax));
+    return r;
+}
+
+FORCE_INLINE bool AABB::TestPoint(const AABB& aabb, Float3 pt)
+{
+    if (aabb.xmax < pt.x || aabb.xmin > pt.x)
+        return false;
+    if (aabb.ymax < pt.y || aabb.ymin > pt.y)
+        return false;
+    if (aabb.zmax < pt.z || aabb.zmin > pt.z)
+        return false;
+    return true;
+}
+
+FORCE_INLINE bool AABB::Test(const AABB& aabb1, const AABB& aabb2)
+{
+    if (aabb1.xmax < aabb2.xmin || aabb1.xmin > aabb2.xmax)
+        return false;
+    if (aabb1.ymax < aabb2.ymin || aabb1.ymin > aabb2.ymax)
+        return false;
+    if (aabb1.zmax < aabb2.zmin || aabb1.zmin > aabb2.zmax)
+        return false;
+    return true;    
+}
+
+/*
+ *        6                 7
+ *        ------------------
+ *       /|               /|
+ *      / |              / |
+ *     /  |             /  |
+ *  2 /   |          3 /   |
+ *   /----------------/    |
+ *   |    |           |    |
+ *   |    |           |    |      +Z
+ *   |    |           |    |
+ *   |    |-----------|----|     |
+ *   |   / 4          |   / 5    |  / +Y
+ *   |  /             |  /       | /
+ *   | /              | /        |/
+ *   |/               |/         --------- +X
+ *   ------------------
+ *  0                 1
+ */
+FORCE_INLINE Float3 AABB::GetCorner(const AABB& aabb, int index)
+{
+    ASSERT(index < 8);
+    return Float3((index & 1) ? aabb.xmax : aabb.xmin,
+                  (index & 4) ? aabb.ymax : aabb.ymin,
+                  (index & 2) ? aabb.zmax : aabb.zmin);
+}
+
+FORCE_INLINE void AABB::GetCorners(Float3 corners[8], const AABB& aabb)
+{
+    for (int i = 0; i < 8; i++)
+        corners[i] = AABB::GetCorner(aabb, i);
+}
+
+FORCE_INLINE Float3 AABB::Extents() const
+{
+    return Float3::Mul(Float3(xmax - xmin,  ymax - ymin, zmax - zmin), 0.5f);
+}
+
+FORCE_INLINE Float3 AABB::Center() const
+{
+    return Float3::Mul(Float3::Add(Float3(vmin), Float3(vmax)), 0.5f);
+}
+
+FORCE_INLINE AABB AABB::Translate(const AABB& aabb, Float3 offset)
+{
+    return AABB(Float3::Add(Float3(aabb.vmin), offset), Float3::Add(Float3(aabb.vmax), offset));
+}
+
+FORCE_INLINE AABB AABB::SetPos(const AABB& aabb, Float3 pos)
+{
+    Float3 e = aabb.Extents();
+    return AABB(pos.x - e.x, pos.y - e.y, pos.z - e.z, 
+                pos.x + e.x, pos.y + e.y, pos.z + e.z);
+}
+
+FORCE_INLINE AABB AABB::Expand(const AABB& aabb, Float3 expand)
+{
+    Float3 p = aabb.Center();
+    Float3 e = Float3::Add(aabb.Extents(), expand);
+    return AABB(p.x - e.x, p.y - e.y, p.z - e.z, 
+                p.x + e.x, p.y + e.y, p.z + e.z);
+}
+
+FORCE_INLINE AABB AABB::Scale(const AABB& aabb, Float3 scale)
+{
+    Float3 p = aabb.Center();
+    Float3 e = Float3::Mul(aabb.Extents(), scale);
+    return AABB(p.x - e.x, p.y - e.y, p.z - e.z, 
+                p.x + e.x, p.y + e.y, p.z + e.z);
+}
+
+FORCE_INLINE Transform3D Transform3D::Mul(const Transform3D& txa, const Transform3D& txb)
+{
+    return Transform3D(Float3::Add(Mat3::MulFloat3(txa.rot, txb.pos), txa.pos), Mat3::Mul(txa.rot, txb.rot));
+}
+
+FORCE_INLINE Float3 Transform3D::MulFloat3(const Transform3D& tx, Float3 v)
+{
+    return Float3::Add(Mat3::MulFloat3(tx.rot, v), tx.pos);
+}   
+
+FORCE_INLINE Float3 Transform3D::MulFloat3Scale(const Transform3D& tx, Float3 scale, Float3 v)
+{
+    return Float3::Add(Mat3::MulFloat3(tx.rot, Float3::Mul(v, scale)), tx.pos);
+}
+
+FORCE_INLINE Transform3D Transform3D::Inverse(const Transform3D& tx)
+{   
+    Mat3 rotInv = Mat3::Transpose(tx.rot);
+    return Transform3D(Mat3::MulFloat3(rotInv, Float3::Mul(tx.pos, -1.0f)), rotInv);
+}
+
+FORCE_INLINE Float3 Transform3D::MulFloat3Inverse(const Transform3D& tx, Float3 v)
+{   
+    Mat3 rmat = Mat3::Transpose(tx.rot);
+    return Mat3::MulFloat3(rmat, Float3::Sub(v, tx.pos));
+}
+
+FORCE_INLINE Transform3D Transform3D::MulInverse(const Transform3D& txa, const Transform3D& txb)
+{
+    return Transform3D(Mat3::MulFloat3Inverse(txa.rot, Float3::Sub(txb.pos, txa.pos)), Mat3::MulInverse(txa.rot, txb.rot));
+}
+
+FORCE_INLINE Mat4 Transform3D::ToMat4(const Transform3D& tx)
+{
+    return Mat4(Float4(Float3(tx.rot.fc1), 0.0f),
+                Float4(Float3(tx.rot.fc2), 0.0f),
+                Float4(Float3(tx.rot.fc3), 0.0f),
+                Float4(tx.pos,             1.0f));
+}
+
+FORCE_INLINE Transform3D Transform3D::Make(float x, float y, float z, float rx, float ry, float rz)
+{
+    Mat4 rot = Mat4::RotateXYZ(rx, ry, rz);
+    return Transform3D(Float3(x, y, z), Mat3(rot.fc1, rot.fc2, rot.fc3));
+}
+
+FORCE_INLINE Transform3D Transform3D::FromMat4(const Mat4& mat)
+{
+    return Transform3D(Float3(mat.fc4),  Mat3(mat.fc1, mat.fc2, mat.fc3));
+}
+
+
+                                                                                                           
+FORCE_INLINE Float2 operator+(Float2 a, Float2 b)
+{
+    return Float2::Add(a, b);
+}
+
+FORCE_INLINE Float2 operator-(Float2 a, Float2 b)
+{
+    return Float2::Sub(a, b);
+}
+
+FORCE_INLINE Float2 operator*(Float2 v, float k)
+{
+    return Float2::Mul(v, k);
+}
+
+FORCE_INLINE Float2 operator*(float k, Float2 v)
+{
+    return Float2::Mul(v, k);
+}
+
+FORCE_INLINE Float2 operator*(Float2 v0, Float2 v1)
+{
+    return Float2::Mul(v0, v1);
+}
+
+FORCE_INLINE Int2 operator+(Int2 a, Int2 b)
+{
+    return Int2::Add(a, b);
+}
+
+FORCE_INLINE Int2 operator-(Int2 a, Int2 b)
+{
+    return Int2::Sub(a, b);
+}
+
+FORCE_INLINE Float3 operator+(Float3 v1, Float3 v2)
+{
+    return Float3::Add(v1, v2);
+}
+
+FORCE_INLINE Float3 operator-(Float3 v1, Float3 v2)
+{
+    return Float3::Sub(v1, v2);
+}
+
+FORCE_INLINE Float3 operator*(Float3 v, float k)
+{
+    return Float3::Mul(v, k);
+}
+
+FORCE_INLINE Float3 operator*(float k, Float3 v)
+{
+    return Float3::Mul(v, k);
+}
+
+FORCE_INLINE Mat4 operator*(const Mat4& a, const Mat4& b)
+{
+    return Mat4::Mul(a, b);
+}
+
+FORCE_INLINE Mat3 operator*(const Mat3& a, const Mat3& b)
+{
+    return Mat3::Mul(a, b);
+}
+
+FORCE_INLINE Quat operator*(const Quat& a, const Quat& b)
+{
+    return Quat::Mul(a, b);
+}
+
+
+namespace M
+{
+    FORCE_INLINE float  Float2Dot(Float2 _a, Float2 _b) { return Float2::Dot(_a, _b); }
+    FORCE_INLINE float  Float2Len(Float2 _a) { return Float2::Len(_a); }
+    FORCE_INLINE Float2 Float2Norm(Float2 _a) { return Float2::Norm(_a); }
+    FORCE_INLINE Float2 Float2NormLen(Float2 _a, float* outlen) { return Float2::NormLen(_a, outlen); }
+    FORCE_INLINE Float2 Float2Min(Float2 _a, Float2 _b) { return Float2::Min(_a, _b); }
+    FORCE_INLINE Float2 Float2Max(Float2 _a, Float2 _b) { return Float2::Max(_a, _b); }
+    FORCE_INLINE Float2 Float2Lerp(Float2 _a, Float2 _b, float _t) { return Float2::Lerp(_a, _b, _t); }
+    FORCE_INLINE Float2 Float2Abs(Float2 _a) { return Float2::Abs(_a); }
+    FORCE_INLINE Float2 Float2Neg(Float2 _a) { return Float2::Neg(_a); }
+    FORCE_INLINE Float2 Float2Add(Float2 _a, Float2 _b) { return Float2::Add(_a, _b); }
+    FORCE_INLINE Float2 Float2Add(Float2 _a, float _b) { return Float2::Add(_a, _b); }
+    FORCE_INLINE Float2 Float2Sub(Float2 _a, Float2 _b) { return Float2::Sub(_a, _b); }
+    FORCE_INLINE Float2 Float2Sub(Float2 _a, float _b) { return Float2::Sub(_a, _b); }
+    FORCE_INLINE Float2 Float2Mul(Float2 _a, Float2 _b) { return Float2::Mul(_a, _b); }
+    FORCE_INLINE Float2 Float2Mul(Float2 _a, float _b) { return Float2::Mul(_a, _b); }
+    FORCE_INLINE Float2 Float2CalcLinearFit2D(const Float2* _points, int _num) { return Float2::CalcLinearFit2D(_points, _num); }
+
+    FORCE_INLINE Float3 Float3Abs(Float3 _a) { return Float3::Abs(_a); }
+    FORCE_INLINE Float3 Float3Neg(Float3 _a) { return Float3::Neg(_a); }
+    FORCE_INLINE Float3 Float3Add(Float3 _a, Float3 _b) { return Float3::Add(_a, _b); }
+    FORCE_INLINE Float3 Float3Add(Float3 _a, float _b) { return Float3::Add(_a, _b); }
+    FORCE_INLINE Float3 Float3Sub(Float3 _a, Float3 _b) { return Float3::Sub(_a, _b); }
+    FORCE_INLINE Float3 Float3Sub(Float3 _a, float _b) { return Float3::Sub(_a, _b); }
+    FORCE_INLINE Float3 Float3Mul(Float3 _a, Float3 _b) { return Float3::Mul(_a, _b); }
+    FORCE_INLINE Float3 Float3Mul(Float3 _a, float _b) { return Float3::Mul(_a, _b); }
+    FORCE_INLINE float  Float3Dot(Float3 _a, Float3 _b) { return Float3::Dot(_a, _b); }
+    FORCE_INLINE Float3 Float3Cross(Float3 _a, Float3 _b) { return Float3::Cross(_a, _b); }
+    FORCE_INLINE float  Float3Len(Float3 _a) { return Float3::Len(_a); }
+    FORCE_INLINE Float3 Float3Lerp(Float3 _a, Float3 _b, float _t) { return Float3::Lerp(_a, _b, _t); }
+    FORCE_INLINE Float3 Float3SmoothLerp(Float3 _a, Float3 _b, float _dt, float _h) { return Float3::SmoothLerp(_a, _b, _dt, _h); }
+    FORCE_INLINE Float3 Float3Norm(Float3 _a) { return Float3::Norm(_a); }
+    FORCE_INLINE Float3 Float3NormLen(Float3 _a, float* _outlen) { return Float3::NormLen(_a, _outlen); }
+    FORCE_INLINE Float3 Float3Min(Float3 _a, Float3 _b) { return Float3::Min(_a, _b); }
+    FORCE_INLINE Float3 Float3Max(Float3 _a, Float3 _b) { return Float3::Max(_a, _b); }
+    FORCE_INLINE Float3 Float3Rcp(Float3 _a) { return Float3::Rcp(_a); }
+    FORCE_INLINE void   Float3Tangent(Float3* _t, Float3* _b, Float3 _n) { Float3::Tangent(_t, _b, _n); }
+    FORCE_INLINE void   Float3TangentAngle(Float3* _t, Float3* _b, Float3 _n, float _angle) { Float3::TangentAngle(_t, _b, _n, _angle); }
+    FORCE_INLINE Float3 Float3FromLatLong(float _u, float _v) { return Float3::FromLatLong(_u, _v); }
+    FORCE_INLINE Float2 Float3ToLatLong(Float3 _dir) { return Float3::ToLatLong(_dir); }
+    FORCE_INLINE Float3 Float3CalcLinearFit3D(const Float3* _points, int _num) { return Float3::CalcLinearFit3D(_points, _num); }
+
+    FORCE_INLINE Float4 Float4Mul(Float4 _a, Float4 _b) { return Float4::Mul(_a, _b); }
+    FORCE_INLINE Float4 Float4Mul(Float4 _a, float _b) { return Float4::Mul(_a, _b); }
+    FORCE_INLINE Float4 Float4Add(Float4 _a, Float4 _b) { return Float4::Add(_a, _b); }
+    FORCE_INLINE Float4 Float4Sub(Float4 _a, Float4 _b) { return Float4::Sub(_a, _b); }
+
+    FORCE_INLINE float ColorValueToLinear(float _a) { return Color4u::ValueToLinear(_a); }
+    FORCE_INLINE float ColorValueToGamma(float _a) { return Color4u::ValueToGamma(_a); }
+    FORCE_INLINE Float4 ColorToFloat4(Color4u c) { return Color4u::ToFloat4(c); }
+    FORCE_INLINE Color4u  ColorBlend(Color4u _a, Color4u _b, float _t) { return Color4u::Blend(_a, _b, _t); }
+    FORCE_INLINE Float4 ColorToFloat4SRGB(Float4 cf) { return Color4u::ToFloat4SRGB(cf); }
+    FORCE_INLINE Float4 ColorToFloat4Linear(Float4 c) { return Color4u::ToFloat4Linear(c); }
+    FORCE_INLINE Float3 ColorRGBtoHSV(Float3 rgb) { return Color4u::RGBtoHSV(rgb); }
+    FORCE_INLINE Float3 ColorHSVtoRGB(Float3 hsv) { return Color4u::HSVtoRGB(hsv); }
+
+    FORCE_INLINE Int2 Int2Add(Int2 _a, Int2 _b) { return Int2::Add(_a, _b); }
+    FORCE_INLINE Int2 Int2Sub(Int2 _a, Int2 _b) { return Int2::Sub(_a, _b); }
+    FORCE_INLINE Int2 Int2Min(Int2 _a, Int2 _b) { return Int2::Min(_a, _b); }
+    FORCE_INLINE Int2 Int2Max(Int2 _a, Int2 _b) { return Int2::Max(_a, _b); }
+
+    FORCE_INLINE Float3 QuatMulXYZ(Quat _qa, Quat _qb) { return Quat::MulXYZ(_qa, _qb); }
+    FORCE_INLINE Quat   QuatMul(Quat p, Quat q) { return Quat::Mul(p, q); }
+    FORCE_INLINE Quat   QuatInverse(Quat _q) { return Quat::Inverse(_q); }
+    FORCE_INLINE float  QuatDot(Quat _a, Quat _b) { return Quat::Dot(_a, _b); }
+    FORCE_INLINE float  QuatAngle(Quat _a, Quat _b) { return Quat::Angle(_a, _b); }
+    FORCE_INLINE Quat   QuatNorm(Quat _q) { return Quat::Norm(_q); }
+    FORCE_INLINE Quat   QuatRotateAxis(Float3 _axis, float _angle) { return Quat::RotateAxis(_axis, _angle); }
+    FORCE_INLINE Quat   QuatRotateX(float _ax) { return Quat::RotateX(_ax); }
+    FORCE_INLINE Quat   QuatRotateY(float _ay) { return Quat::RotateY(_ay); }
+    FORCE_INLINE Quat   QuatRotateZ(float _az) { return Quat::RotateZ(_az); }
+    FORCE_INLINE Quat   QuatLerp(Quat _a, Quat _b, float t) { return Quat::Lerp(_a, _b, t); }
+    FORCE_INLINE Quat   QuatSlerp(Quat _a, Quat _b, float t) { return Quat::Slerp(_a, _b, t); }
+    FORCE_INLINE Float3 QuatToEuler(Quat _q) { return Quat::ToEuler(_q); }
+    FORCE_INLINE Quat   QuatFromEuler(Float3 _float3) { return Quat::FromEuler(_float3); }
+    FORCE_INLINE Float3 QuatTransformFloat3(Float3 v, Quat q) { return Quat::TransformFloat3(v, q); }
+
+    FORCE_INLINE Mat3   Mat3Transpose(const Mat3& _a) { return Mat3::Transpose(_a); }
+    FORCE_INLINE Float3 Mat3MulFloat3(const Mat3& _mat, Float3 _vec) { return Mat3::MulFloat3(_mat, _vec); }
+    FORCE_INLINE Mat3   Mat3MulInverse(const Mat3& _a, const Mat3& _b) { return Mat3::MulInverse(_a, _b); }
+    FORCE_INLINE Float3 Mat3MulFloat3Inverse(const Mat3& mat, Float3 v) { return Mat3::MulFloat3Inverse(mat, v); }
+    FORCE_INLINE Float2 Mat3MulFloat2(const Mat3& _mat, Float2 _vec) { return Mat3::MulFloat2(_mat, _vec); }
+    FORCE_INLINE Mat3   Mat3Translate(float x, float y) { return Mat3::Translate(x, y); }
+    FORCE_INLINE Mat3   Mat3TranslateFloat2(Float2 p) { return Mat3::TranslateFloat2(p); }
+    FORCE_INLINE Mat3   Mat3Rotate(float theta) { return Mat3::Rotate(theta); }
+    FORCE_INLINE Mat3   Mat3Scale(float sx, float sy) { return Mat3::Scale(sx, sy); }
+    FORCE_INLINE Mat3   Mat3ScaleRotateTranslate(float sx, float sy, float angle, float tx, float ty) { return Mat3::ScaleRotateTranslate(sx, sy, angle, tx, ty); }
+    FORCE_INLINE Mat3   Mat3Inverse(const Mat3& _a) { return Mat3::Inverse(_a); }
+    FORCE_INLINE Mat3   Mat3Mul(const Mat3& _a, const Mat3& _b) { return Mat3::Mul(_a, _b); }
+    FORCE_INLINE Mat3   Mat3Abs(const Mat3& m) { return Mat3::Abs(m); }
+    FORCE_INLINE Mat3   Mat3FromQuat(Quat q) { return Mat3::FromQuat(q); }
+
+    FORCE_INLINE Mat4   Mat4Translate(float _tx, float _ty, float _tz) { return Mat4::Translate(_tx, _ty, _tz); }
+    FORCE_INLINE Mat4   Mat4Scale(float _sx, float _sy, float _sz) { return Mat4::Scale(_sx, _sy, _sz); }
+    FORCE_INLINE Mat4   Mat4Scalef(float _scale) { return Mat4::Scale(_scale); }
+    FORCE_INLINE Mat4   Mat4RotateX(float _ax) { return Mat4::RotateX(_ax); }
+    FORCE_INLINE Mat4   Mat4RotateY(float _ay) { return Mat4::RotateY(_ay); }
+    FORCE_INLINE Mat4   Mat4RotateZ(float _az) { return Mat4::RotateZ(_az); }
+    FORCE_INLINE Mat4   Mat4RotateXY(float _ax, float _ay) { return Mat4::RotateXY(_ax, _ay); }
+    FORCE_INLINE Mat4   Mat4RotateXYZ(float _ax, float _ay, float _az) { return Mat4::RotateXYZ(_ax, _ay, _az); }
+    FORCE_INLINE Mat4   Mat4RotateZYX(float _ax, float _ay, float _az) { return Mat4::RotateZYX(_ax, _ay, _az); }
+    FORCE_INLINE Mat4   Mat4ToQuatTranslate(Quat _quat, Float3 _translation) { return Mat4::ToQuatTranslate(_quat, _translation); }
+    FORCE_INLINE Mat4   Mat4ToQuatTranslateHMD(Quat _quat, Float3 _translation) { return Mat4::ToQuatTranslateHMD(_quat, _translation); }
+    FORCE_INLINE Float3 Mat4MulFloat3(const Mat4& _mat, Float3 _vec) { return Mat4::MulFloat3(_mat, _vec); }
+    FORCE_INLINE Float3 Mat4MulFloat3_xyz0(const Mat4& _mat, Float3 _vec) { return Mat4::MulFloat3_xyz0(_mat, _vec); }
+    FORCE_INLINE Float3 Mat4MulFloat3H(const Mat4& _mat, Float3 _vec) { return Mat4::MulFloat3H(_mat, _vec); }
+    FORCE_INLINE Float4 Mat4MulFloat4(const Mat4& _mat, Float4 _vec) { return Mat4::MulFloat4(_mat, _vec); }
+    FORCE_INLINE Mat4   Mat4Transpose(const Mat4& _a) { return Mat4::Transpose(_a); }
+    FORCE_INLINE void   Mat4ProjFlipHandedness(Mat4* _dst, const Mat4& _src) { return Mat4::ProjFlipHandedness(_dst, _src); }
+    FORCE_INLINE void   Mat4ViewFlipHandedness(Mat4* _dst, const Mat4& _src) { return Mat4::ViewFlipHandedness(_dst, _src); }
+    FORCE_INLINE Mat4   Mat4FromNormal(Float3 _normal, float _scale, Float3 _pos) { return Mat4::FromNormal(_normal, _scale, _pos); }
+    FORCE_INLINE Mat4   Mat4FromNormalAngle(Float3 _normal, float _scale, Float3 _pos, float _angle) { return Mat4::FromNormalAngle(_normal, _scale, _pos, _angle); }
+    FORCE_INLINE Mat4   Mat4ViewLookAt(Float3 eye, Float3 target, Float3 up) { return Mat4::ViewLookAt(eye, target, up); }
+    FORCE_INLINE Mat4   Mat4ViewLookAtLH(Float3 eye, Float3 target, Float3 up) { return Mat4::ViewLookAtLH(eye, target, up); }
+    FORCE_INLINE Mat4   Mat4ViewFPS(Float3 eye, float pitch, float yaw) { return Mat4::ViewFPS(eye, pitch, yaw); }
+    FORCE_INLINE Mat4   Mat4ViewArcBall(Float3 move, Quat rot, Float3 targetPos) { return Mat4::ViewArcBall(move, rot, targetPos); }
+    FORCE_INLINE Mat4   Mat4Perspective(float width, float height, float zn, float zf, bool d3dNdc = false) { return Mat4::Perspective(width, height, zn, zf, d3dNdc); }
+    FORCE_INLINE Mat4   Mat4PerspectiveLH(float width, float height, float zn, float zf, bool d3dNdc = false) { return Mat4::PerspectiveLH(width, height, zn, zf, d3dNdc); }
+    FORCE_INLINE Mat4   Mat4PerspectiveOffCenter(float xmin, float ymin, float xmax, float ymax,
+                                                 float zn, float zf, bool d3dNdc = false) { return Mat4::PerspectiveOffCenter(xmin, ymin, xmax, ymax, zn, zf, d3dNdc); }
+    FORCE_INLINE Mat4   Mat4PerspectiveOffCenterLH(float xmin, float ymin, float xmax, float ymax,
+                                                   float zn, float zf, bool d3dNdc = false) { return Mat4::PerspectiveOffCenterLH(xmin, ymin, xmax, ymax, zn, zf, d3dNdc); }
+    FORCE_INLINE Mat4   Mat4PerspectiveFOV(float fov_y, float aspect, float zn, float zf, bool d3dNdc = false) { return Mat4::PerspectiveFOV(fov_y, aspect, zn, zf, d3dNdc); }
+    FORCE_INLINE Mat4   Mat4PerspectiveFOVLH(float fov_y, float aspect, float zn, float zf, bool d3dNdc = false) { return Mat4::PerspectiveFOVLH(fov_y, aspect, zn, zf, d3dNdc); }
+    FORCE_INLINE Mat4   Mat4Ortho(float width, float height, float zn, float zf, float offset = 0, bool d3dNdc = false) { return Mat4::Ortho(width, height, zn, zf, offset, d3dNdc); }
+    FORCE_INLINE Mat4   Mat4OrthoLH(float width, float height, float zn, float zf, float offset = 0, bool d3dNdc = false) { return Mat4::OrthoLH(width, height, zn, zf, offset, d3dNdc); }
+    FORCE_INLINE Mat4   Mat4OrthoOffCenter(float xmin, float ymin, float xmax, float ymax, float zn,
+                                           float zf, float offset = 0, bool d3dNdc = false) { return Mat4::OrthoOffCenter(xmin, ymin, xmax, ymax, zn, zf, offset, d3dNdc); }
+    FORCE_INLINE Mat4   Mat4OrthoOffCenterLH(float xmin, float ymin, float xmax, float ymax, float zn,
+                                             float zf, float offset = 0, bool d3dNdc = false) { return Mat4::OrthoOffCenterLH(xmin, ymin, xmax, ymax, zn, zf, offset, d3dNdc); }
+    FORCE_INLINE Mat4   Mat4ScaleRotateTranslate(float _sx, float _sy, float _sz, 
+                                                 float _ax, float _ay, float _az,
+                                                 float _tx, float _ty, float _tz) { return Mat4::ScaleRotateTranslate(_sx, _sy, _sz, _ax, _ay, _az, _tx, _ty, _tz); }
+    FORCE_INLINE Mat4   Mat4Mul(const Mat4& _a, const Mat4& _b) { return Mat4::Mul(_a, _b); }
+    FORCE_INLINE Mat4   Mat4Inverse(const Mat4& _a) { return Mat4::Inverse(_a); }
+    FORCE_INLINE Mat4   Mat4InverseTransformMat(const Mat4& _a) { return Mat4::InverseTransformMat(_a); }
+    FORCE_INLINE Quat   Mat4ToQuat(const Mat4& _mat) { return Mat4::ToQuat(_mat); }
+    FORCE_INLINE Mat4   Mat4FromQuat(Quat q) { return Mat4::FromQuat(q); }
+    FORCE_INLINE Mat4   Mat4ProjectPlane(Float3 planeNormal) { return Mat4::ProjectPlane(planeNormal); }
+
+    FORCE_INLINE RectFloat   RectCenterExtents(Float2 center, Float2 extents) { return RectFloat::CenterExtents(center, extents); }
+    FORCE_INLINE RectFloat   RectExpand(const RectFloat rc, Float2 expand) { return RectFloat::Expand(rc, expand); }
+    FORCE_INLINE bool   RectTestPoint(const RectFloat rc, Float2 pt) { return RectFloat::TestPoint(rc, pt); }
+    FORCE_INLINE bool   RectTest(const RectFloat rc1, const RectFloat rc2) { return RectFloat::Test(rc1, rc2); }
+    FORCE_INLINE void   RectAddPoint(RectFloat* rc, Float2 pt) { RectFloat::AddPoint(rc, pt); }
+    FORCE_INLINE Float2 RectGetCorner(const RectFloat* rc, int index) { return RectFloat::GetCorner(rc, index); }
+    FORCE_INLINE void   RectGetCorners(Float2 corners[4], const RectFloat* rc) { RectFloat::GetCorners(corners, rc); }
+    FORCE_INLINE Float2 RectExtents(const RectFloat rc) { return RectFloat::Extents(rc); }
+    FORCE_INLINE Float2 RectCenter(const RectFloat rc) { return RectFloat::Center(rc); }
+    FORCE_INLINE RectFloat   RectTranslate(const RectFloat rc, Float2 pos) { return RectFloat::Translate(rc, pos); }
+
+    FORCE_INLINE RectInt  RectIntExpand(const RectInt rc, Int2 expand) { return RectInt::Expand(rc, expand); }
+    FORCE_INLINE bool     RectIntTestPoint(const RectInt rc, Int2 pt) { return RectInt::TestPoint(rc, pt); }
+    FORCE_INLINE bool     RectIntTest(const RectInt rc1, const RectInt rc2) { return RectInt::Test(rc1, rc2); }
+    FORCE_INLINE void     RectIntAddPoint(RectInt* rc, Int2 pt) { return RectInt::AddPoint(rc, pt); }
+    FORCE_INLINE Int2     RectIntGetCorner(const RectInt* rc, int index) { return RectInt::GetCorner(rc, index); }
+    FORCE_INLINE void     RectIntGetCorners(Int2 corners[4], const RectInt* rc) { return RectInt::GetCorners(corners, rc); }
+
+    FORCE_INLINE void   AABBAddPoint(AABB* aabb, Float3 pt) { return AABB::AddPoint(aabb, pt); }
+    FORCE_INLINE AABB   AABBUnify(const AABB& aabb1, const AABB& aabb2) { return AABB::Unify(aabb1, aabb2); }
+    FORCE_INLINE bool   AABBTestPoint(const AABB& aabb, Float3 pt) { return AABB::TestPoint(aabb, pt); }
+    FORCE_INLINE bool   AABBTest(const AABB& aabb1, const AABB& aabb2) { return AABB::Test(aabb1, aabb2); }
+    FORCE_INLINE Float3 AABBGetCorner(const AABB& aabb, int index) { return AABB::GetCorner(aabb, index); }
+    FORCE_INLINE void   AABBGetCorners(Float3 corners[8], const AABB& aabb) { return AABB::GetCorners(corners, aabb); }
+    FORCE_INLINE AABB   AABBTranslate(const AABB& aabb, Float3 offset) { return AABB::Translate(aabb, offset); }
+    FORCE_INLINE AABB   AABBSetPos(const AABB& aabb, Float3 pos) { return AABB::SetPos(aabb, pos); }
+    FORCE_INLINE AABB   AABBExpand(const AABB& aabb, Float3 expand) { return AABB::Expand(aabb, expand); }
+    FORCE_INLINE AABB   AABBScale(const AABB& aabb, Float3 scale) { return AABB::Scale(aabb, scale); }
+    FORCE_INLINE AABB   AABBTransform(const AABB& aabb, const Mat4& mat) { return AABB::Transform(aabb, mat); }
+
+    FORCE_INLINE Float3 PlaneCalcNormal(Float3 _va, Float3 _vb, Float3 _vc) { return Plane::CalcNormal(_va, _vb, _vc); }
+    FORCE_INLINE Plane  PlaneFrom3Points(Float3 _va, Float3 _vb, Float3 _vc) { return Plane::From3Points(_va, _vb, _vc); }
+    FORCE_INLINE Plane  PlaneFromNormalPoint(Float3 _normal, Float3 _p) { return Plane::FromNormalPoint(_normal, _p); }
+    FORCE_INLINE float  PlaneDistance(Plane _plane, Float3 _p) { return Plane::Distance(_plane, _p); }
+    FORCE_INLINE Float3 PlaneProjectPoint(Plane _plane, Float3 _p) { return Plane::ProjectPoint(_plane, _p); }
+    FORCE_INLINE Float3 PlaneOrigin(Plane _plane) { return Plane::Origin(_plane); }
+
+    FORCE_INLINE Transform3D Transform3DMul(const Transform3D& txa, const Transform3D& txb) { return Transform3D::Mul(txa, txb); }
+    FORCE_INLINE Float3      Transform3DMulFloat3(const Transform3D& tx, Float3 v) { return Transform3D::MulFloat3(tx, v); }
+    FORCE_INLINE Float3      Transform3DMulFloat3Scale(const Transform3D& tx, Float3 scale, Float3 v) { return Transform3D::MulFloat3Scale(tx, scale, v); }
+    FORCE_INLINE Transform3D Transform3DInverse(const Transform3D& tx) { return Transform3D::Inverse(tx); }
+    FORCE_INLINE Float3      Transform3DMulFloat3Inverse(const Transform3D& tx, Float3 v) { return Transform3D::MulFloat3Inverse(tx, v); }
+    FORCE_INLINE Transform3D Transform3DMulInverse(const Transform3D& txa, const Transform3D& txb) { return Transform3D::MulInverse(txa, txb); }
+    FORCE_INLINE Mat4        Transform3DToMat4(const Transform3D& tx) { return Transform3D::ToMat4(tx); }
+    FORCE_INLINE Transform3D Transform3DMake(float x, float y, float z, float rx, float ry, float rz) { return Transform3D::Make(x, y, z, rx, ry, rz); }
+    FORCE_INLINE Transform3D Transform3DFromMat4(const Mat4& mat) { return Transform3D::FromMat4(mat); }
+
+    FORCE_INLINE AABB BoxToAABB(const Box& box) { return Box::ToAABB(box); } 
+}
 
 
 
@@ -11969,124 +11241,6 @@ inline typename FixedSizePool<_T, _Align>::Page* FixedSizePool<_T, _Align>::Crea
 
 
 
-
-enum class LogLevel
-{
-    Default = 0,
-    Error,
-    Warning,
-    Info,
-    Verbose,
-    Debug,
-    _Count
-};
-
-struct LogEntry
-{
-    LogLevel    type;
-    uint32      channels;
-    uint32      textLen;
-    uint32      sourceFileLen;
-    uint32      line;
-    const char* text;
-    const char* sourceFile;
-};
-
-using LogCallback = void(*)(const LogEntry& entry, void* userData);
-
-namespace Log
-{
-    API void RegisterCallback(LogCallback callback, void* userData);
-    API void UnregisterCallback(LogCallback callback);
-    API void SetSettings(LogLevel logLevel, bool breakOnErrors, bool treatWarningsAsErrors);
-
-    namespace _private
-    {
-        API void PrintInfo(uint32 channels, const char* source_file, uint32 line, const char* fmt, ...);
-        API void PrintDebug(uint32 channels, const char* source_file, uint32 line, const char* fmt, ...);
-        API void PrintVerbose(uint32 channels, const char* source_file, uint32 line, const char* fmt, ...);
-        API void PrintWarning(uint32 channels, const char* source_file, uint32 line, const char* fmt, ...);
-        API void PrintError(uint32 channels, const char* source_file, uint32 line, const char* fmt, ...);
-    }
-};
-
-#define LOG_INFO(_text, ...)      Log::_private::PrintInfo(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
-#define LOG_DEBUG(_text, ...)     Log::_private::PrintDebug(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
-#define LOG_VERBOSE(_text, ...)   Log::_private::PrintVerbose(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
-#define LOG_WARNING(_text, ...)   Log::_private::PrintWarning(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
-#define LOG_ERROR(_text, ...)     Log::_private::PrintError(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
-
-
-
-
-typedef struct ini_t ini_t;
-
-struct INIFileProperty
-{
-    void SetName(const char* name);
-    void SetValue(const char* value);
-
-    const char* GetName();
-    const char* GetValue();
-
-    void Delete();
-
-    inline bool IsValid() const    { return id != -1; }
-
-    ini_t* ini = nullptr;
-    int sectionId = -1;
-    int id = -1;
-};
-
-struct INIFileSection
-{
-    uint32 GetPropertyCount();
-    INIFileProperty GetProperty(uint32 index);
-    const char* GetPropertyName(uint32 index);
-
-    INIFileProperty NewProperty(const char* name, const char* value);
-    INIFileProperty FindProperty(const char* name);
-
-    void SetName(const char* name);
-    const char* GetName();
-
-    void Delete();
-
-    inline bool IsValid() const    { return id != -1; }
-
-    ini_t* ini = nullptr;
-    int id = -1;
-};
-
-struct INIFileContext
-{
-    uint32 GetSectionCount() const;
-    INIFileSection GetSection(uint32 index) const;
-    const char* GetSectionName(uint32 index) const;
-
-    INIFileSection GetRootSection() const;
-
-    INIFileSection NewSection(const char* name) const;
-    INIFileSection FindSection(const char* name) const;
-
-    inline bool IsValid() const    { return ini != nullptr; }
-
-    void Destroy();
-
-    ini_t* ini = nullptr;
-};
-
-namespace INIFile
-{
-    API INIFileContext Create(MemAllocator* alloc = Mem::GetDefaultAlloc());
-    API INIFileContext Load(const char* filepath, MemAllocator* alloc = Mem::GetDefaultAlloc());
-    API INIFileContext LoadFromString(const char* data, MemAllocator* alloc = Mem::GetDefaultAlloc());
-    API bool Save(const INIFileContext& ini, const char* filepath);
-    API Blob SaveToMem(const INIFileContext& ini, MemAllocator* alloc);
-}
-
-
-
 template <typename _T> struct Array;
 typedef struct AAssetManager AAssetManager;
 
@@ -12122,6 +11276,849 @@ namespace Settings
 
     API void SetValue(const char* key, const char* value);
     API const char* GetValue(const char* key, const char* defaultValue = "");
+}
+
+
+
+
+enum class ThreadCreateFlags : uint32
+{
+    None = 0,
+    Detached = 0x1
+};
+ENABLE_BITMASK(ThreadCreateFlags);
+
+enum class ThreadPriority 
+{
+    Normal = 0,
+    Idle,
+    Realtime,
+    High,
+    Low
+};
+
+using ThreadEntryFunc = int(*)(void* userData);
+
+struct ThreadDesc
+{
+    ThreadEntryFunc entryFn;
+    void* userData;
+    const char* name;
+    size_t stackSize = SIZE_MB;
+    ThreadCreateFlags flags = ThreadCreateFlags::None;
+    ThreadPriority priority = ThreadPriority::Normal;
+};
+
+struct alignas(64) Thread
+{
+    Thread();
+
+    bool Start(const ThreadDesc& desc);
+    int  Stop();
+    bool IsRunning();
+    void SetPriority(ThreadPriority prio);
+
+    static void SwitchContext();
+    static uint32 GetCurrentId();
+    static void SetCurrentThreadPriority(ThreadPriority prio);
+    static void SetCurrentThreadName(const char* name);
+    static void GetCurrentThreadName(char* nameOut, uint32 nameSize);
+    static void Sleep(uint32 msecs);
+
+private:
+    uint8 mData[256];
+};
+
+
+struct alignas(CACHE_LINE_SIZE) Mutex
+{
+    void Initialize(uint32 spinCount = 32);
+    void Release();
+
+    void Enter();
+    void Exit();
+    bool TryEnter();
+
+private:
+    uint8 mData[128];
+};
+
+struct MutexScope
+{
+    MutexScope( ) = delete;
+    MutexScope(const MutexScope& mtx) = delete;
+    explicit MutexScope(Mutex& mtx) : mMtx(mtx) { mMtx.Enter(); }
+    ~MutexScope( ) { mMtx.Exit(); }
+
+private:
+    Mutex& mMtx;
+};
+
+
+struct alignas(CACHE_LINE_SIZE) ReadWriteMutex
+{
+    void Initialize();
+    void Release();
+
+    bool TryRead();
+    bool TryWrite();
+
+    void EnterRead();
+    void ExitRead();
+
+    void EnterWrite();
+    void ExitWrite();
+
+private:
+    #if !PLATFORM_APPLE
+    uint8 mData[64];
+    #else
+    uint8 mData[256];
+    #endif
+};
+
+struct ReadWriteMutexReadScope
+{
+    ReadWriteMutexReadScope() = delete;
+    ReadWriteMutexReadScope(const ReadWriteMutexReadScope&) = delete;
+    explicit ReadWriteMutexReadScope(ReadWriteMutex& mtx) : mMtx(mtx) { mMtx.EnterRead(); }
+    ~ReadWriteMutexReadScope() { mMtx.ExitRead(); }
+
+private:
+    ReadWriteMutex& mMtx;
+};
+
+struct ReadWriteMutexWriteScope
+{
+    ReadWriteMutexWriteScope() = delete;
+    ReadWriteMutexWriteScope(const ReadWriteMutexWriteScope&) = delete;
+    explicit ReadWriteMutexWriteScope(ReadWriteMutex& mtx) : mMtx(mtx) { mMtx.EnterWrite(); }
+    ~ReadWriteMutexWriteScope() { mMtx.ExitWrite(); }
+
+private:
+    ReadWriteMutex& mMtx;
+};
+
+
+struct alignas(CACHE_LINE_SIZE) SpinLockMutex
+{
+    void Enter();
+    void Exit();
+    bool TryEnter();
+
+private:
+    uint32 mLocked = 0;
+    uint8 _padding[CACHE_LINE_SIZE - sizeof(uint32)];
+};
+
+struct SpinLockMutexScope
+{
+    SpinLockMutexScope() = delete;
+    SpinLockMutexScope(const SpinLockMutexScope&) = delete;
+    inline explicit SpinLockMutexScope(SpinLockMutex& lock) : mLock(lock) { mLock.Enter(); }
+    inline ~SpinLockMutexScope() { mLock.Exit(); }
+        
+private:
+    SpinLockMutex& mLock;
+};
+
+
+struct alignas(16) Semaphore
+{
+    void Initialize();
+    void Release();
+
+    void Post(uint32 count = 1);
+    bool Wait(uint32 msecs = UINT32_MAX);
+
+private:
+    uint8 mData[128];
+};
+
+
+struct alignas(16) Signal
+{
+    void Initialize();
+    void Release();
+
+    void Raise();
+    void RaiseAll();
+    bool Wait(uint32 msecs = UINT32_MAX);
+    void Decrement(uint32 count = 1);
+    void Increment(uint32 count = 1);
+    bool WaitOnCondition(bool(*condFn)(int value, int reference), int reference = 0, uint32 msecs = UINT32_MAX);
+    void Set(int value = 1);
+
+private:
+    uint8 mData[128];
+};
+
+
+
+namespace Timer
+{
+    API void Initialize();
+    API uint64 GetTicks();
+    API uint64 LapTime(uint64* lastTime);
+    INLINE uint64 Diff(uint64 newTick, uint64 oldTick);
+    INLINE double ToSec(uint64 tick);
+    INLINE double ToMS(uint64 tick);
+    INLINE double ToUS(uint64 tick);
+}
+
+struct TimerStopWatch
+{
+    TimerStopWatch();
+
+    void Reset();
+
+    uint64 Elapsed() const;
+    double ElapsedSec() const;
+    double ElapsedMS() const;
+    double ElapsedUS() const;
+
+private:
+    uint64 mStart;
+};
+
+
+enum class MemVirtualFlags : uint32
+{
+    None = 0,
+    Watch = 0x1
+};
+ENABLE_BITMASK(MemVirtualFlags);
+
+struct MemVirtualStats
+{
+    uint64 commitedBytes;
+    uint64 reservedBytes;
+};
+
+namespace Mem
+{
+    API void* VirtualReserve(size_t size, MemVirtualFlags flags = MemVirtualFlags::None);
+    API void* VirtualCommit(void* ptr, size_t size);
+    API void VirtualDecommit(void* ptr, size_t size);
+    API void VirtualRelease(void* ptr, size_t size);
+    API MemVirtualStats VirtualGetStats();
+    API bool VirtualEnableLargePages(size_t* largePageSize);
+}
+
+enum class PathType : uint32
+{
+    Invalid = 0,
+    File,
+    Directory
+};
+
+struct PathInfo
+{
+    PathType type;
+    uint64 size;
+    uint64 lastModified;
+};
+
+namespace PathUtils
+{
+    API char* ToUnix(const char* path, char* dst, size_t dstSize);
+    API char* ToWin(const char* path, char* dst, size_t dstSize);
+    API char* GetFileExtension(const char* path, char* dst, size_t dstSize);
+    API char* GetFilenameAndExtension(const char* path, char* dst, size_t dstSize);
+    API char* GetFilename(const char* path, char* dst, size_t dstSize);
+    API char* GetDirectory(const char* path, char* dst, size_t dstSize);
+    API char* Join(char* dst, size_t dstSize, const char* pathA, const char* pathB);
+    API char* JoinUnixStyle(char* dst, size_t dstSize, const char* pathA, const char* pathB);
+}
+
+struct Path : String<PATH_CHARS_MAX>
+{
+    Path() = default;
+    Path(const char* cstr) : String<PATH_CHARS_MAX>(cstr) {}
+    Path(const String<PATH_CHARS_MAX>& str) : String<PATH_CHARS_MAX>(str) {}
+
+    Path& SetToCurrentDir();
+
+    Path& ConvertToUnix();
+    Path& ConvertToWin();
+    Path& ConvertToAbsolute();
+
+    Path GetAbsolute() const;
+    Path GetFileExtension() const;
+    Path GetFileNameAndExt() const;
+    Path GetFileName() const;
+    Path GetDirectory() const;
+
+    inline PathInfo Stat() const;
+    inline bool Exists() const;
+    inline bool IsFile() const;
+    inline bool IsDir() const;
+
+    Path& Join(const Path& path);
+    static Path Join(const Path& pathA, const Path& pathB);
+    static Path JoinUnix(const Path& pathA, const Path& pathB);
+};
+
+enum class FileOpenFlags : uint32
+{
+    None         = 0,
+    Read         = 0x01, // Open for reading
+    Write        = 0x02, // Open for writing
+    Append       = 0x03, // Append to the end of the file (write-mode only)
+    NoCache      = 0x08, // Disable IO cache, suitable for very large files, remember to align buffers to virtual memory pages
+    Writethrough = 0x10, // Write-through writes meta information to disk immediately
+    SeqScan      = 0x20, // Optimize cache for sequential read (not to be used with NOCACHE)
+    RandomAccess = 0x40, // Optimize cache for random access read (not to be used with NOCACHE)
+    Temp         = 0x80, // Indicate that the file is temperary
+};
+ENABLE_BITMASK(FileOpenFlags);
+
+enum class FileSeekMode
+{
+    Start = 0,
+    Current,
+    End 
+};
+
+struct File
+{
+    File();
+
+    bool Open(const char* filepath, FileOpenFlags flags);
+    void Close();
+
+    size_t Read(void* dst, size_t size);
+    size_t Write(const void* src, size_t size);
+    size_t Seek(size_t offset, FileSeekMode mode = FileSeekMode::Start);
+
+    template <typename _T> uint32 Read(_T* dst, uint32 count);
+    template <typename _T> uint32 Write(_T* dst, uint32 count);
+
+    size_t GetSize() const;
+    uint64 GetLastModified() const;
+    bool IsOpen() const;
+
+private:
+    uint8 mData[64];
+};
+
+struct AsyncFile
+{
+    void* data;
+    void* userData;
+    uint64 lastModifiedTime;
+    uint32 size;
+    Path filepath;
+};
+
+using AsyncFileCallback = void(*)(AsyncFile* file, bool failed);
+
+struct AsyncFileRequest
+{
+    MemAllocator* alloc = Mem::GetDefaultAlloc();// Allocator to allocate a continous chunk of file data 
+    AsyncFileCallback readFn = nullptr;  // Callback to receive async results. see 'AsyncFileCallback'. If this value is null, then you should use Wait and IsFinished to poll for data
+    void* userData = nullptr;            // user-data. Can be allocated by async functions internally as well. See 'userDataAllocatedSize'
+    uint32 userDataAllocateSize = 0;     // allocate user-data for this request and copy over the provdided userData instead of using userData pointer directly
+    uint32 sizeHint = 0;                 // If you provide a size hint, then file info will not be queried and AsyncRead will allocate this size instead
+};
+
+namespace Async
+{
+    API bool Initialize();
+    API void Release();
+
+    API AsyncFile* ReadFile(const char* filepath, const AsyncFileRequest& request = AsyncFileRequest());
+    API void Close(AsyncFile* file);
+    API bool Wait(AsyncFile* file);
+    API bool IsFinished(AsyncFile* file, bool* outError = nullptr);
+};
+
+struct SocketErrorCode 
+{
+    enum Enum
+    {
+        None = 0,
+        AddressInUse,
+        AddressNotAvailable,
+        AddressUnsupported,
+        AlreadyConnected,
+        ConnectionRefused,
+        Timeout,
+        HostUnreachable,
+        ConnectionReset,
+        SocketShutdown,
+        MessageTooLarge,
+        NotConnected,
+        Unknown
+    };
+
+    static const char* ToStr(Enum code)
+    {
+        switch (code) {
+        case AddressInUse:         return "AddressInUse";
+        case AddressNotAvailable:  return "AddressNotAvailable";
+        case AddressUnsupported:   return "AddressUnsupported";
+        case AlreadyConnected:     return "AlreadyConnected";
+        case ConnectionRefused:    return "ConnectionRefused";        
+        case Timeout:              return "Timeout";
+        case HostUnreachable:      return "HostUnreachable";
+        case ConnectionReset:      return "ConnectionReset";
+        case SocketShutdown:       return "SocketShutdown";
+        case MessageTooLarge:      return "MessageTooLarge";
+        case NotConnected:         return "NotConnected";
+        default:                   return "Unknown";
+        }
+    }
+};
+
+#if PLATFORM_WINDOWS
+using SocketHandle = uint64;
+#else 
+using SocketHandle = int;
+#endif
+
+struct SocketTCP
+{
+    SocketTCP();
+
+    void Close();
+    bool IsValid() const;
+    bool IsConnected() const { return mLive; }
+    SocketErrorCode::Enum GetErrorCode() const { return mErrCode; }
+
+    uint32 Write(const void* src, uint32 size);
+    uint32 Read(void* dst, uint32 dstSize);
+
+    static SocketTCP CreateListener();
+    SocketTCP Accept(char* clientUrl = nullptr, uint32 clientUrlSize = 0);
+    bool Listen(uint16 port, uint32 maxConnections = UINT32_MAX);
+
+    static SocketTCP Connect(const char* url);
+
+private:
+    static bool ParseUrl(const char* url, char* address, size_t addressSize, char* port, size_t portSize, const char** pResource = nullptr);
+
+private:
+    SocketHandle mSock;
+    SocketErrorCode::Enum mErrCode;
+    uint16 mLive;
+};
+
+struct UniqueID
+{
+    uint8 data[16];
+
+    bool operator==(const UniqueID& uuid) const;
+
+    static bool Generate(UniqueID* uuid);
+    static bool ToString(const UniqueID& uuid, char* str, uint32 size);
+    static bool FromString(UniqueID* uuid, const char* str);
+};
+
+using OSDLL = void*;
+
+struct SysInfo
+{
+    enum class CpuFamily 
+    {
+        Unknown = 0,
+        ARM,
+        x86_64,
+        ARM64
+    };
+
+    struct CacheInfo
+    {
+        uint8 count;
+        uint8 kway;
+        uint16 lineSize;
+        uint32 size;
+    };
+
+    char         cpuName[32];
+    char         cpuModel[64];
+    CpuFamily    cpuFamily;
+    size_t       pageSize;
+    size_t       physicalMemorySize;
+    uint32       coreCount;
+    CacheInfo    L1Cache;
+    CacheInfo    L2Cache;
+    CacheInfo    L3Cache;
+    uint32       cpuCapsSSE : 1;
+    uint32       cpuCapsSSE2 : 1;
+    uint32       cpuCapsSSE3 : 1;
+    uint32       cpuCapsSSE41 : 1;
+    uint32       cpuCapsSSE42: 1;
+    uint32       cpuCapsAVX : 1;
+    uint32       cpuCapsAVX2 : 1;
+    uint32       cpuCapsAVX512 : 1;
+    uint32       cpuCapsNeon : 1;
+};
+
+namespace OS
+{
+    API void PauseCPU();
+    uint64 GetCPUClock();
+
+    API [[nodiscard]] OSDLL LoadDLL(const char* filepath, char** pErrorMsg = nullptr);
+    API void UnloadDLL(OSDLL dll);
+    API void* GetSymbolAddress(OSDLL dll, const char* symbolName);
+    API size_t GetPageSize();
+    API void GetSysInfo(SysInfo* info);
+    API bool IsDebuggerPresent();
+    API void GenerateCmdLineFromArgcArgv(int argc, const char* argv[], char** outString, uint32* outStringLen, 
+                                             MemAllocator* alloc = Mem::GetDefaultAlloc(), const char* prefixCmd = nullptr);
+
+    API bool SetEnvVar(const char* name, const char* value);
+    API bool GetEnvVar(const char* name, char* outValue, uint32 valueSize);
+
+    API char* GetMyPath(char* dst, size_t dstSize);
+    API char* GetAbsolutePath(const char* path, char* dst, size_t dstSize);
+    API char* GetCurrentDir(char* dst, size_t dstSize);
+    API void  SetCurrentDir(const char* path);
+    API char* GetHomeDir(char* dst, size_t dstSize);
+    API char* GetCacheDir(char* dst, size_t dstSize, const char* appName);
+    API PathInfo GetPathInfo(const char* path);
+    API bool PathExists(const char* path);
+    API bool IsPathFile(const char* path);
+    API bool IsPathDir(const char* path);
+    API bool CreateDir(const char* path);
+    API bool MovePath(const char* src, const char* dest);
+    API bool MakeTempPath(char* dst, size_t dstSize, const char* namePrefix, const char* dir = nullptr);
+    API bool DeleteFilePath(const char* path);
+}
+
+#if PLATFORM_PC
+enum class OSProcessFlags : uint32
+{
+    None = 0,
+    CaptureOutput = 0x1,
+    InheritHandles = 0x2,
+    DontCreateConsole = 0x4,
+    ForceCreateConsole = 0x8
+};
+ENABLE_BITMASK(OSProcessFlags);
+
+struct OSProcess
+{
+    OSProcess();
+    ~OSProcess();
+
+    bool Run(const char* cmdline, OSProcessFlags flags, const char* cwd = nullptr);
+    void Wait() const;
+    bool IsRunning() const;
+    void Abort();
+    bool IsValid() const;
+
+    int GetExitCode() const;
+    uint32 ReadStdOut(void* data, uint32 size) const;
+    uint32 ReadStdErr(void* data, uint32 size) const;
+
+private:
+    void* mProcess;
+    void* mStdOutPipeRead;
+    void* mStdErrPipeRead;
+    
+#if PLATFORM_POSIX
+    int mExitCode;
+    int mTermSignalCode;
+#endif
+};
+
+#endif // PLATFORM_PC
+
+#if PLATFORM_WINDOWS
+
+enum class OSWin32ShowWindow : int
+{
+    Hide = 0,
+    Normal = 1,
+    Minimized = 2,
+    Maximized = 3,
+    NotActive = 4,
+    Show = 5,
+    Minimize = 6,
+    MinimizedNotActive = 7,
+    Restore = 9,
+    Default = 10,
+    ForceMinimize = 11
+};
+
+enum class OSWin32ShellExecuteResult
+{
+    Ok,
+    OutOfMemory,
+    FileNotFound,
+    PathNotFound,
+    BadFormat,
+    AccessDenied,
+    NoAssociation,
+    UnknownError
+};
+
+enum class OSWin32Folder
+{
+    Documents = 0,  // %USERPROFILE%\My Documents
+    Fonts,          // %windir%\Fonts
+    Downloads,      // %USERPROFILE%\Downloads
+    AppData,        // %USERPROFILE%\AppData\Roaming
+    LocalAppData,   // %USERPROFILE%\AppData\Local
+    ProgramFiles,   // %SystemDrive%\Program Files
+    System,         // %windir%\system32
+    Startup,        // %APPDATA%\Microsoft\Windows\Start Menu\Programs\StartUp
+    Desktop,        // %USERPROFILE%\Desktop
+    _Count
+};
+
+namespace OS
+{
+    API bool Win32IsProcessRunning(const char* execName);
+    API bool Win32GetRegisterLocalMachineString(const char* subkey, const char* value, char* dst, size_t dstSize);
+    API void Win32PrintToDebugger(const char* text); 
+    API bool Win32SetPrivilege(const char* name, bool enable = true);
+    API OSWin32ShellExecuteResult Win32ShellExecute(const char* filepath, const char* args = nullptr, 
+                                                         const char* cwd = nullptr, 
+                                                         OSWin32ShowWindow showFlag = OSWin32ShowWindow::Default, 
+                                                         const char* operation = nullptr,
+                                                         void** pInstance = nullptr);
+    API char* Win32GetFolder(OSWin32Folder folder, char* dst, size_t dstSize);
+    API void Win32EnableProgramConsoleCoding();
+}
+
+#elif PLATFORM_ANDROID
+struct _JNIEnv;
+typedef _JNIEnv JNIEnv;
+
+typedef struct ANativeActivity ANativeActivity; // <android/native_activity.h>
+
+enum class OSAndroidLogType 
+{
+    Unknown = 0,
+    Default,
+    Verbose,
+    Debug,
+    Info,
+    Warn,
+    Error,
+    Fatal,
+    Silent,
+};
+
+namespace OS
+{
+    API void AndroidPrintToLog(OSAndroidLogType logType, const char* tag, const char* text);
+    API JNIEnv* AndroidAcquireJniEnv(ANativeActivity* activity);
+    API void AndroidReleaseJniEnv(ANativeActivity* activity);    
+    API JNIEnv* AndroidGetJniEnv();
+    API Path AndroidGetCacheDirectory(ANativeActivity* activity);
+}
+#endif
+
+namespace _private
+{
+    void CountersAddThread(size_t stackSize);
+    void CountersRemoveThread(size_t stackSize);
+    void CountersAddMutex();
+    void CountersRemoveMutex();
+    void CountersAddSignal();
+    void CountersRemoveSignal();
+    void CountersAddSemaphore();
+    void CountersRemoveSemaphore();
+}
+
+struct SysPrimitiveStats
+{
+    uint32 numMutexes;
+    uint32 numSignals;
+    uint32 numSemaphores;
+    uint32 numThreads;
+    uint64 threadStackSize;
+};
+
+SysPrimitiveStats GetSystemPrimitiveStats();
+
+inline Path& Path::SetToCurrentDir()
+{
+    OS::GetCurrentDir(mStr, sizeof(mStr));
+    mLen = Str::Len(mStr);
+    return *this;
+}
+
+inline Path& Path::ConvertToUnix()
+{
+    PathUtils::ToUnix(mStr, mStr, sizeof(mStr));
+    return *this;
+}
+
+inline Path& Path::ConvertToWin()
+{
+    PathUtils::ToWin(mStr, mStr, sizeof(mStr));
+    return *this;
+}
+
+inline Path& Path::ConvertToAbsolute()
+{
+    char abspath[PATH_CHARS_MAX];
+    OS::GetAbsolutePath(mStr, abspath, sizeof(abspath));
+    return *this = abspath;
+}
+
+inline Path Path::GetAbsolute() const 
+{
+    Path p;
+    OS::GetAbsolutePath(mStr, p.mStr, sizeof(p.mStr));
+    p.mLen = Str::Len(p.mStr);
+    return p;
+}
+
+inline Path Path::GetFileExtension() const
+{
+    Path p;
+    PathUtils::GetFileExtension(mStr, p.mStr, sizeof(p.mStr));
+    p.mLen = Str::Len(p.mStr);
+    return p;
+}
+
+inline Path Path::GetFileNameAndExt() const
+{
+    Path p;
+    PathUtils::GetFilenameAndExtension(mStr, p.mStr, sizeof(p.mStr));
+    p.mLen = Str::Len(p.mStr);
+    return p;
+}
+
+inline Path Path::GetFileName() const
+{
+    Path p;
+    PathUtils::GetFilename(mStr, p.mStr, sizeof(p.mStr));
+    p.mLen = Str::Len(p.mStr);
+    return p;
+}
+
+inline Path Path::GetDirectory() const
+{
+    Path p;
+    PathUtils::GetDirectory(mStr, p.mStr, sizeof(p.mStr));
+    p.mLen = Str::Len(p.mStr);
+    return p;
+}
+
+inline Path& Path::Join(const Path& path)
+{
+    PathUtils::Join(mStr, sizeof(mStr), mStr, path.mStr);
+    mLen = Str::Len(mStr);
+    return *this;
+}
+
+inline Path Path::Join(const Path& pathA, const Path& pathB)
+{
+    Path p;
+    PathUtils::Join(p.mStr, sizeof(p.mStr), pathA.mStr, pathB.mStr);
+    p.mLen = Str::Len(p.mStr);
+    return p;
+}
+
+inline Path Path::JoinUnix(const Path& pathA, const Path& pathB)
+{
+    Path p;
+    PathUtils::JoinUnixStyle(p.mStr, sizeof(p.mStr), pathA.mStr, pathB.mStr);
+    p.mLen = Str::Len(p.mStr);
+    return p;
+}
+
+inline PathInfo Path::Stat() const
+{
+    return OS::GetPathInfo(mStr);
+}
+
+inline bool Path::Exists() const
+{
+    return OS::PathExists(mStr);
+}
+
+inline bool Path::IsFile() const
+{
+    return OS::GetPathInfo(mStr).type == PathType::File;
+}
+
+inline bool Path::IsDir() const
+{
+    return OS::GetPathInfo(mStr).type == PathType::Directory;
+}
+
+inline bool OS::PathExists(const char* path)
+{
+    return OS::GetPathInfo(path).type != PathType::Invalid;
+}
+
+inline bool OS::IsPathFile(const char* path)
+{
+    return OS::GetPathInfo(path).type == PathType::File;
+}
+
+inline bool OS::IsPathDir(const char* path)
+{
+    return OS::GetPathInfo(path).type == PathType::Directory;
+}
+
+INLINE uint64 Timer::Diff(uint64 newTick, uint64 oldTick)
+{
+    return (newTick > oldTick) ? (newTick - oldTick) : 1;
+}
+
+INLINE double Timer::ToSec(uint64 tick)
+{
+    return (double)tick / 1000000000.0;
+}
+
+INLINE double Timer::ToMS(uint64 tick)
+{
+    return (double)tick / 1000000.0;
+}
+
+INLINE double Timer::ToUS(uint64 tick)
+{
+    return (double)tick / 1000.0;
+}
+
+inline TimerStopWatch::TimerStopWatch()
+{
+    mStart = Timer::GetTicks();
+}
+
+inline void TimerStopWatch::Reset()
+{
+    mStart = Timer::GetTicks();
+}
+
+inline uint64 TimerStopWatch::Elapsed() const
+{
+    return Timer::Diff(Timer::GetTicks(), mStart);
+}
+
+inline double TimerStopWatch::ElapsedSec() const
+{
+    return Timer::ToSec(Elapsed());
+}
+
+inline double TimerStopWatch::ElapsedMS() const
+{
+    return Timer::ToMS(Elapsed());
+}
+
+inline double TimerStopWatch::ElapsedUS() const
+{
+    return Timer::ToUS(Elapsed());
+}
+
+template <typename _T> inline uint32 File::Read(_T* dst, uint32 count)
+{
+    return static_cast<uint32>(Read((void*)dst, sizeof(_T)*count)/sizeof(_T));
+}
+
+template <typename _T> inline uint32 File::Write(_T* dst, uint32 count)
+{
+    return static_cast<uint32>(Write((const void*)dst, sizeof(_T)*count)/sizeof(_T));
 }
 
 
