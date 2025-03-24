@@ -3847,7 +3847,7 @@ namespace Debug
 
         gStacktrace.mDbgHelp = LoadLibraryA("dbghelp.dll");
         if (!gStacktrace.mDbgHelp) {
-            Debug::Print("Could not load DbgHelp.dll");
+            Debug::PrintLine("Could not load DbgHelp.dll");
             gStacktrace.mInitialized = false;
             return false;
         }
@@ -3863,7 +3863,7 @@ namespace Debug
 
         if (!_SymInitialize(gStacktrace.mProcess, NULL, TRUE)) {
             LeaveCriticalSection(&gStacktrace.mMutex);
-            Debug::Print("DbgHelp: _SymInitialize failed");
+            Debug::PrintLine("DbgHelp: _SymInitialize failed");
             gStacktrace.mInitialized = false;
             return false;
         }
@@ -3925,7 +3925,7 @@ void Debug::ResolveStacktrace(uint16 numStacktrace, void* const* stackframes, De
         else {
             DWORD gle = GetLastError();
             if (gle != ERROR_INVALID_ADDRESS && gle != ERROR_MOD_NOT_FOUND) {
-                Debug::Print("_SymGetSymFromAddr64 failed");
+                Debug::PrintLine("_SymGetSymFromAddr64 failed");
                 break;
             }
             Str::Copy(entry.name, sizeof(entry.name), "[NA]");
@@ -3938,7 +3938,7 @@ void Debug::ResolveStacktrace(uint16 numStacktrace, void* const* stackframes, De
         else {
             DWORD gle = GetLastError();
             if (gle != ERROR_INVALID_ADDRESS && gle != ERROR_MOD_NOT_FOUND) {
-                Debug::Print("_SymGetLineFromAddr64 failed");
+                Debug::PrintLine("_SymGetLineFromAddr64 failed");
                 break;
             }
             Str::Copy(entry.filename, PATH_CHARS_MAX, "[NA]");
@@ -4422,14 +4422,34 @@ void Debug::StacktraceSaveStopPoint(void* funcPtr)
 
 static bool gDebugCaptureStacktraceForFiberProtector;
 
-void Debug::Print(const char* text)
+void Debug::PrintLine(const char* text)
 {
     #if PLATFORM_WINDOWS
-        OS::Win32PrintToDebugger(text);
+    OS::Win32PrintToDebugger(text);
+    OS::Win32PrintToDebugger("\n");
     #elif PLATFORM_ANDROID
-        OS::AndroidPrintToLog(OSAndroidLogType::Debug, CONFIG_APP_NAME, text);
+    OS::AndroidPrintToLog(OSAndroidLogType::Debug, CONFIG_APP_NAME, text);
     #else
-        puts(text);
+    puts(text);
+    #endif
+}
+
+void Debug::PrintLineFmt(const char* fmt, ...)
+{
+    char text[1024];
+    va_list args;
+    va_start(args, fmt);
+    uint32 len = Str::PrintFmtArgs(text, sizeof(text)-1, fmt, args);
+    va_end(args);
+
+    #if PLATFORM_WINDOWS
+    text[len] = '\n';
+    text[len+1] = '\0';
+    OS::Win32PrintToDebugger(text);
+    #elif PLATFORM_ANDROID
+    OS::AndroidPrintToLog(OSAndroidLogType::Debug, CONFIG_APP_NAME, text);
+    #else
+    puts(text);
     #endif
 }
 
@@ -4521,24 +4541,16 @@ void Debug::FiberScopeProtector_Pop(uint16 id)
 
 void Debug::FiberScopeProtector_Check()
 {
-    char msg[512];
-    
     if (FiberProtectorCtx().items.Count()) {
-        Str::PrintFmt(msg, sizeof(msg), "Found %u protected items in the fiber that are not destructed in the scope:", FiberProtectorCtx().items.Count());
-        Debug::Print(msg);
-        if constexpr (PLATFORM_WINDOWS) Debug::Print("\n");
+        Debug::PrintLineFmt("Found %u protected items in the fiber that are not destructed in the scope:", FiberProtectorCtx().items.Count());
         
         DebugStacktraceEntry stacktraces[kDebugMaxFiberProtectorStackframes];
         for (const DebugFiberProtectorThreadContext::Item& item : FiberProtectorCtx().items) {
-            Str::PrintFmt(msg, sizeof(msg), "\t%s:", item.name);
-            Debug::Print(msg);
-            if constexpr (PLATFORM_WINDOWS) Debug::Print("\n");
+            Debug::PrintLineFmt("\t%s:", item.name);
             if (item.numStackframes) {
                 Debug::ResolveStacktrace(item.numStackframes, item.stackframes, stacktraces);
                 for (uint16 i = 0; i < item.numStackframes; i++) {
-                    Str::PrintFmt(msg, sizeof(msg), "\t\t%s(%u): %s", stacktraces[i].filename, stacktraces[i].line, stacktraces[i].name);
-                    Debug::Print(msg);
-                    if constexpr (PLATFORM_WINDOWS) Debug::Print("\n");
+                    Debug::PrintLineFmt("\t\t%s(%u): %s", stacktraces[i].filename, stacktraces[i].line, stacktraces[i].name);
                 }
             }
         }
@@ -10970,26 +10982,25 @@ namespace Log
 
     static void _PrintToDebugger(const LogEntry& entry)
     {
-        #if PLATFORM_WINDOWS
-            uint32 newSize = entry.textLen + 128;
-            MemTempAllocator tmp;
-            char* text = tmp.MallocTyped<char>(newSize);
+        if constexpr(!PLATFORM_WINDOWS)
+            return;
 
-            if (text) {
-                char source[PATH_CHARS_MAX];
-                if (entry.sourceFile)
-                    Str::PrintFmt(source, sizeof(source), "%s(%d): ", entry.sourceFile, entry.line);
-                else 
-                    source[0] = '\0';
-                Str::PrintFmt(text, newSize, "%s%s%s\n", source, LOG_ENTRY_TYPES[static_cast<uint32>(entry.type)], entry.text);
-                Debug::Print(text);
-            }
-            else {
-                ASSERT_ALWAYS(0, "Not enough stack memory: %u bytes", newSize);
-            }
-        #else
-            UNUSED(entry);
-        #endif
+        uint32 newSize = entry.textLen + 128;
+        MemTempAllocator tmp;
+        char* text = tmp.MallocTyped<char>(newSize);
+
+        if (text) {
+            char source[PATH_CHARS_MAX];
+            if (entry.sourceFile)
+                Str::PrintFmt(source, sizeof(source), "%s(%d): ", entry.sourceFile, entry.line);
+            else 
+                source[0] = '\0';
+            Str::PrintFmt(text, newSize, "%s%s%s", source, LOG_ENTRY_TYPES[static_cast<uint32>(entry.type)], entry.text);
+            Debug::PrintLine(text);
+        }
+        else {
+            ASSERT_ALWAYS(0, "Not enough stack memory: %u bytes", newSize);
+        }
     }
 
     #ifdef TRACY_ENABLE
@@ -12963,8 +12974,61 @@ static SettingsContext gSettings;
 
 namespace Settings
 {
+    static bool _LoadFromINIInternal(const Blob& blob)
+    {
+        ASSERT(blob.IsValid());
 
-void AddCustomCallbacks(SettingsCustomCallbacks* callbacks)
+        ini_t* ini = ini_load(reinterpret_cast<const char*>(blob.Data()), Mem::GetDefaultAlloc());
+        if (!ini)
+            return false;
+
+        char keyTrimmed[64];
+        char valueTrimmed[256];
+        uint32 count = 0;
+
+        for (int i = 0; i < ini_section_count(ini); i++) {
+            const char* sectionName = ini_section_name(ini, i);
+
+            for (uint32 c = 0; c < gSettings.customCallbacks.Count(); c++) {
+                SettingsCustomCallbacks* callbacks = gSettings.customCallbacks[c];
+
+                uint32 foundCatId = UINT32_MAX;
+                for (uint32 catId = 0, catIdCount = callbacks->GetCategoryCount(); catId < catIdCount; catId++) {
+                    if (Str::IsEqualNoCase(sectionName, callbacks->GetCategory(catId))) {
+                        foundCatId = catId;
+                        break;
+                    }
+                }
+
+                for (int j = 0; j < ini_property_count(ini, i); j++) {
+                    const char* key = ini_property_name(ini, i, j);
+                    const char* value = ini_property_value(ini, i, j);
+                    Str::Trim(keyTrimmed, sizeof(keyTrimmed), key);
+                    Str::Trim(valueTrimmed, sizeof(valueTrimmed), value);
+
+                    bool predefined = foundCatId != UINT32_MAX ? callbacks->ParseSetting(foundCatId, keyTrimmed, valueTrimmed) : false;
+
+                    if (!predefined)
+                        SetValue(keyTrimmed, valueTrimmed);
+
+                    Debug::PrintLineFmt("\t%u) %s%s = %s", ++count, keyTrimmed, !predefined ? "(*)" : "", valueTrimmed);
+                }
+            } // for each custom settings parser
+        }
+
+        int sectionId = ini_find_section(ini, SETTINGS_NONE_PREDEFINED, Str::Len(SETTINGS_NONE_PREDEFINED));
+        if (sectionId != -1) {
+            for (int i = 0; i < ini_property_count(ini, sectionId); i++) {
+                SetValue(ini_property_name(ini, sectionId, i), ini_property_value(ini, sectionId, i));
+            }
+        }
+
+        ini_destroy(ini);
+        return true;
+    }
+} // Settings
+
+void Settings::AddCustomCallbacks(SettingsCustomCallbacks* callbacks)
 {
     ASSERT(callbacks);
 
@@ -12973,7 +13037,7 @@ void AddCustomCallbacks(SettingsCustomCallbacks* callbacks)
         gSettings.customCallbacks.Push(callbacks);
 }
 
-void RemoveCustomCallbacks(SettingsCustomCallbacks* callbacks)
+void Settings::RemoveCustomCallbacks(SettingsCustomCallbacks* callbacks)
 {
     ASSERT(callbacks);
 
@@ -12982,67 +13046,10 @@ void RemoveCustomCallbacks(SettingsCustomCallbacks* callbacks)
         gSettings.customCallbacks.RemoveAndSwap(index);
 }
 
-static bool settingsLoadFromINIInternal(const Blob& blob)
-{
-    ASSERT(blob.IsValid());
-
-    ini_t* ini = ini_load(reinterpret_cast<const char*>(blob.Data()), Mem::GetDefaultAlloc());
-    if (!ini)
-        return false;
-
-    char keyTrimmed[64];
-    char valueTrimmed[256];
-    uint32 count = 0;
-
-    for (int i = 0; i < ini_section_count(ini); i++) {
-        const char* sectionName = ini_section_name(ini, i);
-
-        for (uint32 c = 0; c < gSettings.customCallbacks.Count(); c++) {
-            SettingsCustomCallbacks* callbacks = gSettings.customCallbacks[c];
-
-            uint32 foundCatId = UINT32_MAX;
-            for (uint32 catId = 0, catIdCount = callbacks->GetCategoryCount(); catId < catIdCount; catId++) {
-                if (Str::IsEqualNoCase(sectionName, callbacks->GetCategory(catId))) {
-                    foundCatId = catId;
-                    break;
-                }
-            }
-
-            for (int j = 0; j < ini_property_count(ini, i); j++) {
-                const char* key = ini_property_name(ini, i, j);
-                const char* value = ini_property_value(ini, i, j);
-                Str::Trim(keyTrimmed, sizeof(keyTrimmed), key);
-                Str::Trim(valueTrimmed, sizeof(valueTrimmed), value);
-
-                bool predefined = foundCatId != UINT32_MAX ? callbacks->ParseSetting(foundCatId, keyTrimmed, valueTrimmed) : false;
-
-                if (!predefined)
-                    SetValue(keyTrimmed, valueTrimmed);
-
-                char msg[256];
-                Str::PrintFmt(msg, sizeof(msg), "\t%u) %s%s = %s\n", ++count, keyTrimmed, !predefined ? "(*)" : "", valueTrimmed);
-                Debug::Print(msg);
-            }
-        } // for each custom settings parser
-    }
-
-    int sectionId = ini_find_section(ini, SETTINGS_NONE_PREDEFINED, Str::Len(SETTINGS_NONE_PREDEFINED));
-    if (sectionId != -1) {
-        for (int i = 0; i < ini_property_count(ini, sectionId); i++) {
-            SetValue(ini_property_name(ini, sectionId, i), ini_property_value(ini, sectionId, i));
-        }
-    }
-
-    ini_destroy(ini);
-    return true;
-}
-
 #if PLATFORM_ANDROID
-bool InitializeFromAndroidAsset(AAssetManager* assetMgr, const char* iniFilepath)
+bool Settings::InitializeFromAndroidAsset(AAssetManager* assetMgr, const char* iniFilepath)
 {
-    char msg[256];
-    Str::PrintFmt(msg, sizeof(msg), "Loading settings from assets: %s\n", iniFilepath);
-    Debug::Print(msg);
+    Debug::PrintLineFmt("Loading settings from assets: %s", iniFilepath);
 
     Blob blob;
     AAsset* asset = AAssetManager_open(assetMgr, iniFilepath, AASSET_MODE_BUFFER);
@@ -13060,27 +13067,22 @@ bool InitializeFromAndroidAsset(AAssetManager* assetMgr, const char* iniFilepath
     }
 
     if (!blob.IsValid()) {
-        Str::PrintFmt(msg, sizeof(msg), "Opening ini file '%s' failed\n", iniFilepath);
-        Debug::Print(msg);
+        Debug::PrintLineFmt("Opening ini file '%s' failed", iniFilepath);
         return false;
     }
 
-    bool r = settingsLoadFromINIInternal(blob);
+    bool r = _LoadFromINIInternal(blob);
     blob.Free();
 
-    if (!r) {
-        Str::PrintFmt(msg, sizeof(msg), "Parsing ini file '%s' failed\n", iniFilepath);
-        Debug::Print(msg);
-    }
+    if (!r)
+        Debug::PrintLineFmt("Parsing ini file '%s' failed", iniFilepath);
     return r;
 }
 #endif  // PLATFORM_ANDROID
 
-bool InitializeFromINI(const char* iniFilepath)
+bool Settings::InitializeFromINI(const char* iniFilepath)
 {
-    char msg[256];
-    Str::PrintFmt(msg, sizeof(msg), "Loading settings from file: %s", iniFilepath);
-    Debug::Print(msg);
+    Debug::PrintLineFmt("Loading settings from file: %s", iniFilepath);
 
     Blob blob;
     File f;
@@ -13096,26 +13098,21 @@ bool InitializeFromINI(const char* iniFilepath)
     }
 
     if (!blob.IsValid()) {
-        Str::PrintFmt(msg, sizeof(msg), "Opening ini file '%s' failed", iniFilepath);
-        Debug::Print(msg);
+        Debug::PrintLineFmt("Opening ini file '%s' failed", iniFilepath);
         return false;
     }
 
-    bool r = settingsLoadFromINIInternal(blob);
+    bool r = _LoadFromINIInternal(blob);
     blob.Free();
 
-    if (!r) {
-        Str::PrintFmt(msg, sizeof(msg), "Parsing ini file '%s' failed", iniFilepath);
-        Debug::Print(msg);
-    }
+    if (!r) 
+        Debug::PrintLineFmt("Parsing ini file '%s' failed", iniFilepath);
     return r;
 }
 
-void SaveToINI(const char* iniFilepath)
+void Settings::SaveToINI(const char* iniFilepath)
 {
-    char msg[256];
-    Str::PrintFmt(msg, sizeof(msg), "Saving settings to file: %s", iniFilepath);
-    Debug::Print(msg);
+    Debug::PrintLineFmt("Saving settings to file: %s", iniFilepath);
     
     MemTempAllocator tmpAlloc;
     ini_t* ini = ini_create(&tmpAlloc);
@@ -13164,19 +13161,15 @@ void SaveToINI(const char* iniFilepath)
     ini_destroy(ini);
 }
 
-bool InitializeFromCommandLine(int argc, char* argv[])
+bool Settings::InitializeFromCommandLine(int argc, char* argv[])
 {
     sargs_state* args = sargs_create(sargs_desc {
         .argc = argc,
         .argv = argv
     });
 
-    if (sargs_num_args(args) > 0) {
-        Debug::Print("Loading settings from CommandLine:");
-        #if PLATFORM_WINDOWS
-        Debug::Print("\n");
-        #endif
-    }
+    if (sargs_num_args(args) > 0)
+        Debug::PrintLine("Loading settings from CommandLine:");
 
     for (int i = 0; i < sargs_num_args(args); i++) {
         const char* key = sargs_key_at(args, i);
@@ -13205,12 +13198,7 @@ bool InitializeFromCommandLine(int argc, char* argv[])
             if (!predefined)
                 SetValue(key, value);
 
-            char msg[256];
-            Str::PrintFmt(msg, sizeof(msg), "\t%d) %s%s = %s", i+1, key, !predefined ? "(*)" : "", value);
-            Debug::Print(msg);
-            #if PLATFORM_WINDOWS
-            Debug::Print("\n");
-            #endif
+            Debug::PrintLineFmt("\t%d) %s%s = %s", i+1, key, !predefined ? "(*)" : "", value);
         }
 
     }
@@ -13219,7 +13207,7 @@ bool InitializeFromCommandLine(int argc, char* argv[])
     return true;
 }
 
-void SetValue(const char* key, const char* value)
+void Settings::SetValue(const char* key, const char* value)
 {
     if (value[0] == 0)
         return;
@@ -13234,7 +13222,7 @@ void SetValue(const char* key, const char* value)
         gSettings.keyValuePairs.Push(SettingsKeyValue {.key = key, .value = value});
 }
 
-const char* GetValue(const char* key, const char* defaultValue)
+const char* Settings::GetValue(const char* key, const char* defaultValue)
 {
     uint32 index = gSettings.keyValuePairs.FindIf([key](const SettingsKeyValue& keyval) {
         return keyval.key.IsEqual(key);
@@ -13243,12 +13231,11 @@ const char* GetValue(const char* key, const char* defaultValue)
     return index != UINT32_MAX ? gSettings.keyValuePairs[index].value.CStr() : defaultValue;
 }
 
-void Release()
+void Settings::Release()
 {
     gSettings.keyValuePairs.Free();
 }
 
-} // Settings
 
 #include <string.h>
 #include <stdlib.h>
