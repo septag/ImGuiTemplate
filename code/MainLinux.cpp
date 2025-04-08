@@ -178,6 +178,10 @@ int main(int argc, const char * argv[])
     ImGui::MyRelease();
     Release();
     ReleaseCommon();
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+
     ImGui::DestroyContext();
 
     glfwDestroyWindow(window);
