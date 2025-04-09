@@ -5,26 +5,23 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug LLDB",
-            "program": "${workspaceFolder}/bin/Test",
-            "args": [],
-            "cwd": "${workspaceFolder}",
-            "preLaunchTask": "Build Linux/Mac"
-        },
-
-        {
-            "name": "Debug Windows",
+            "name": "LaunchWindows",
             "type": "cppvsdbg",
             "request": "launch",
-            "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}/.build/Ninja/Test.exe",
+            "program": "${command:cmake.launchTargetPath}",
             "args": [],
-            "environment": [],
             "stopAtEntry": false,
-            "preLaunchTask": "Build Windows",
-            "console": "externalTerminal",
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "externalTerminal"
+        },
+        {
+            "name": "LaunchLinux",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${command:cmake.launchTargetPath}",
+            "args": [],
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

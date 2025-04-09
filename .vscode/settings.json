@@ -18,5 +18,16 @@
     },
     "clangd.arguments": [
         "--compile-commands-dir=${workspaceFolder}/.build/Ninja"
-    ]
+    ],
+    "cmake.sourceDirectory": [
+        "${workspaceFolder}/cmake",
+    ],
+    "cmake.preferredGenerators": ["Ninja"],
+    "cmake.buildDirectory": "${workspaceFolder}/.build",
+    "cmake.autoSelectActiveFolder": false,
+    "cmake.options.advanced": {
+        "folder": { "statusBarVisibility": "visible" },
+        "variant": { "statusBarVisibility": "compact" }
+    },
+    "cmake.copyCompileCommands": "${workspaceFolder}/.build/compile_commands.json"
 }

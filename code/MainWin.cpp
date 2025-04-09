@@ -89,6 +89,25 @@ static bool CreateDeviceD3D(HWND hWnd)
     return true;
 }
 
+// MSVC D0 extension work around for LivePPte
+#if USE_LIVEPP
+static void _LivePPGlobalHotReloadEnd(lpp::LppGlobalHotReloadEndHookId)
+{
+    char eventName[32];
+    if (Str::PrintFmt(eventName, sizeof(eventName), "D0_GlobalHotReload_%i", GetCurrentProcessId()) < 0) {
+        return;
+    }
+
+    HANDLE ev = OpenEventA(EVENT_MODIFY_STATE, FALSE, eventName);
+    if (ev) {
+        SetEvent(ev);
+        CloseHandle(ev);
+    }
+}
+
+LPP_GLOBAL_HOTRELOAD_END_HOOK(_LivePPGlobalHotReloadEnd);
+#endif // USE_LIVEPP
+
 static void CleanupDeviceD3D()
 {
     if (gGfx.mainRenderTargetView) { gGfx.mainRenderTargetView->Release(); gGfx.mainRenderTargetView = nullptr; }
