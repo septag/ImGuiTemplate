@@ -1,0 +1,7 @@
+pkg-config
+libfreetype-dev
+libglfw3-dev
+uuid-dev
+libgtk-3-dev
+libc++abi-dev
+

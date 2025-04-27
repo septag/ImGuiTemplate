@@ -17,7 +17,7 @@
         "**/*.dylib": true
     },
     "clangd.arguments": [
-        "--compile-commands-dir=${workspaceFolder}/.build/Ninja"
+        "--compile-commands-dir=${workspaceFolder}/.build"
     ],
     "cmake.sourceDirectory": [
         "${workspaceFolder}/cmake",
@@ -29,5 +29,6 @@
         "folder": { "statusBarVisibility": "visible" },
         "variant": { "statusBarVisibility": "compact" }
     },
-    "cmake.copyCompileCommands": "${workspaceFolder}/.build/compile_commands.json"
+    "cmake.copyCompileCommands": "${workspaceFolder}/.build/compile_commands.json",
+    "cmake.configureArgs": ["-DAPPNAME=Test"]
 }
