@@ -57,6 +57,10 @@
     #define TRACY_FIBERS
 #endif
 
+#if PLATFORM_LINUX || PLATFORM_WINDOWS
+    #define TRACY_NO_CALLSTACK
+#endif
+
 //----------------------------------------------------------------------------------------------------------------------
 // External/tracy/tracy/TracyC.h
 
@@ -172,6 +176,8 @@ TRACY_API void ___tracy_set_thread_name( const char* name );
 
 typedef const void* TracyCZoneCtx;
 
+typedef const void* TracyCLockCtx;
+
 #define TracyCZone(c,x)
 #define TracyCZoneN(c,x,y)
 #define TracyCZoneC(c,x,y)
@@ -229,7 +235,18 @@ typedef const void* TracyCZoneCtx;
 #define TracyCMessageCS(x,y,z,w)
 #define TracyCMessageLCS(x,y,z)
 
+#define TracyCLockCtx(l)
+#define TracyCLockAnnounce(l)
+#define TracyCLockTerminate(l)
+#define TracyCLockBeforeLock(l)
+#define TracyCLockAfterLock(l)
+#define TracyCLockAfterUnlock(l)
+#define TracyCLockAfterTryLock(l,x)
+#define TracyCLockMark(l)
+#define TracyCLockCustomName(l,x,y)
+
 #define TracyCIsConnected 0
+#define TracyCIsStarted 0
 
 #ifdef TRACY_FIBERS
 #  define TracyCFiberEnter(fiber)
@@ -305,16 +322,29 @@ struct ___tracy_gpu_calibration_data {
     uint8_t context;
 };
 
+struct ___tracy_gpu_time_sync_data {
+    int64_t gpuTime;
+    uint8_t context;
+};
+
+struct __tracy_lockable_context_data;
+
 typedef /*const*/ struct ___tracy_c_zone_context TracyCZoneCtx;
 
+typedef struct __tracy_lockable_context_data* TracyCLockCtx;
 
 #ifdef TRACY_MANUAL_LIFETIME
 TRACY_API void ___tracy_startup_profiler(void);
 TRACY_API void ___tracy_shutdown_profiler(void);
+TRACY_API int ___tracy_profiler_started(void);
+
+#  define TracyCIsStarted ___tracy_profiler_started()
+#else
+#  define TracyCIsStarted 1
 #endif
 
-TRACY_API uint64_t ___tracy_alloc_srcloc( uint32_t line, const char* source, size_t sourceSz, const char* function, size_t functionSz );
-TRACY_API uint64_t ___tracy_alloc_srcloc_name( uint32_t line, const char* source, size_t sourceSz, const char* function, size_t functionSz, const char* name, size_t nameSz );
+TRACY_API uint64_t ___tracy_alloc_srcloc( uint32_t line, const char* source, size_t sourceSz, const char* function, size_t functionSz, uint32_t color );
+TRACY_API uint64_t ___tracy_alloc_srcloc_name( uint32_t line, const char* source, size_t sourceSz, const char* function, size_t functionSz, const char* name, size_t nameSz, uint32_t color );
 
 TRACY_API TracyCZoneCtx ___tracy_emit_zone_begin( const struct ___tracy_source_location_data* srcloc, int active );
 TRACY_API TracyCZoneCtx ___tracy_emit_zone_begin_callstack( const struct ___tracy_source_location_data* srcloc, int depth, int active );
@@ -335,6 +365,7 @@ TRACY_API void ___tracy_emit_gpu_time( const struct ___tracy_gpu_time_data );
 TRACY_API void ___tracy_emit_gpu_new_context( const struct ___tracy_gpu_new_context_data );
 TRACY_API void ___tracy_emit_gpu_context_name( const struct ___tracy_gpu_context_name_data );
 TRACY_API void ___tracy_emit_gpu_calibration( const struct ___tracy_gpu_calibration_data );
+TRACY_API void ___tracy_emit_gpu_time_sync( const struct ___tracy_gpu_time_sync_data );
 
 TRACY_API void ___tracy_emit_gpu_zone_begin_serial( const struct ___tracy_gpu_zone_begin_data );
 TRACY_API void ___tracy_emit_gpu_zone_begin_callstack_serial( const struct ___tracy_gpu_zone_begin_callstack_data );
@@ -345,6 +376,7 @@ TRACY_API void ___tracy_emit_gpu_time_serial( const struct ___tracy_gpu_time_dat
 TRACY_API void ___tracy_emit_gpu_new_context_serial( const struct ___tracy_gpu_new_context_data );
 TRACY_API void ___tracy_emit_gpu_context_name_serial( const struct ___tracy_gpu_context_name_data );
 TRACY_API void ___tracy_emit_gpu_calibration_serial( const struct ___tracy_gpu_calibration_data );
+TRACY_API void ___tracy_emit_gpu_time_sync_serial( const struct ___tracy_gpu_time_sync_data );
 
 TRACY_API int ___tracy_connected(void);
 
@@ -482,6 +514,25 @@ TRACY_API void ___tracy_emit_message_appinfo( const char* txt, size_t size );
 #  define TracyCMessageLCS( txt, color, depth ) TracyCMessageLC( txt, color )
 #endif
 
+
+TRACY_API struct __tracy_lockable_context_data* ___tracy_announce_lockable_ctx( const struct ___tracy_source_location_data* srcloc );
+TRACY_API void ___tracy_terminate_lockable_ctx( struct __tracy_lockable_context_data* lockdata );
+TRACY_API int ___tracy_before_lock_lockable_ctx( struct __tracy_lockable_context_data* lockdata );
+TRACY_API void ___tracy_after_lock_lockable_ctx( struct __tracy_lockable_context_data* lockdata );
+TRACY_API void ___tracy_after_unlock_lockable_ctx( struct __tracy_lockable_context_data* lockdata );
+TRACY_API void ___tracy_after_try_lock_lockable_ctx( struct __tracy_lockable_context_data* lockdata, int acquired );
+TRACY_API void ___tracy_mark_lockable_ctx( struct __tracy_lockable_context_data* lockdata, const struct ___tracy_source_location_data* srcloc );
+TRACY_API void ___tracy_custom_name_lockable_ctx( struct __tracy_lockable_context_data* lockdata, const char* name, size_t nameSz );
+
+#define TracyCLockAnnounce( lock ) static const struct ___tracy_source_location_data TracyConcat(__tracy_source_location,TracyLine) = { NULL, __func__,  TracyFile, (uint32_t)TracyLine, 0 }; lock = ___tracy_announce_lockable_ctx( &TracyConcat(__tracy_source_location,TracyLine) );
+#define TracyCLockTerminate( lock ) ___tracy_terminate_lockable_ctx( lock );
+#define TracyCLockBeforeLock( lock ) ___tracy_before_lock_lockable_ctx( lock );
+#define TracyCLockAfterLock( lock ) ___tracy_after_lock_lockable_ctx( lock );
+#define TracyCLockAfterUnlock( lock ) ___tracy_after_unlock_lockable_ctx( lock );
+#define TracyCLockAfterTryLock( lock, acquired ) ___tracy_after_try_lock_lockable_ctx( lock, acquired );
+#define TracyCLockMark( lock ) static const struct ___tracy_source_location_data TracyConcat(__tracy_source_location,TracyLine) = { NULL, __func__,  TracyFile, (uint32_t)TracyLine, 0 }; ___tracy_mark_lockable_ctx( lock, &TracyConcat(__tracy_source_location,TracyLine) );
+#define TracyCLockCustomName( lock, name, nameSz ) ___tracy_custom_name_lockable_ctx( lock, name, nameSz );
+
 #define TracyCIsConnected ___tracy_connected()
 
 #ifdef TRACY_FIBERS
@@ -511,132 +562,70 @@ TRACY_API void ___tracy_fiber_leave( void );
         API void RunZoneEnterCallback(TracyCZoneCtx* ctx, const ___tracy_source_location_data* sourceLoc);
         API bool RunZoneExitCallback(TracyCZoneCtx* ctx);
 
-        namespace _private
+        API int64 GetTime();
+
+        struct CpuProfilerScope
         {
-            struct ___tracy_gpu_calibrate_data
-            {
-                int64 gpuTime;
-                int64 cpuTime;
-                int64 deltaTime;
-                uint8 context;
-            };
+            TracyCZoneCtx mCtx;
 
-            void ___tracy_emit_gpu_calibrate_serial(const struct ___tracy_gpu_calibrate_data data);
-            int64 __tracy_get_time(void);
-            uint64 __tracy_alloc_source_loc(uint32 line, const char* source, const char* function, const char* name);
+            CpuProfilerScope() = delete;
 
-            struct TracyCZoneScope
-            {
-                TracyCZoneCtx mCtx;
-                const ___tracy_source_location_data* mSourceLoc;
-    
-                TracyCZoneScope() = delete;
-                explicit TracyCZoneScope(TracyCZoneCtx ctx, const ___tracy_source_location_data* sourceLoc) : mCtx(ctx), mSourceLoc(sourceLoc) { Tracy::RunZoneEnterCallback(&ctx, sourceLoc); }
-                ~TracyCZoneScope() { if (!Tracy::RunZoneExitCallback(&mCtx)) { TracyCZoneEnd(mCtx); }}
-            };
-        }
+            explicit CpuProfilerScope(const ___tracy_source_location_data* sourceLoc, int callstackDepth, bool isActive, bool isAlloc);
+            ~CpuProfilerScope();
+        };
     }
-
 
     #define TracyCRealloc(oldPtr, ptr, size) if (oldPtr) { TracyCFree(oldPtr); }  TracyCAlloc(ptr, size)
 
+    TRACY_API uint64_t ___tracy_alloc_srcloc_name( uint32_t line, const char* source, size_t sourceSz, const char* function, size_t functionSz, const char* name, size_t nameSz, uint32_t color );
+
     #if defined TRACY_HAS_CALLSTACK && defined TRACY_CALLSTACK
-        #define PROFILE_ZONE_OPT(active) \
-            static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { NULL, __func__,  __FILE__, (uint32_t)__LINE__, 0 }; \
-            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin_callstack(&CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active), &CONCAT(__tracy_source_location,__LINE__));
-        #define PROFILE_ZONE_NAME_OPT(name, active) \
+        #define PROFILE_ZONE_OPT(active, name) \
             static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { name, __func__,  __FILE__, (uint32_t)__LINE__, 0 }; \
-            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin_callstack( &CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active ), &CONCAT(__tracy_source_location,__LINE__));
-        #define PROFILE_ZONE_COLOR_OPT(color, active) \
-            static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { NULL, __func__,  __FILE__, (uint32_t)__LINE__, color }; \
-            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin_callstack( &CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active ), &CONCAT(__tracy_source_location,__LINE__));
-        #define PROFILE_ZONE_NAME_COLOR_OPT(name, color, active) \
+            Tracy::CpuProfilerScope CONCAT(__cpu_profiler,__LINE__)(&CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active, false)
+        #define PROFILE_ZONE_ALLOC_OPT(name, active) \
+            struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { name, __func__,  __FILE__, (uint32_t)__LINE__, 0 }; \
+            Tracy::CpuProfilerScope CONCAT(__cpu_profiler,__LINE__)(&CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active, true)
+        #define PROFILE_ZONE_COLOR_OPT(name, color, active) \
             static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { name, __func__,  __FILE__, (uint32_t)__LINE__, color }; \
-            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin_callstack( &CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active ), &CONCAT(__tracy_source_location,__LINE__));
+            Tracy::CpuProfilerScope CONCAT(__cpu_profiler,__LINE__)(&CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active, false)
+        #define PROFILE_ZONE_ALLOC_COLOR_OPT(name, color, active) \
+            static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { name, __func__,  __FILE__, (uint32_t)__LINE__, color }; \
+            Tracy::CpuProfilerScope CONCAT(__cpu_profiler,__LINE__)(&CONCAT(__tracy_source_location,__LINE__), TRACY_CALLSTACK, active, true)
 
-        #define PROFILE_ZONE() PROFILE_ZONE_OPT(true)
-        #define PROFILE_ZONE_NAME(name) PROFILE_ZONE_NAME_OPT(name, true)
-        #define PROFILE_ZONE_COLOR(color) PROFILE_ZONE_COLOR_OPT(color, true)
-        #define PROFILE_ZONE_NAME_COLOR(name, color) PROFILE_ZONE_NAME_COLOR_OPT(name, color, true)
-
-        #define PROFILE_ZONE_WITH_TEXT_OPT(text, textLen, active) \
-            PROFILE_ZONE_OPT(active) \
-            TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
-        #define PROFILE_ZONE_NAME_WITH_TEXT_OPT(name, text, textLen, active) \
-            PROFILE_ZONE_NAME_OPT(name, active) \
-            TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
-        #define PROFILE_ZONE_COLOR_WITH_TEXT_OPT(color, text, textLen, active) \
-            PROFILE_ZONE_COLOR_OPT(color, active) \
-            TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
-        #define PROFILE_ZONE_NAME_COLOR_WITH_TEXT_OPT(name, color, text, textLen, active) \
-            PROFILE_ZONE_NAME_COLOR_OPT(name, color, active) \
-            TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
-
-        #define PROFILE_ZONE_WITH_TEXT(text, textLen) PROFILE_ZONE_WITH_TEXT_OPT(text, textLen, true)
-        #define PROFILE_ZONE_NAME_WITH_TEXT(name, text, textLen) PROFILE_ZONE_NAME_WITH_TEXT_OPT(name, text, textLen, true)
-        #define PROFILE_ZONE_COLOR_WITH_TEXT(color, text, textLen) PROFILE_ZONE_COLOR_WITH_TEXT_OPT(color, text, textLen, true)
-        #define PROFILE_ZONE_NAME_COLOR_WITH_TEXT(name, color, text, textLen) PROFILE_ZONE_NAME_COLOR_WITH_TEXT(name, color, text, textLen, true)
+        #define PROFILE_ZONE(name) PROFILE_ZONE_OPT(name, true)
+        #define PROFILE_ZONE_ALLOC(name) PROFILE_ZONE_ALLOC_OPT(name, true)
+        #define PROFILE_ZONE_COLOR(name, color) PROFILE_ZONE_COLOR_OPT(name, color, true)
+        #define PROFILE_ZONE_ALLOC_COLOR(name, color) PROFILE_ZONE_ALLOC_COLOR_OPT(name, color, true)
     #else
-        #define PROFILE_ZONE_OPT(active) \
-            static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { NULL, __func__,  __FILE__, (uint32_t)__LINE__, 0 }; \
-            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin( &CONCAT(__tracy_source_location,__LINE__), active ), &CONCAT(__tracy_source_location,__LINE__));
-        #define PROFILE_ZONE_NAME_OPT(name, active) \
+        #define PROFILE_ZONE_OPT(name, active) \
             static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { name, __func__,  __FILE__, (uint32_t)__LINE__, 0 }; \
-            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin( &CONCAT(__tracy_source_location,__LINE__), active ), &CONCAT(__tracy_source_location,__LINE__));
-        #define PROFILE_ZONE_COLOR_OPT(color, active) \
-            static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { NULL, __func__,  __FILE__, (uint32_t)__LINE__, color }; \
-            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin( &CONCAT(__tracy_source_location,__LINE__), active ), &CONCAT(__tracy_source_location,__LINE__));
-        #define PROFILE_ZONE_NAME_COLOR_OPT(name, color, active) \
+            Tracy::CpuProfilerScope CONCAT(__cpu_profiler,__LINE__)(&CONCAT(__tracy_source_location,__LINE__), 0, active, false)
+        #define PROFILE_ZONE_ALLOC_OPT(name, active) \
+            struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { name, __func__,  __FILE__, (uint32_t)__LINE__, 0 }; \
+            Tracy::CpuProfilerScope CONCAT(__cpu_profiler,__LINE__)(&CONCAT(__tracy_source_location,__LINE__), 0, active, true)
+        #define PROFILE_ZONE_COLOR_OPT(name, color, active) \
             static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { name, __func__,  __FILE__, (uint32_t)__LINE__, color }; \
-            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin( &CONCAT(__tracy_source_location,__LINE__), active ), &CONCAT(__tracy_source_location,__LINE__));
-        #define PROFILE_ZONE_WITH_TEXT_OPT(text, textLen, active) \
-            static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { NULL, __func__,  __FILE__, (uint32_t)__LINE__, 0 }; \
-            Tracy::_private::TracyCZoneScope CONCAT(__tracy_ctx,__LINE__)(___tracy_emit_zone_begin( &CONCAT(__tracy_source_location,__LINE__), active ), &CONCAT(__tracy_source_location,__LINE__)); \
-            TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
+            Tracy::CpuProfilerScope CONCAT(__cpu_profiler,__LINE__)(&CONCAT(__tracy_source_location,__LINE__), 0, active, false)
+        #define PROFILE_ZONE_ALLOC_COLOR_OPT(name, color, active) \
+            static constexpr struct ___tracy_source_location_data CONCAT(__tracy_source_location,__LINE__) = { name, __func__,  __FILE__, (uint32_t)__LINE__, color }; \
+            Tracy::CpuProfilerScope CONCAT(__cpu_profiler,__LINE__)(&CONCAT(__tracy_source_location,__LINE__), 0, active, true)
 
-        #define PROFILE_ZONE() PROFILE_ZONE_OPT(true)
-        #define PROFILE_ZONE_NAME(name) PROFILE_ZONE_NAME_OPT(name, true)
-        #define PROFILE_ZONE_COLOR(color) PROFILE_ZONE_COLOR_OPT(color, true)
-        #define PROFILE_ZONE_NAME_COLOR(name, color) PROFILE_ZONE_NAME_COLOR_OPT(name, color, true)
-
-        #define PROFILE_ZONE_WITH_TEXT_OPT(text, textLen, active) \
-            PROFILE_ZONE_OPT(active) \
-            TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
-        #define PROFILE_ZONE_NAME_WITH_TEXT_OPT(name, text, textLen, active) \
-            PROFILE_ZONE_NAME_OPT(name, active) \
-            TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
-        #define PROFILE_ZONE_COLOR_WITH_TEXT_OPT(color, text, textLen, active) \
-            PROFILE_ZONE_COLOR_OPT(color, active) \
-            TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
-        #define PROFILE_ZONE_NAME_COLOR_WITH_TEXT_OPT(name, color, text, textLen, active) \
-            PROFILE_ZONE_NAME_COLOR_WITH_TEXT_OPT(name, color, active) \
-            TracyCZoneText(CONCAT(__tracy_ctx,__LINE__).mCtx, text, textLen)
-
-        #define PROFILE_ZONE_WITH_TEXT(text, textLen) PROFILE_ZONE_WITH_TEXT_OPT(text, textLen, true)
-        #define PROFILE_ZONE_NAME_WITH_TEXT(name, text, textLen) PROFILE_ZONE_NAME_WITH_TEXT_OPT(name, text, textLen, true)
-        #define PROFILE_ZONE_COLOR_WITH_TEXT(color, text, textLen) PROFILE_ZONE_COLOR_WITH_TEXT_OPT(color, text, textLen, true)
-        #define PROFILE_ZONE_NAME_COLOR_WITH_TEXT(name, color, text, textLen) PROFILE_ZONE_NAME_COLOR_WITH_TEXT(name, color, text, textLen, true)
+        #define PROFILE_ZONE(name) PROFILE_ZONE_OPT(name, true)
+        #define PROFILE_ZONE_ALLOC(name) PROFILE_ZONE_ALLOC_OPT(name, true)
+        #define PROFILE_ZONE_COLOR(name, color) PROFILE_ZONE_COLOR_OPT(name, color, true)
+        #define PROFILE_ZONE_ALLOC_COLOR(name, color) PROFILE_ZONE_ALLOC_COLOR_OPT(name, color, true)
     #endif // else: TRACY_HAS_CALLBACK
 #else
-    #define PROFILE_ZONE_OPT(active)
-    #define PROFILE_ZONE_NAME_OPT(name, active)
-    #define PROFILE_ZONE_COLOR_OPT(color, active)
-    #define PROFILE_ZONE_NAME_COLOR_OPT(name, color, active)
+    #define PROFILE_ZONE_OPT(name, active)
+    #define PROFILE_ZONE_ALLOC_OPT(name, active)
+    #define PROFILE_ZONE_COLOR_OPT(name, color, active)
+    #define PROFILE_ZONE_ALLOC_COLOR_OPT(name, color, active)
 
-    #define PROFILE_ZONE_WITH_TEXT_OPT(text, textLen, active)
-    #define PROFILE_ZONE_NAME_WITH_TEXT_OPT(name, text, textLen, active)
-    #define PROFILE_ZONE_COLOR_WITH_TEXT_OPT(color, text, textLen, active)
-    #define PROFILE_ZONE_NAME_COLOR_WITH_TEXT_OPT(name, color, text, textLen, active)
-
-    #define PROFILE_ZONE()
-    #define PROFILE_ZONE_NAME(name)
-    #define PROFILE_ZONE_COLOR(color)
-    #define PROFILE_ZONE_NAME_COLOR(name, color)
-
-    #define PROFILE_ZONE_WITH_TEXT(text, textLen)
-    #define PROFILE_ZONE_NAME_WITH_TEXT(name, text, textLen)
-    #define PROFILE_ZONE_COLOR_WITH_TEXT(color, text, textLen)
-    #define PROFILE_ZONE_NAME_COLOR_WITH_TEXT(name, color, text, textLen)    
+    #define PROFILE_ZONE(name)
+    #define PROFILE_ZONE_ALLOC(name)
+    #define PROFILE_ZONE_COLOR(name, color)
+    #define PROFILE_ZONE_ALLOC_COLOR(name, color)
 
     #define TracyCRealloc(oldPtr, ptr, size)
 #endif  // TRACY_ENABLE
@@ -2196,7 +2185,7 @@ MemTempContext::~MemTempContext()
 
 void MemTempAllocator::Reset()
 {
-    PROFILE_ZONE();
+    PROFILE_ZONE("TempAllocator.Reset");
 
 
     uint32 count;
@@ -2375,6 +2364,7 @@ void* MemTempAllocator::Realloc(void* ptr, size_t size, uint32 align)
         return newPtr;
     }
     else {
+        void* initPtr = ptr;
         if (ptr == nullptr)
             ptr = Mem::GetDefaultAlloc()->Malloc(size, align);
         else
@@ -2385,14 +2375,35 @@ void* MemTempAllocator::Realloc(void* ptr, size_t size, uint32 align)
             size_t endOffset = memStack.baseOffset + memStack.offset;
 
             ctx.peakBytes = Max<size_t>(ctx.peakBytes, endOffset);
+
+            if (initPtr) {
+                uint32 oldPtrIdx = memStack.debugPointers.FindIf([initPtr](const MemDebugPointer& p) { return p.ptr == initPtr; });
+                if (oldPtrIdx != -1)
+                    memStack.debugPointers.RemoveAndSwap(oldPtrIdx);
+            }
+            
             memStack.debugPointers.Push({ptr, align});
         }
         return ptr;
     }
 }
 
-void MemTempAllocator::Free(void*, uint32) 
+void MemTempAllocator::Free(void* ptr, uint32) 
 {
+    if (!ptr)
+        return;
+
+    MemTempContext& ctx = _GetMemTempContext();
+
+    if (ctx.debugMode) {
+        uint32 index = mId >> 16;
+        ASSERT_MSG(index == ctx.allocStack.Count() - 1, "Invalid temp id, likely doesn't belong to current temp stack scope");
+
+        MemTempStack& memStack = ctx.allocStack[index];
+        uint32 freeIdx = memStack.debugPointers.FindIf([ptr](const MemDebugPointer& p) { return p.ptr == ptr; });
+        if (freeIdx != -1)
+            memStack.debugPointers.RemoveAndSwap(freeIdx);
+    }
 }
 
 size_t MemTempAllocator::GetOffset() const
@@ -2546,8 +2557,13 @@ void* MemBumpAllocatorBase::Realloc(void* ptr, size_t size, uint32 align)
     }
 }
 
-void MemBumpAllocatorBase::Free(void*, uint32)
+void MemBumpAllocatorBase::Free(void* ptr, uint32)
 {
+    if (mDebugMode && ptr) {
+        uint32 index = mDebugPointers->FindIf([ptr](const MemDebugPointer& p) { return p.ptr == ptr; });
+        if (index != -1)
+            mDebugPointers->RemoveAndSwap(index);
+    }
 }
 
 void MemBumpAllocatorBase::Reset()
@@ -2555,7 +2571,6 @@ void MemBumpAllocatorBase::Reset()
     if (!mDebugMode) {
         mLastAllocatedPtr = nullptr;
         mOffset = 0;
-        mCommitSize = 0;
     }
     else {
         mOffset = 0;
@@ -2601,8 +2616,6 @@ void  MemBumpAllocatorVM::BackendRelease(void* ptr, size_t size)
 
 void MemBumpAllocatorVM::WarmUp()
 {
-    PROFILE_ZONE();
-
     size_t hwPageSize = OS::GetPageSize();
     size_t pageOffset = AlignValue(mOffset, mPageSize);
     BackendCommit(mBuffer + pageOffset, mReserveSize - pageOffset);
@@ -2968,6 +2981,9 @@ void* MemProxyAllocator::Realloc(void* ptr, size_t size, uint32 align)
 
 void MemProxyAllocator::Free(void* ptr, uint32 align)
 {
+    if (!ptr)
+        return;
+    
     mBaseAlloc->Free(ptr, align);
 
     if (IsBitsSet<MemProxyAllocatorFlags>(mFlags, MemProxyAllocatorFlags::EnableTracking) && ptr) {
@@ -4354,7 +4370,7 @@ namespace Debug
 
         state->numFrames++;
         if (state->numFrames <= state->framesToSkip)
-        return _URC_NO_REASON;
+            return _URC_NO_REASON;
 
         void* ip = reinterpret_cast<void*>(_Unwind_GetIP(context));
         if (ip) {
@@ -4439,7 +4455,7 @@ void Debug::PrintLineFmt(const char* fmt, ...)
     char text[1024];
     va_list args;
     va_start(args, fmt);
-    uint32 len = Str::PrintFmtArgs(text, sizeof(text)-1, fmt, args);
+    [[maybe_unused]] uint32 len = Str::PrintFmtArgs(text, sizeof(text)-1, fmt, args);
     va_end(args);
 
     #if PLATFORM_WINDOWS
@@ -8687,8 +8703,13 @@ namespace Jobs
 
         #ifdef TRACY_ENABLE
         if (!fiber->tracyZonesStack.IsEmpty()) {
-            for (JobsTracyZone& zone : fiber->tracyZonesStack)
-                zone.ctx = ___tracy_emit_zone_begin_callstack(zone.sourceLoc, TRACY_CALLSTACK, zone.ctx.active);
+            for (JobsTracyZone& zone : fiber->tracyZonesStack) {
+                #if !defined(TRACY_NO_CALLSTACK)
+                    zone.ctx = ___tracy_emit_zone_begin_callstack(zone.sourceLoc, TRACY_CALLSTACK, zone.ctx.active);
+                #else
+                    zone.ctx = ___tracy_emit_zone_begin(zone.sourceLoc, zone.ctx.active);
+                #endif
+            }
         }
         #endif
 
@@ -8833,12 +8854,14 @@ namespace Jobs
         instance->type = type;
         instance->isAutoDelete = isAutoDelete;
 
+        #if 0
         JobsFiber* parent = nullptr;
         if (gIsInFiber && !isAutoDelete) {
             JobsThreadData* tdata = _GetThreadData();
             ASSERT(tdata->curFiber);
             parent = tdata->curFiber;
         }
+        #endif
 
         {
             JobsLockScope lock(gJobs.waitingListLock);
@@ -13397,7 +13420,7 @@ PERFORMANCE vs MSVC 2008 32-/64-bit (GCC is even slower than MSVC):
 #define STBSP__PUBLICDEF static STBSP__ASAN
 #else
 #ifdef __cplusplus
-#define STBSP__PUBLICDEC extern "C"
+#define STBSP__PUBLICDEC extern "C" STBSP__ASAN
 #define STBSP__PUBLICDEF extern "C" STBSP__ASAN
 #else
 #define STBSP__PUBLICDEC extern
@@ -15358,6 +15381,15 @@ int Str::Compare(const char* a, const char* b)
     return strcmp(a, b);
 }
 
+int Str::CompareNoCase(const char* a, const char* b)
+{
+#if PLATFORM_WINDOWS
+    return _stricmp(a, b);
+#else
+    return stricmp(a, b);
+#endif
+}
+
 uint32 Str::CountMatchingFirstChars(const char* s1, const char* s2)
 {
     uint32 count = 0;
@@ -15722,51 +15754,22 @@ const char* Str::SkipChar(const char* str, char ch)
     return str;
 }
 
-Span<char*> Str::Split(const char* str, char ch, MemAllocator* alloc)
+Str::SplitResult Str::Split(const char* str, char ch, MemAllocator* alloc, bool acceptEmptySplits)
 {
     Array<char*> splits(alloc);
+    char* strCopy = Mem::AllocCopy<char>(str, Str::Len(str) + 1, alloc);
 
-    const char* s = str;
-    const char* start = str;
+    char* s = strCopy;
+    char* start = s;
     while (*s) {
         if (*s == ch) {
-            uint32 len = PtrToInt<uint32>((void*)(s - start));
-            char* splitItem = Mem::AllocCopy<char>(start, len + 1, alloc);
-            splitItem[len] = 0;
-            splits.Push(splitItem);
-
-            s = Str::SkipChar(s, ch);
-            start = Str::SkipChar(s, ch);
-        }
-
-        if (*s) ++s;
-    }
-
-    if (start < s) {
-        uint32 len = PtrToInt<uint32>((void*)(s - start));
-        char* splitItem = Mem::AllocCopy<char>(start, len + 1, alloc);
-        splits.Push(splitItem);
-    }
-
-    return splits.Detach();
-}
-
-Span<char*> Str::SplitWhitespace(const char* str, MemAllocator* alloc)
-{
-    Array<char*> splits(alloc);
-
-    const char* s = str;
-    const char* start = str;
-    while (*s) {
-        if (Str::IsWhitespace(*s)) {
-            if (start != s) {
-                uint32 len = PtrToInt<uint32>((void*)(s - start));
-                char* splitItem = Mem::AllocCopy<char>(start, len + 1, alloc);
-                splitItem[len] = 0;
-                splits.Push(splitItem);
+            if (start != s || acceptEmptySplits) {
+                *(s++) = 0;
+                splits.Push(start);
             }
-
-            s = Str::SkipWhitespace(s);
+            
+            if (!acceptEmptySplits)
+                s = const_cast<char*>(Str::SkipChar(s, ch));
 
             start = s;
         }
@@ -15775,13 +15778,54 @@ Span<char*> Str::SplitWhitespace(const char* str, MemAllocator* alloc)
         }
     }
 
-    if (start != s) {
-        uint32 len = PtrToInt<uint32>((void*)(s - start));
-        char* splitItem = Mem::AllocCopy<char>(start, len + 1, alloc);
-        splits.Push(splitItem);
+    if (start < s) 
+        splits.Push(start);
+
+    Str::SplitResult r {
+        .buffer = strCopy,
+        .splits = splits.Detach()
+    };
+
+    return r;
+}
+
+Str::SplitResult Str::SplitWhitespace(const char* str, MemAllocator* alloc)
+{
+    Array<char*> splits(alloc);
+    char* strCopy = Mem::AllocCopy<char>(str, Str::Len(str) + 1, alloc);
+
+    char* s = strCopy;
+    char* start = s;
+    while (*s) {
+        if (Str::IsWhitespace(*s)) {
+            if (start != s) {
+                *(s++) = 0;
+                splits.Push(start);
+            }
+
+            s = const_cast<char*>(Str::SkipWhitespace(s));
+            start = s;
+        }
+        else {
+            ++s;
+        }
     }
 
-    return splits.Detach();
+    if (start != s) 
+        splits.Push(start);
+
+    Str::SplitResult r {
+        .buffer = strCopy,
+        .splits = splits.Detach()
+    };
+
+    return r;
+}
+
+void Str::FreeSplitResult(SplitResult& sres, MemAllocator* alloc)
+{
+    Mem::Free(sres.buffer, alloc);
+    Mem::Free(sres.splits.Ptr(), alloc);
 }
 
 
@@ -15816,6 +15860,12 @@ Span<char*> Str::SplitWhitespace(const char* str, MemAllocator* alloc)
 #include <netinet/in.h>         // sockaddr_in
 #include <arpa/inet.h>          // inet_ntop
 #include <poll.h>               // async file poll
+#include <spawn.h>
+#include <signal.h>             // kill
+
+#if PLATFORM_LINUX
+#include <sys/wait.h>
+#endif
 
 #if PLATFORM_APPLE || PLATFORM_LINUX
     #include <uuid/uuid.h>
@@ -16046,18 +16096,13 @@ void Thread::SetCurrentThreadPriority(ThreadPriority prio)
 
 struct MutexImpl
 {
-    alignas(CACHE_LINE_SIZE) AtomicUint32 spinlock;
     pthread_mutex_t handle;
-    uint32 spinCount;
 };
 static_assert(sizeof(MutexImpl) <= sizeof(Mutex), "Mutex size mismatch");
 
 void Mutex::Initialize(uint32 spinCount)
 {
     MutexImpl* _m = reinterpret_cast<MutexImpl*>(mData);
-    
-    _m->spinCount = spinCount;
-    _m->spinlock = 0;
     
     pthread_mutexattr_t attr;
     [[maybe_unused]] int r = pthread_mutexattr_init(&attr);
@@ -16083,12 +16128,6 @@ void Mutex::Enter()
 {
     MutexImpl* _m = reinterpret_cast<MutexImpl*>(mData);
 
-    for (uint32 i = 0, c = _m->spinCount; i < c; i++) {
-        if (Atomic::ExchangeExplicit(&_m->spinlock, 1, AtomicMemoryOrder::Acquire) == 0)
-            return;
-        OS::PauseCPU();
-    }
-    
     pthread_mutex_lock(&_m->handle);
 }
 
@@ -16097,15 +16136,12 @@ void Mutex::Exit()
     MutexImpl* _m = reinterpret_cast<MutexImpl*>(mData);
 
     pthread_mutex_unlock(&_m->handle);
-    Atomic::StoreExplicit(&_m->spinlock, 0, AtomicMemoryOrder::Release);
 }
 
 bool Mutex::TryEnter()
 {
     MutexImpl* _m = reinterpret_cast<MutexImpl*>(mData);
 
-    if (Atomic::ExchangeExplicit(&_m->spinlock, 1, AtomicMemoryOrder::Acquire) == 0)
-        return true;
     return pthread_mutex_trylock(&_m->handle) == 0;
 }
 
@@ -16448,7 +16484,7 @@ char* OS::GetAbsolutePath(const char* path, char* dst, size_t dstSize)
 {
     char absPath[PATH_CHARS_MAX];
     if (realpath(path, absPath) != NULL) {
-        Str::Copy(dst, (uint32)dstSize, absPath);
+    Str::Copy(dst, (uint32)dstSize, absPath);
     } else {
         dst[0] = '\0';
     }
@@ -16529,7 +16565,6 @@ void* Mem::VirtualCommit(void* ptr, size_t size)
     int r = mprotect(ptr, size, PROT_READ | PROT_WRITE);
     ASSERT(r == 0);
     
-    size_t pageSize = OS::GetPageSize();
     r = madvise(ptr, size, MADV_WILLNEED);
     if (r != 0) {
         if (errno == ENOMEM) {
@@ -16538,12 +16573,6 @@ void* Mem::VirtualCommit(void* ptr, size_t size)
         ASSERT(0);
         return nullptr;
     }
-
-    uint8* buff = reinterpret_cast<uint8*>(ptr);
-    uintptr dummyCounter = 0;
-    for (size_t off = 0; off < size; off += pageSize) {
-        dummyCounter += *(uintptr*)(buff + off);
-    }    
 
     Atomic::FetchAdd(&gVMStats.commitedBytes, size);
     return ptr;
@@ -17161,13 +17190,13 @@ void Async::Close(AsyncFile* file)
     MemSingleShotMalloc<AsyncFilePosix>::Free(fm, fm->alloc);
 }
 
-bool Wait(AsyncFile* file)
+bool Async::Wait(AsyncFile* file)
 {
     ASSERT_MSG(0, "Wait not implemented for generic impl");
     return false;
 }
 
-bool IsFinished(AsyncFile* file, bool* outError)
+bool Async::IsFinished(AsyncFile* file, bool* outError)
 {
     ASSERT(file);
     AsyncFilePosix* f = (AsyncFilePosix*)file;
@@ -17176,6 +17205,169 @@ bool IsFinished(AsyncFile* file, bool* outError)
         *outError = (r == -1);
     return r != 0;
 }
+
+OSProcess::OSProcess() :
+    mExitCode(-1),
+    mTermSignalCode(0)
+{
+    mProcess = IntToPtr<int>(-1);
+    mStdOutPipeRead = IntToPtr<int>(-1);
+    mStdErrPipeRead = IntToPtr<int>(-1);
+}
+
+OSProcess::~OSProcess()
+{
+    int stdoutPipeRead = PtrToInt<int32>(mStdOutPipeRead);
+    int stderrPipeRead = PtrToInt<int32>(mStdErrPipeRead);
+    pid_t pid = PtrToInt<int32>(mProcess);
+    
+    if (stdoutPipeRead != -1)
+        close(stdoutPipeRead);
+    if (stderrPipeRead != -1)
+        close(stderrPipeRead);
+    
+    if (pid != -1) {
+        int status;
+        waitpid(pid, &status, 0);
+    }
+}
+
+bool OSProcess::Run(const char* cmdline, OSProcessFlags flags, const char* cwd)
+{
+    int stdoutPipes[2] = {-1, -1};
+    int stderrPipes[2] = {-1, -1};
+    pid_t pid;
+    posix_spawn_file_actions_t fileActions;
+
+    [[maybe_unused]] int r = posix_spawn_file_actions_init(&fileActions);
+    ASSERT_MSG(r == 0, "posix_spawn_file_actions_init failed");
+
+    if ((flags & OSProcessFlags::CaptureOutput) == OSProcessFlags::CaptureOutput) {
+        r = pipe(stdoutPipes);
+        ASSERT_MSG(r == 0, "Creating pipes failed");
+
+        r = posix_spawn_file_actions_addclose(&fileActions, stdoutPipes[0]);
+        ASSERT_MSG(r == 0, "posix_spawn_file_actions_addclose");
+        
+        r = posix_spawn_file_actions_adddup2(&fileActions, stdoutPipes[1], STDOUT_FILENO);
+        ASSERT_MSG(r == 0, "posix_spawn_file_actions_addup2 failed");
+        
+        r = pipe(stderrPipes);
+        ASSERT_MSG(r == 0, "Creating pipes failed");
+
+        r = posix_spawn_file_actions_addclose(&fileActions, stderrPipes[0]);
+        ASSERT_MSG(r == 0, "posix_spawn_file_actions_addclose");
+        
+        r = posix_spawn_file_actions_adddup2(&fileActions, stderrPipes[1], STDERR_FILENO);
+        ASSERT_MSG(r == 0, "posix_spawn_file_actions_addup2 failed");
+    }
+    
+    if (cwd) {
+        if (__builtin_available(macOS 10.15, *))
+            posix_spawn_file_actions_addchdir_np(&fileActions, cwd);
+        else
+            ASSERT_MSG(0, "Not implemented for versions less than macOS 10.15");
+    }
+    
+    MemTempAllocator tmpAlloc;
+    Array<char*> argsArr(&tmpAlloc);
+
+    char* cmdlineCopy = Mem::AllocCopy<char>(cmdline, Str::Len(cmdline)+1, &tmpAlloc);
+    char* str = const_cast<char*>(Str::SkipWhitespace(cmdlineCopy));
+    while (*str) {
+        char* start = str;
+        while (*(++str)) {
+            if (Str::IsWhitespace(*str)) {
+                *str = 0;
+                str = const_cast<char*>(Str::SkipWhitespace(str+1));
+                break;
+            }
+        }
+        argsArr.Push(start);
+    }
+    
+    ASSERT(argsArr.Count());
+    char** args = nullptr;
+    if (argsArr.Count() > 1) {
+        args = (char**)tmpAlloc.MallocTyped<char*>(argsArr.Count() + 1);
+        for (uint32 i = 0; i < argsArr.Count(); i++)
+            args[i] = argsArr[i];
+        args[argsArr.Count()] = nullptr;
+    }
+    
+    if (posix_spawn(&pid, argsArr[0], &fileActions, nullptr, args, nullptr) != 0) {
+        LOG_ERROR("Running process failed: %s", cmdline);
+        posix_spawn_file_actions_destroy(&fileActions);
+        if (stdoutPipes[0] != -1)
+            close(stdoutPipes[0]);
+        if (stdoutPipes[1] != -1)
+            close(stdoutPipes[1]);
+        return false;
+    }
+    
+    if ((flags & OSProcessFlags::CaptureOutput) == OSProcessFlags::CaptureOutput) {
+        close(stdoutPipes[1]);
+        close(stderrPipes[1]);
+        mStdOutPipeRead = IntToPtr<int>(stdoutPipes[0]);
+        mStdErrPipeRead = IntToPtr<int>(stderrPipes[0]);
+    }
+    
+    posix_spawn_file_actions_destroy(&fileActions);
+    mProcess = IntToPtr<int32>(pid);
+    return true;
+}
+
+void OSProcess::Wait() const
+{
+    pid_t pid = PtrToInt<int32>(mProcess);
+    ASSERT(pid != -1);
+    int status;
+    [[maybe_unused]] int r = waitpid(pid, &status, 0);
+    ASSERT(r == pid);
+    if (WIFEXITED(status))
+        const_cast<OSProcess*>(this)->mExitCode = WEXITSTATUS(status);
+    else if (WIFSIGNALED(status))
+        const_cast<OSProcess*>(this)->mTermSignalCode = WTERMSIG(status);
+    const_cast<OSProcess*>(this)->mProcess = IntToPtr<int32>(-1);
+}
+
+bool OSProcess::IsRunning() const
+{
+    pid_t pid = PtrToInt<int32>(mProcess);
+    ASSERT(pid != -1);
+    int status;
+    return waitpid(pid, &status, WNOHANG) == 0;
+}
+
+int OSProcess::GetExitCode() const
+{
+    return mExitCode;
+}
+
+uint32 OSProcess::ReadStdOut(void* data, uint32 size) const
+{
+    int pipeId = PtrToInt<int>(mStdOutPipeRead);
+    ASSERT(pipeId != -1);
+    ssize_t r = read(pipeId, data, size);
+    return r > 0 ? (uint32)r : 0;
+}
+
+uint32 OSProcess::ReadStdErr(void* data, uint32 size) const
+{
+    int pipeId = PtrToInt<int>(mStdErrPipeRead);
+    ASSERT(pipeId != -1);
+    ssize_t r = read(pipeId, data, size);
+    return r > 0 ? (uint32)r : 0;
+}
+
+void OSProcess::Abort()
+{
+    pid_t pid = PtrToInt<int32>(mProcess);
+    if (pid)
+        kill(pid, 1);
+}
+
+
 
 #endif // PLATFORM_POSIX
 
@@ -21017,8 +21209,6 @@ Path OS::AndroidGetCacheDirectory(ANativeActivity* activity)
 #include <pthread.h>            // pthread_t and family
 #include <sys/sysctl.h>
 #include <pthread.h>
-#include <spawn.h>
-#include <signal.h>             // kill
 #include <stdio.h>              // puts
 
 struct SemaphoreImpl
@@ -21059,17 +21249,23 @@ void Semaphore::Release()
 void Semaphore::Post(uint32 count)
 {
     SemaphoreImpl* sem = (SemaphoreImpl*)mData;
-    for (int i = 0; i < count; i++) {
-        dispatch_semaphore_signal(sem->handle);
-    } 
+    if (sem->handle) {
+        for (int i = 0; i < count; i++)
+            dispatch_semaphore_signal(sem->handle);
+    }
 }
 
 bool Semaphore::Wait(uint32 msecs)
 {
     SemaphoreImpl* sem = (SemaphoreImpl*)mData;
-    dispatch_time_t dt = msecs < 0 ? DISPATCH_TIME_FOREVER
-                                   : dispatch_time(DISPATCH_TIME_NOW, (int64_t)msecs * 1000000ll);
-    return !dispatch_semaphore_wait(sem->handle, dt);
+    if (sem->handle) {
+        dispatch_time_t dt = msecs < 0 ? DISPATCH_TIME_FOREVER
+                                       : dispatch_time(DISPATCH_TIME_NOW, (int64_t)msecs * 1000000ll);
+        return !dispatch_semaphore_wait(sem->handle, dt);
+    }
+    else {
+        return false;
+    }
 }
 
 namespace Timer
@@ -21133,167 +21329,6 @@ void OS::GetSysInfo(SysInfo* info)
         
     info->pageSize = OS::GetPageSize();
     
-}
-
-OSProcess::OSProcess() :
-    mExitCode(-1),
-    mTermSignalCode(0)
-{
-    mProcess = IntToPtr<int>(-1);
-    mStdOutPipeRead = IntToPtr<int>(-1);
-    mStdErrPipeRead = IntToPtr<int>(-1);
-}
-
-OSProcess::~OSProcess()
-{
-    int stdoutPipeRead = PtrToInt<int32>(mStdOutPipeRead);
-    int stderrPipeRead = PtrToInt<int32>(mStdErrPipeRead);
-    pid_t pid = PtrToInt<int32>(mProcess);
-    
-    if (stdoutPipeRead != -1)
-        close(stdoutPipeRead);
-    if (stderrPipeRead != -1)
-        close(stderrPipeRead);
-    
-    if (pid != -1) {
-        int status;
-        waitpid(pid, &status, 0);
-    }
-}
-
-bool OSProcess::Run(const char* cmdline, OSProcessFlags flags, const char* cwd)
-{
-    int stdoutPipes[2] = {-1, -1};
-    int stderrPipes[2] = {-1, -1};
-    pid_t pid;
-    posix_spawn_file_actions_t fileActions;
-
-    [[maybe_unused]] int r = posix_spawn_file_actions_init(&fileActions);
-    ASSERT_MSG(r == 0, "posix_spawn_file_actions_init failed");
-
-    if ((flags & OSProcessFlags::CaptureOutput) == OSProcessFlags::CaptureOutput) {
-        r = pipe(stdoutPipes);
-        ASSERT_MSG(r == 0, "Creating pipes failed");
-
-        r = posix_spawn_file_actions_addclose(&fileActions, stdoutPipes[0]);
-        ASSERT_MSG(r == 0, "posix_spawn_file_actions_addclose");
-        
-        r = posix_spawn_file_actions_adddup2(&fileActions, stdoutPipes[1], STDOUT_FILENO);
-        ASSERT_MSG(r == 0, "posix_spawn_file_actions_addup2 failed");
-        
-        r = pipe(stderrPipes);
-        ASSERT_MSG(r == 0, "Creating pipes failed");
-
-        r = posix_spawn_file_actions_addclose(&fileActions, stderrPipes[0]);
-        ASSERT_MSG(r == 0, "posix_spawn_file_actions_addclose");
-        
-        r = posix_spawn_file_actions_adddup2(&fileActions, stderrPipes[1], STDERR_FILENO);
-        ASSERT_MSG(r == 0, "posix_spawn_file_actions_addup2 failed");
-    }
-    
-    if (cwd) {
-        if (__builtin_available(macOS 10.15, *))
-            posix_spawn_file_actions_addchdir_np(&fileActions, cwd);
-        else
-            ASSERT_MSG(0, "Not implemented for versions less than macOS 10.15");
-    }
-    
-    MemTempAllocator tmpAlloc;
-    Array<char*> argsArr(&tmpAlloc);
-
-    char* cmdlineCopy = Mem::AllocCopy<char>(cmdline, Str::Len(cmdline)+1, &tmpAlloc);
-    char* str = const_cast<char*>(Str::SkipWhitespace(cmdlineCopy));
-    while (*str) {
-        char* start = str;
-        while (*(++str)) {
-            if (Str::IsWhitespace(*str)) {
-                *str = 0;
-                str = const_cast<char*>(Str::SkipWhitespace(str+1));
-                break;
-            }
-        }
-        argsArr.Push(start);
-    }
-    
-    ASSERT(argsArr.Count());
-    char** args = nullptr;
-    if (argsArr.Count() > 1) {
-        args = (char**)tmpAlloc.MallocTyped<char*>(argsArr.Count() + 1);
-        for (uint32 i = 0; i < argsArr.Count(); i++)
-            args[i] = argsArr[i];
-        args[argsArr.Count()] = nullptr;
-    }
-    
-    if (posix_spawn(&pid, argsArr[0], &fileActions, nullptr, args, nullptr) != 0) {
-        LOG_ERROR("Running process failed: %s", cmdline);
-        posix_spawn_file_actions_destroy(&fileActions);
-        if (stdoutPipes[0] != -1)
-            close(stdoutPipes[0]);
-        if (stdoutPipes[1] != -1)
-            close(stdoutPipes[1]);
-        return false;
-    }
-    
-    if ((flags & OSProcessFlags::CaptureOutput) == OSProcessFlags::CaptureOutput) {
-        close(stdoutPipes[1]);
-        close(stderrPipes[1]);
-        mStdOutPipeRead = IntToPtr<int>(stdoutPipes[0]);
-        mStdErrPipeRead = IntToPtr<int>(stderrPipes[0]);
-    }
-    
-    posix_spawn_file_actions_destroy(&fileActions);
-    mProcess = IntToPtr<int32>(pid);
-    return true;
-}
-
-void OSProcess::Wait() const
-{
-    pid_t pid = PtrToInt<int32>(mProcess);
-    ASSERT(pid != -1);
-    int status;
-    [[maybe_unused]] int r = waitpid(pid, &status, 0);
-    ASSERT(r == pid);
-    if (WIFEXITED(status))
-        const_cast<OSProcess*>(this)->mExitCode = WEXITSTATUS(status);
-    else if (WIFSIGNALED(status))
-        const_cast<OSProcess*>(this)->mTermSignalCode = WTERMSIG(status);
-    const_cast<OSProcess*>(this)->mProcess = IntToPtr<int32>(-1);
-}
-
-bool OSProcess::IsRunning() const
-{
-    pid_t pid = PtrToInt<int32>(mProcess);
-    ASSERT(pid != -1);
-    int status;
-    return waitpid(pid, &status, WNOHANG) == 0;
-}
-
-int OSProcess::GetExitCode() const
-{
-    return mExitCode;
-}
-
-uint32 OSProcess::ReadStdOut(void* data, uint32 size) const
-{
-    int pipeId = PtrToInt<int>(mStdOutPipeRead);
-    ASSERT(pipeId != -1);
-    ssize_t r = read(pipeId, data, size);
-    return r > 0 ? (uint32)r : 0;
-}
-
-uint32 OSProcess::ReadStdErr(void* data, uint32 size) const
-{
-    int pipeId = PtrToInt<int>(mStdErrPipeRead);
-    ASSERT(pipeId != -1);
-    ssize_t r = read(pipeId, data, size);
-    return r > 0 ? (uint32)r : 0;
-}
-
-void OSProcess::Abort()
-{
-    pid_t pid = PtrToInt<int32>(mProcess);
-    if (pid)
-        kill(pid, 1);
 }
 
 bool OS::IsDebuggerPresent()
@@ -21736,8 +21771,7 @@ void OS::GetSysInfo(SysInfo* sysInfo)
                 if (strncmp(line, "MemTotal:", 9) == 0) {
                     uint64 memTotal;
                     sscanf(line, "MemTotal: %lu kB", &memTotal);
-                    printf("Total physical memory: %lu KB\n", memTotal);
-                    sysInfo->physicalMemorySize = memTotal;
+                    sysInfo->physicalMemorySize = memTotal*SIZE_KB;
                     break;
                 }
             }
@@ -22158,31 +22192,22 @@ PRAGMA_DIAGNOSTIC_PUSH()
 PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4530)   // C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
 PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wsometimes-uninitialized")
 PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-variable")
-#ifdef PLATFORM_POSIX
-    #define OLD_PLATFORM_POSIX PLATFORM_POSIX
-    #undef PLATFORM_POSIX
-#endif
-#ifdef PLATFORM_WINDOWS
+
+#if PLATFORM_WINDOWS
     #define fileno _fileno
-    #define OLD_PLATFORM_WINDOWS PLATFORM_WINDOWS
-    #undef PLATFORM_WINDOWS
 #endif
-#define TRACY_UNWIND(_stackframes, _depth) Debug::CaptureStacktrace(_stackframes, _depth, 2)
-#define TRACY_VK_USE_SYMBOL_TABLE
+
+#pragma push_macro("PLATFORM_WINDOWS")
+#pragma push_macro("PLATFORM_POSIX")
+#undef PLATFORM_POSIX
+#undef PLATFORM_WINDOWS
+
+
 #include "External/tracy/TracyClient.cpp"
 PRAGMA_DIAGNOSTIC_POP()
 
-#ifdef OLD_PLATFORM_POSIX
-    #undef PLATFORM_POSIX
-    #define PLATFORM_POSIX OLD_PLATFORM_POSIX
-#endif
-
-#ifdef OLD_PLATFORM_WINDOWS
-    #undef PLATFORM_WINDOWS
-    #define PLATFORM_WINDOWS OLD_PLATFORM_WINDOWS
-#endif
-
-#include <string.h>
+#pragma pop_macro("PLATFORM_WINDOWS")
+#pragma pop_macro("PLATFORM_POSIX")
 
 static TracyZoneEnterCallback gZoneEnterCallback;
 static TracyZoneExitCallback gZoneExitCallback;
@@ -22208,26 +22233,47 @@ void Tracy::RunZoneEnterCallback(TracyCZoneCtx* ctx, const ___tracy_source_locat
 }
 
 
-void Tracy::_private::___tracy_emit_gpu_calibrate_serial(const struct ___tracy_gpu_calibrate_data data)
-{
-    auto item = tracy::Profiler::QueueSerial();
-    tracy::MemWrite(&item->hdr.type, tracy::QueueType::GpuCalibration);
-    tracy::MemWrite(&item->gpuCalibration.gpuTime, data.gpuTime);
-    tracy::MemWrite(&item->gpuCalibration.cpuTime, data.cpuTime);
-    tracy::MemWrite(&item->gpuCalibration.cpuDelta, data.deltaTime);
-    tracy::MemWrite(&item->gpuCalibration.context, data.context);
-    tracy::Profiler::QueueSerialFinish();
-}
-
-int64 Tracy::_private::__tracy_get_time(void)
+int64 Tracy::GetTime()
 {
     return tracy::Profiler::GetTime();
 }
 
-uint64 Tracy::_private::__tracy_alloc_source_loc(uint32 line, const char* source, const char* function, const char* name)
-{
-    return tracy::Profiler::AllocSourceLocation(line, source, function, name, name ? strlen(name): 0);
+Tracy::CpuProfilerScope::CpuProfilerScope(const ___tracy_source_location_data* sourceLoc, int callstackDepth, bool isActive, bool isAlloc)
+{ 
+    mCtx = {};
+
+    if (callstackDepth > 0) {
+        if (isAlloc) {
+            mCtx = ___tracy_emit_zone_begin_alloc_callstack(
+                ___tracy_alloc_srcloc_name(sourceLoc->line, sourceLoc->file, Str::Len(sourceLoc->file), 
+                                           sourceLoc->function, Str::Len(sourceLoc->function), sourceLoc->name, Str::Len(sourceLoc->name),
+                                           sourceLoc->color), callstackDepth, isActive);
+        }
+        else {
+            mCtx = ___tracy_emit_zone_begin_callstack(sourceLoc, callstackDepth, isActive);
+        }
+    }
+    else {
+        if (isAlloc) {
+            mCtx = ___tracy_emit_zone_begin_alloc(
+                ___tracy_alloc_srcloc_name(sourceLoc->line, sourceLoc->file, Str::Len(sourceLoc->file), 
+                                           sourceLoc->function, Str::Len(sourceLoc->function), sourceLoc->name, Str::Len(sourceLoc->name),
+                                           sourceLoc->color), isActive);
+        }
+        else {
+            mCtx = ___tracy_emit_zone_begin(sourceLoc, isActive);
+        }
+    }
+
+    Tracy::RunZoneEnterCallback(&mCtx, sourceLoc); 
 }
+
+Tracy::CpuProfilerScope::~CpuProfilerScope() 
+{ 
+    if (!Tracy::RunZoneExitCallback(&mCtx)) 
+        ___tracy_emit_zone_end(mCtx); 
+}
+
 
 #endif  // TRACY_ENABLE
 

@@ -82,6 +82,7 @@ set(SOURCE_FILES
     ../code/ImGui/imgui_widgets.cpp
     ../code/ImGui/imgui.h
     ../code/ImGui/imconfig.h 
+   	../code/ImGui/IconsFontAwesome4.h 
     ../code/External/osdialog/osdialog.h
     ../code/External/osdialog/osdialog.c)
 set_source_files_properties(../code/External/osdialog/osdialog.c PROPERTIES SKIP_PRECOMPILE_HEADERS ON)

@@ -370,7 +370,7 @@
 #define PLATFORM_PC (0 || PLATFORM_WINDOWS || PLATFORM_LINUX || PLATFORM_OSX)
 #define PLATFORM_MOBILE (0 || PLATFORM_ANDROID || PLATFORM_IOS)
 
-#if CONFIG_TOOLMODE && !PLATFORM_WINDOWS
+#if CONFIG_TOOLMODE && !PLATFORM_PC
     #undef CONFIG_TOOLMODE
     #define CONFIG_TOOLMODE 0
 #endif
@@ -1163,9 +1163,12 @@ private:
 
 struct MemBumpAllocatorCustom final : MemBumpAllocatorBase
 {
-    MemAllocator* mAlloc = Mem::GetDefaultAlloc();
+    MemBumpAllocatorCustom() = default;
+    explicit MemBumpAllocatorCustom(MemAllocator* alloc) : mAlloc(alloc) {}
+    void SetAllocator(MemAllocator* alloc) { mAlloc = alloc; }
 
 private:
+    MemAllocator* mAlloc = Mem::GetDefaultAlloc();
     void* BackendReserve(size_t size) override;
     void* BackendCommit(void* ptr, size_t size) override;
     void  BackendDecommit(void* ptr, size_t size) override;
@@ -6503,6 +6506,7 @@ namespace Str
     API bool IsEqualCount(const char* s1, const char* s2, uint32 count);
     API bool IsEqualNoCaseCount(const char* s1, const char* s2, uint32 count);
     API int Compare(const char* a, const char* b);
+    API int CompareNoCase(const char* a, const char* b);
     API uint32 CountMatchingFirstChars(const char* s1, const char* s2);
     API bool StartsWith(const char* str, const char* startsWith);
     API bool EndsWith(const char* str, const char* endsWith);
@@ -6533,8 +6537,16 @@ namespace Str
     NO_ASAN API const char* FindCharRev(const char* str, char ch);
     NO_ASAN API const char* FindStr(const char* RESTRICT str, const char* RESTRICT find);
 
-    API Span<char*> Split(const char* str, char ch, MemAllocator* alloc);
-    API Span<char*> SplitWhitespace(const char* str, MemAllocator* alloc);
+    
+    struct SplitResult
+    {
+        char* buffer;
+        Span<char*> splits;
+    };
+
+    API SplitResult Split(const char* str, char ch, MemAllocator* alloc, bool acceptEmptySplits = false);
+    API SplitResult SplitWhitespace(const char* str, MemAllocator* alloc);
+    API void FreeSplitResult(SplitResult& sres, MemAllocator* alloc);
 } // Str
 
 
@@ -7549,7 +7561,11 @@ struct HashTable
     
     _T* Add(uint32 key);
     uint32 Add(uint32 key, const _T& value);
-    uint32 AddIfNotFound(uint32 key, const _T& value);
+
+    uint32 AddUnique(uint32 key, const _T& value);
+
+    void AddReplaceUnique(uint32 key, const _T& value);
+
     uint32 Find(uint32 key) const;
     void Clear();
 
@@ -7724,42 +7740,55 @@ inline void HashTable<_T>::Free()
 template <typename _T>
 inline const _T* HashTable<_T>::Values() const
 {
+    if (!mHashTable)
+        return nullptr;
     return reinterpret_cast<const _T*> (mHashTable->values);
 }
 
 template <typename _T>
 inline const uint32* HashTable<_T>::Keys() const
 {
+    if (!mHashTable)
+        return nullptr;
     return mHashTable->keys;
 }
 
 template <typename _T>
 inline uint32 HashTable<_T>::Count() const
 {
+    if (!mHashTable)
+        return 0;
+
     return mHashTable->count;
 }
 
 template <typename _T>
 inline uint32 HashTable<_T>::Capacity() const
 {
+    if (!mHashTable)
+        return 0;
+
     return mHashTable->capacity;
 }
 
 template <typename _T>
 inline const _T& HashTable<_T>::Get(uint32 index) const
 {
+    ASSERT(mHashTable);
     return reinterpret_cast<_T*>(mHashTable->values)[index];
 }
 
 template <typename _T>
 inline void HashTable<_T>::Set(uint32 index, const _T& value)
 {
+    ASSERT(mHashTable);
     reinterpret_cast<_T*>(mHashTable->values)[index] = value;
 }
 
 template <typename _T>
 inline _T& HashTable<_T>::GetMutable(uint32 index)
 {
+    ASSERT(mHashTable);
     return reinterpret_cast<_T*>(mHashTable->values)[index];
 }
 
@@ -7768,24 +7797,41 @@ inline void HashTable<_T>::Remove(uint32 index)
 {
     ASSERT_MSG(index < mHashTable->capacity, "index out of range");
 
-    mHashTable->keys[index] = 0;
-    --mHashTable->count;
+    if (mHashTable) {
+        mHashTable->keys[index] = 0;
+        --mHashTable->count;
+    }
 }
 
 template <typename _T>
 inline void HashTable<_T>::Clear()
 {
-    _private::hashtableClear(mHashTable);
+    if (mHashTable)
+        _private::hashtableClear(mHashTable);
 }
 
 template <typename _T>
 inline uint32 HashTable<_T>::Find(uint32 key) const
 {
+    if (!mHashTable)
+        return uint32(-1);
+
     return _private::hashtableFind(mHashTable, key);
 }
 
 template <typename _T>
-inline uint32 HashTable<_T>::AddIfNotFound(uint32 key, const _T& value)
+inline void HashTable<_T>::AddReplaceUnique(uint32 key, const _T& value)
+{
+    uint32 index = Find(key);
+
+    if (index == INVALID_INDEX)
+        Add(key, value);
+    else
+        ((_T*)mHashTable->values)[index] = value;
+}
+
+template <typename _T>
+inline uint32 HashTable<_T>::AddUnique(uint32 key, const _T& value)
 {
     uint32 index = Find(key);
 
@@ -7794,6 +7840,7 @@ inline uint32 HashTable<_T>::AddIfNotFound(uint32 key, const _T& value)
     else
         return index;
 }
+
 
 template <typename _T>
 inline uint32 HashTable<_T>::Add(uint32 key, const _T& value)
@@ -7818,7 +7865,12 @@ inline uint32 HashTable<_T>::Add(uint32 key, const _T& value)
 template <typename _T>
 inline _T* HashTable<_T>::Add(uint32 key)
 {
-    ASSERT(mHashTable);
+    if (mHashTable == nullptr) {
+        ASSERT(mAlloc);
+        Reserve(32);
+        ASSERT(mHashTable);
+    }
+
     if (mHashTable->count == mHashTable->capacity) {
         ASSERT_MSG(mAlloc, "HashTable full. Only hashtables with allocators can grow");
         [[maybe_unused]] bool r = _private::hashtableGrow(&mHashTable, mAlloc);
@@ -8507,6 +8559,8 @@ struct RectInt
     bool IsEmpty() const;
     int Width() const;
     int Height() const;
+    void SetWidth(int width);
+    void SetHeight(int height);
 
     static RectInt  Expand(const RectInt rc, Int2 expand);
     static bool   TestPoint(const RectInt rc, Int2 pt);
@@ -10274,6 +10328,17 @@ FORCE_INLINE int RectInt::Height() const
     return ymax - ymin;
 }
 
+FORCE_INLINE void RectInt::SetWidth(int width)
+{
+    xmax = xmin + width;
+}
+
+FORCE_INLINE void RectInt::SetHeight(int height)
+{
+    ymax = ymin + height;
+}
+
+
 /*
 *   2               3 (max)
 *   -----------------
@@ -11331,7 +11396,7 @@ private:
 };
 
 
-struct alignas(CACHE_LINE_SIZE) Mutex
+struct Mutex
 {
     void Initialize(uint32 spinCount = 32);
     void Release();
@@ -11341,7 +11406,7 @@ struct alignas(CACHE_LINE_SIZE) Mutex
     bool TryEnter();
 
 private:
-    uint8 mData[128];
+    uint8 mData[64];
 };
 
 struct MutexScope
@@ -11409,7 +11474,7 @@ struct alignas(CACHE_LINE_SIZE) SpinLockMutex
 
 private:
     uint32 mLocked = 0;
-    uint8 _padding[CACHE_LINE_SIZE - sizeof(uint32)];
+    [[maybe_unused]] uint8 _padding[CACHE_LINE_SIZE - sizeof(uint32)];
 };
 
 struct SpinLockMutexScope
@@ -11556,6 +11621,8 @@ struct Path : String<PATH_CHARS_MAX>
     inline bool IsDir() const;
 
     Path& Join(const Path& path);
+    Path& JoinUnix(const Path& path);
+
     static Path Join(const Path& pathA, const Path& pathB);
     static Path JoinUnix(const Path& pathA, const Path& pathB);
 };
@@ -12007,6 +12074,13 @@ inline Path Path::GetDirectory() const
 inline Path& Path::Join(const Path& path)
 {
     PathUtils::Join(mStr, sizeof(mStr), mStr, path.mStr);
+    mLen = Str::Len(mStr);
+    return *this;
+}
+
+inline Path& Path::JoinUnix(const Path& path)
+{
+    PathUtils::JoinUnixStyle(mStr, sizeof(mStr), mStr, path.mStr);
     mLen = Str::Len(mStr);
     return *this;
 }

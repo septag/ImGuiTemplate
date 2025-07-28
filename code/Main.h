@@ -20,6 +20,7 @@ void SetWindowRect(uint16 x, uint16 y, uint16 width, uint16 height);
 void SetWindowTitle(const char* title);
 
 void ToggleIdleWait(bool wait);
+void ForceUpdateNextFrame();		// Forces only the next frame to refresh
 
 void* CreateRGBATexture(uint32 width, uint32 height, const void* data);
 void  DestroyTexture(void* handle);
@@ -40,4 +41,3 @@ void ReleaseCommon();
 void UpdateCommon();
 
 RectInt GetWindowDesktopRect();
-

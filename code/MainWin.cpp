@@ -37,6 +37,7 @@ struct MainWindowContext
     HWND hwnd;
     uint32 resizeWidth;
     uint32 resizeHeight;
+	bool forceUpdateFrame;
     bool isFocused;
     bool disableIdleWait;
     bool quit;
@@ -69,7 +70,7 @@ static bool CreateDeviceD3D(HWND hWnd)
     sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 
     UINT createDeviceFlags = 0;
-    createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    // createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
     D3D_FEATURE_LEVEL featureLevel;
     const D3D_FEATURE_LEVEL featureLevelArray[2] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0, };
     HRESULT res = D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, createDeviceFlags, featureLevelArray, 2, D3D11_SDK_VERSION, &sd, &gGfx.swapchain, &gGfx.device, &featureLevel, &gGfx.deviceContext);
@@ -187,12 +188,16 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
     // Setup Platform/Renderer backends
     if (!CreateDeviceD3D(hwnd)) {
         CleanupDeviceD3D();
+		DestroyWindow(hwnd);
+		UnregisterClassW(wc.lpszClassName, wc.hInstance);
         LOG_ERROR("Create D3D11 device failed");
         return -1;
     }
 
     if (!ImGui::MyInitialize()) {
         CleanupDeviceD3D();
+		DestroyWindow(hwnd);
+		UnregisterClassW(wc.lpszClassName, wc.hInstance);
         LOG_ERROR("ImGui initialization failed");
         return -1;
     }
@@ -203,6 +208,8 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 
     if (!Initialize()) {
         CleanupDeviceD3D();
+		DestroyWindow(hwnd);
+		UnregisterClassW(wc.lpszClassName, wc.hInstance);
         LOG_ERROR("%s initialization failed", CONFIG_APP_NAME);
         return -1;
     }
@@ -221,10 +228,13 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
         // See the WndProc() function below for our to dispatch events to the Win32 backend.
         MSG msg;
 
-        if (!gWindow.disableIdleWait) {
-            constexpr uint32 MSG_WAIT_TIME = USE_LIVEPP ? 64 : INFINITE;
-            MsgWaitForMultipleObjects(0, nullptr, FALSE, MSG_WAIT_TIME, QS_ALLINPUT);
+		// Block the program and go into idle mode if we are getting no window messages
+        if (!gWindow.disableIdleWait && !gWindow.forceUpdateFrame && GetMessage(&msg, nullptr, 0U, 0U)) {
+            ::TranslateMessage(&msg);
+            ::DispatchMessage(&msg);
         }
+
+		gWindow.forceUpdateFrame = false;
 
         while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
         {
@@ -490,4 +500,11 @@ void SetWindowTitle(const char* title)
         SetWindowTextA(gWindow.hwnd, CONFIG_APP_NAME);
 }
 
+void ForceUpdateNextFrame()
+{
+	gWindow.forceUpdateFrame = true;
+	if (gWindow.hwnd) {
+		PostMessage(gWindow.hwnd, WM_NULL, 0, 0);
+	}
+}
 #endif // PLATFORM_WINDOWS
