@@ -32,9 +32,17 @@ struct GraphicsContext
     ID3D11ShaderResourceView* fontTextureView;
 };
 
+struct WindowTimer
+{
+	TimerCallback callback;
+	void* userData;
+	uint32 id;
+};
+
 struct MainWindowContext
 {
     HWND hwnd;
+	Array<WindowTimer> timers;
     uint32 resizeWidth;
     uint32 resizeHeight;
 	bool forceUpdateFrame;
@@ -294,6 +302,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
         MemTempAllocator::Reset();
     }
 
+	gWindow.timers.Free();
     ImGui::MyRelease();
     Release();
     ReleaseCommon();
@@ -379,6 +388,16 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
             gWindow.quit = true;
         }
         break;
+
+	case WM_TIMER:
+		for (WindowTimer& t : gWindow.timers) {
+			if (t.id == uint32(wParam)) {
+				t.callback(t.userData);
+				break;
+			}
+		}
+		break;
+
     }
     return ::DefWindowProcW(hWnd, msg, wParam, lParam);
 }
@@ -507,4 +526,35 @@ void ForceUpdateNextFrame()
 		PostMessage(gWindow.hwnd, WM_NULL, 0, 0);
 	}
 }
+
+uint32 AddWindowTimer(TimerCallback timerCb, uint32 intervalMs, void* userData)
+{
+	ASSERT(timerCb);
+	ASSERT(intervalMs);
+
+	[[maybe_unused]] uint32 index = gWindow.timers.FindIf([timerCb](const WindowTimer& a) { return a.callback == timerCb; });
+	ASSERT(index == -1);
+
+	static uint32 idCounter = 0;
+	uint32 id = IndexToId(idCounter++);
+	WindowTimer t = {
+		.callback = timerCb,
+		.userData = userData,
+		.id = id
+	};
+	gWindow.timers.Push(t);
+
+	SetTimer(gWindow.hwnd, id, intervalMs, nullptr);
+	return id;
+}
+
+void RemoveWindowTimer(uint32 timerId)
+{
+	uint32 index = gWindow.timers.FindIf([timerId](const WindowTimer& a) { return a.id == timerId; });
+	if (index != -1) {
+		gWindow.timers.RemoveAndSwap(index);
+		KillTimer(gWindow.hwnd, timerId);
+	}
+}
+
 #endif // PLATFORM_WINDOWS

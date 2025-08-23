@@ -41,3 +41,7 @@ void ReleaseCommon();
 void UpdateCommon();
 
 RectInt GetWindowDesktopRect();
+
+using TimerCallback = void(*)(void* userData);
+uint32 AddWindowTimer(TimerCallback timerCb, uint32 intervalMs, void* userData);
+void RemoveWindowTimer(uint32 timerId);
