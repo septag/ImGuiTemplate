@@ -2026,6 +2026,8 @@ struct alignas(CACHE_LINE_SIZE) MemTempContext
     size_t framePeaks[MEM_TEMP_FRAME_PEAKS_COUNT];
     size_t curFramePeak;
     size_t peakBytes;
+    size_t commitedBytes;
+    size_t reservedBytes;
     uint8* buffer;
     size_t bufferSize;
     
@@ -2084,10 +2086,12 @@ void MemTempAllocator::GetStats(MemAllocator* alloc, Stats** outStats, uint32* o
     *outCount = gMemTemp.tempCtxs.Count();
 
     for (uint32 i = 0; i < *outCount; i++) {
-        (*outStats)[i].curPeak = gMemTemp.tempCtxs[i]->curFramePeak;
-        (*outStats)[i].maxPeak = gMemTemp.tempCtxs[i]->peakBytes;
-        (*outStats)[i].threadId = gMemTemp.tempCtxs[i]->threadId;
-        (*outStats)[i].threadName = gMemTemp.tempCtxs[i]->threadName;
+        Stats& s = (*outStats)[i];
+        s.maxPeak = gMemTemp.tempCtxs[i]->peakBytes;
+        s.commitedBytes = gMemTemp.tempCtxs[i]->commitedBytes;
+        s.reservedBytes = gMemTemp.tempCtxs[i]->reservedBytes;
+        s.threadId = gMemTemp.tempCtxs[i]->threadId;
+        s.threadName = gMemTemp.tempCtxs[i]->threadName;
     }
 }
 
@@ -2104,8 +2108,10 @@ MemTempAllocator::ID MemTempAllocator::PushId()
     if (!ctx.init) {
         if (ctx.buffer == nullptr && !ctx.debugMode) {
             ctx.buffer = (uint8*)Mem::VirtualReserve(MEM_TEMP_MAX_BUFFER_SIZE);
+            ctx.reservedBytes = MEM_TEMP_MAX_BUFFER_SIZE;
             ctx.bufferSize = MEM_TEMP_PAGE_SIZE;
             Mem::VirtualCommit(ctx.buffer, ctx.bufferSize); 
+            ctx.commitedBytes = ctx.bufferSize;
         }
         ctx.init = true;
     }
@@ -2221,10 +2227,12 @@ void MemTempAllocator::Reset()
                 if (maxPeakSize > ctx->bufferSize) {
                     size_t growSize = maxPeakSize - ctx->bufferSize;
                     Mem::VirtualCommit(ctx->buffer + ctx->bufferSize, growSize);
+                    ctx->commitedBytes += growSize;
                 }
                 else if (maxPeakSize < ctx->bufferSize) {
                     size_t shrinkSize = ctx->bufferSize - maxPeakSize;
                     Mem::VirtualDecommit(ctx->buffer + maxPeakSize, shrinkSize);
+                    ctx->commitedBytes -= shrinkSize;
                 }
                 ctx->bufferSize = maxPeakSize;
             }
@@ -2344,6 +2352,7 @@ void* MemTempAllocator::Realloc(void* ptr, size_t size, uint32 align)
             size_t growSize = AlignValue(newSize - ctx.bufferSize, gMemTemp.pageSize);
             Mem::VirtualCommit(ctx.buffer + ctx.bufferSize, growSize);
             ctx.bufferSize += growSize;
+            ctx.commitedBytes += growSize;
         }
 
         ctx.curFramePeak = Max<size_t>(ctx.curFramePeak, endOffset);
@@ -2457,6 +2466,9 @@ void MemBumpAllocatorBase::Release()
         Mem::Free(mDebugPointers, Mem::GetDefaultAlloc());
         mDebugPointers = nullptr;
     }
+
+    mCommitSize = 0;
+    mReserveSize = 0;
 }
 
 bool MemBumpAllocatorBase::IsInitialized() const
@@ -2490,7 +2502,7 @@ void* MemBumpAllocatorBase::Realloc(void* ptr, size_t size, uint32 align)
         size_t addOffset = size;
         if (ptr) {
             lastSize = *((size_t*)ptr - 1);
-            ASSERT(size > lastSize);
+            ASSERT(size >= lastSize);
 
             if (mLastAllocatedPtr == ptr) {
                 newPtr = ptr;
@@ -3998,6 +4010,9 @@ DebugStacktraceContext::~DebugStacktraceContext()
 
 static const char* RDBG_PIPE_NAME_PREFIX = "\\\\.\\pipe\\";
 static constexpr uint32 RDBG_BUFFER_SIZE = 8*SIZE_KB;
+static constexpr uint32 RDBG_LAUNCH_MAX_WAIT_TIME = 2000;
+static constexpr uint32 RDBG_CONNECTION_RETRY_INTERVAL = 100;
+static constexpr uint32 RDBG_CONNECTION_MAX_RETRIES = 5;
 
 struct RDBG_Context
 {
@@ -4059,17 +4074,27 @@ bool RDBG::Initialize(const char* serverName, const char* remedybgPath)
         LOG_ERROR("RemedyBG: Could not run RemedyBG instance '%s'", remedybgPath);
         return false;
     }
-    while (!gRemedyBG.remedybgProc.IsRunning())
-        Thread::Sleep(20);
-    Thread::Sleep(200);   // wait a little more so remedybg gets it's shit together
+    constexpr uint32 WAIT_TIME = 20;
+    uint32 waitTm = 0;
+    while (!gRemedyBG.remedybgProc.IsRunning() && waitTm < RDBG_LAUNCH_MAX_WAIT_TIME) {
+        Thread::Sleep(WAIT_TIME);
+        waitTm += WAIT_TIME;
+    }
+    if (!gRemedyBG.remedybgProc.IsRunning())
+        return false;
 
     String<256> pipeName(RDBG_PIPE_NAME_PREFIX);
     pipeName.Append(serverName);
 
-    gRemedyBG.cmdPipe = CreateFileA(pipeName.CStr(), GENERIC_READ|GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
-    if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE) {
-        LOG_ERROR("RemedyBG: Creating command pipe failed");
-        return false;
+    uint32 retryCount = 0;
+    while (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE && retryCount < RDBG_CONNECTION_MAX_RETRIES) {
+        gRemedyBG.cmdPipe = CreateFileA(pipeName.CStr(), GENERIC_READ|GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+        if (gRemedyBG.cmdPipe == INVALID_HANDLE_VALUE) {
+            LOG_ERROR("RemedyBG: Creating command pipe failed");
+            return false;
+        }
+        Thread::Sleep(RDBG_CONNECTION_RETRY_INTERVAL);   // wait a little more so remedybg gets it's shit together
+        ++retryCount;
     }
     
     DWORD newMode = PIPE_READMODE_MESSAGE;
@@ -10925,6 +10950,8 @@ JsonNode JsonNode::GetNextArrayItem(const JsonNode& curItem) const
     #endif
 #endif
 
+static constexpr uint32 LOG_MAX_MESSAGE_CHARS = 2048;
+
 struct LogContext
 {
     StaticArray<Pair<LogCallback, void*>, 8> callbacks;
@@ -11069,7 +11096,7 @@ namespace Log
             return;
 
         MemTempAllocator tmp;
-        uint32 fmtLen = Str::Len(fmt) + 1024;
+        uint32 fmtLen = Str::Len(fmt) + LOG_MAX_MESSAGE_CHARS;
         char* text = tmp.MallocTyped<char>(fmtLen);
 
         va_list args;
@@ -11095,7 +11122,7 @@ namespace Log
                 return;
         
             MemTempAllocator tmp;
-            uint32 fmtLen = Str::Len(fmt) + 1024;
+            uint32 fmtLen = Str::Len(fmt) + LOG_MAX_MESSAGE_CHARS;
             char* text = tmp.MallocTyped<char>(fmtLen);
 
             va_list args;
@@ -11126,7 +11153,7 @@ namespace Log
             return;
 
         MemTempAllocator tmp;
-        uint32 fmtLen = Str::Len(fmt) + 1024;
+        uint32 fmtLen = Str::Len(fmt) + LOG_MAX_MESSAGE_CHARS;
         char* text = tmp.MallocTyped<char>(fmtLen);
 
         va_list args;
@@ -11151,7 +11178,7 @@ namespace Log
             return;
 
         MemTempAllocator tmp;
-        uint32 fmtLen = Str::Len(fmt) + 1024;
+        uint32 fmtLen = Str::Len(fmt) + LOG_MAX_MESSAGE_CHARS;
         char* text = tmp.MallocTyped<char>(fmtLen);
 
         va_list args;
@@ -11176,7 +11203,7 @@ namespace Log
             return;
 
         MemTempAllocator tmp;
-        uint32 fmtLen = Str::Len(fmt) + 1024;
+        uint32 fmtLen = Str::Len(fmt) + LOG_MAX_MESSAGE_CHARS;
         char* text = tmp.MallocTyped<char>(fmtLen);
 
         va_list args;
@@ -11448,7 +11475,9 @@ Mat4 Mat4::OrthoOffCenterLH(float xmin, float ymin, float xmax, float ymax, floa
                 0,              0,                      0,      1.0f);
 }
 
-Mat4 Mat4::ScaleRotateTranslate(float _sx, float _sy, float _sz, float _ax, float _ay, float _az, float _tx, float _ty, float _tz)
+Mat4 Mat4::TransformMat(float _tx, float _ty, float _tz, 
+                        float _ax, float _ay, float _az, 
+                        float _sx, float _sy, float _sz)
 {
     float sx, cx, sy, cy, sz, cz;
     
@@ -11479,10 +11508,43 @@ Mat4 Mat4::ScaleRotateTranslate(float _sx, float _sy, float _sz, float _ax, floa
     const float sxsz = sx * sz;
     const float cycz = cy * cz;
     
-    return Mat4(_sx * (cycz - sxsz * sy),       _sx * -cx * sz, _sx * (cz * sy + cy * sxsz),    _tx,
+    return Mat4(_sx * (cycz - sxsz * sy), _sx * -cx * sz, _sx * (cz * sy + cy * sxsz),    _tx,
                     _sy * (cz * sx * sy + cy * sz), _sy * cx * cz,  _sy * (sy * sz - cycz * sx),    _ty,
                     _sz * -cx * sy,                 _sz * sx,       _sz * cx * cy,                  _tz, 
                     0.0f,                           0.0f,           0.0f,                           1.0f);
+}
+
+Mat4 Mat4::TransformMat(Float3 translation, Quat rotation, Float3 scale)
+{
+    rotation = Quat::Norm(rotation);
+    float x = rotation.x;
+    float y = rotation.y;
+    float z = rotation.z;
+    float w = rotation.w;
+
+    float xx = x*x, yy = y*y, zz = z*z;
+    float xy = x*y, xz = x*z, yz = y*z;
+    float wx = w*x, wy = w*y, wz = w*z;
+
+    float r00 = 1.0f - 2.0f*(yy + zz);
+    float r01 = 2.0f*(xy + wz);
+    float r02 = 2.0f*(xz - wy);
+
+    float r10 = 2.0f*(xy - wz);
+    float r11 = 1.0f - 2.0f*(xx + zz);
+    float r12 = 2.0f*(yz + wx);
+
+    float r20 = 2.0f*(xz + wy);
+    float r21 = 2.0f*(yz - wx);
+    float r22 = 1.0f - 2.0f*(xx + yy);
+
+    float sx = scale.x, sy = scale.y, sz = scale.z;
+
+    return Mat4(
+        Float4(r00 * sx, r10 * sx, r20 * sx, 0.0f),
+        Float4(r01 * sy, r11 * sy, r21 * sy, 0.0f),
+        Float4(r02 * sz, r12 * sz, r22 * sz, 0.0f),
+        Float4(translation.x, translation.y, translation.z, 1.0f));
 }
 
 Mat4 Mat4::FromNormal(Float3 _normal, float _scale, Float3 _pos)
@@ -11858,7 +11920,7 @@ Color4u Color4u::Blend(Color4u _a, Color4u _b, float _t)
     Float4 c1 = Color4u::ToFloat4(_a);
     Float4 c2 = Color4u::ToFloat4(_b);
     
-    return Color4u(
+    return Color4u::FromFloat4(
         M::Lerp(c1.x, c2.x, _t),
         M::Lerp(c1.y, c2.y, _t),
         M::Lerp(c1.z, c2.z, _t),
@@ -12028,13 +12090,6 @@ AABB AABB::Transform(const AABB& aabb, const Mat4& mat)
     return AABB(Float3::Sub(newCenter, newExtents), Float3::Add(newCenter, newExtents));
 }
 
-AABB Box::ToAABB(const Box& box)
-{
-    Float3 center = box.tx.pos;
-    Mat3 absMat = Mat3::Abs(box.tx.rot);
-    Float3 extents = Mat3::MulFloat3(absMat, box.e);
-    return AABB(Float3::Sub(center, extents), Float3::Add(center, extents));
-}
 
 
 
@@ -13263,6 +13318,7 @@ void Settings::Release()
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #if PLATFORM_POSIX
 #include <strings.h>
@@ -15188,6 +15244,20 @@ char* Str::PrintFmtAlloc(MemAllocator* alloc, const char* fmt, ...)
     char* str = Str::PrintFmtAllocArgs(alloc, fmt, args);
     va_end(args);
     return str;
+}
+
+uint32 Str::ScanFmt(const char* str, const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    uint32 r = vsscanf_s(str, fmt, args);
+    va_end(args);
+    return r;
+}
+
+uint32 Str::ScanFmtArgs(const char* str, const char* fmt, va_list args)
+{
+    return vsscanf_s(str, fmt, args);
 }
 
 char* Str::PrintFmtAllocArgs(MemAllocator* alloc, const char* fmt, va_list args)
@@ -18903,7 +18973,7 @@ void OSWin32Pipe::Destroy(OSWin32Pipe* pipe)
     pipeInternal->mPendingWritesMtx.Release();
     pipeInternal->mPendingWrites.Free();
 
-	MemSingleShotMalloc<OSWin32Pipe>::Free(pipeInternal);
+	MemSingleShotMalloc<OSWin32PipeInternal>::Free(pipeInternal);
 }
 
 static MemVirtualStats gVMStats;

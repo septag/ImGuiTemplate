@@ -427,6 +427,12 @@
 
 #define HAS_INCLUDE(incl) __has_include(incl)
 
+#define STRUCT_PADDING_2_BYTES() uint8 CONCAT(_padding, __LINE__)[2]
+#define STRUCT_PADDING_4_BYTES() uint8 CONCAT(_padding, __LINE__)[4]
+#define STRUCT_PADDING_8_BYTES() uint8 CONCAT(_padding, __LINE__)[8]
+#define STRUCT_PADDING_12_BYTES() uint8 CONCAT(_padding, __LINE__)[12]
+#define STRUCT_PADDING_16_BYTES() uint8 CONCAT(_padding, __LINE__)[16]
+
 
 using uint8 = uint8_t;
 using int8 = int8_t;
@@ -1068,8 +1074,9 @@ struct MemTempAllocator final : MemAllocator
 
     struct Stats
     {
-        size_t curPeak;
         size_t maxPeak;
+        size_t commitedBytes;
+        size_t reservedBytes;
         uint32 threadId;
         const char* threadName;
     };
@@ -1266,7 +1273,7 @@ private:
         bool   relativePtr;
     };
 
-    Field  mFields[_MaxFields];
+    Field  mFields[_MaxFields+1];
     size_t mSize;
     uint32 mNumFields;
 };
@@ -1289,7 +1296,7 @@ template <typename _FieldType> inline MemSingleShotMalloc<_T, _MaxFields>&
     MemSingleShotMalloc<_T, _MaxFields>::AddMemberArray(uint32 offsetInStruct, size_t arrayCount, bool relativePtr, uint32 align)
 {
     uint32 index = mNumFields;
-    ASSERT_MSG(index < _MaxFields, "Cannot add more fields, increase the _MaxFields");
+    ASSERT_MSG(index < (_MaxFields + 1), "Cannot add more fields, increase the _MaxFields");
     
     align = Max(CONFIG_MACHINE_ALIGNMENT, align);
     size_t size = sizeof(_FieldType) * arrayCount;
@@ -1318,7 +1325,7 @@ inline MemSingleShotMalloc<_T, _MaxFields>&
                                                                   size_t arrayCount, bool relativePtr, uint32 align)
 {
     uint32 index = mNumFields;
-    ASSERT_MSG(index < _MaxFields, "Cannot add more fields, increase the _MaxFields");
+    ASSERT_MSG(index < (_MaxFields+1), "Cannot add more fields, increase the _MaxFields");
     
     align = Max(CONFIG_MACHINE_ALIGNMENT, align);
     size_t size = childSingleShot.GetMemoryRequirement() * arrayCount;
@@ -1350,7 +1357,7 @@ template <typename _FieldType> inline MemSingleShotMalloc<_T, _MaxFields>&
     ASSERT(pPtr);
 
     uint32 index = mNumFields;
-    ASSERT_MSG(index < _MaxFields, "Cannot add more fields, increase the _MaxFields");
+    ASSERT_MSG(index < (_MaxFields+1), "Cannot add more fields, increase the _MaxFields");
     
     align = Max(CONFIG_MACHINE_ALIGNMENT, align);
     size_t size = sizeof(_FieldType) * arrayCount;
@@ -1910,13 +1917,12 @@ inline bool Array<_T>::IsFull() const
 template <typename _T>
 inline void Array<_T>::Free()
 {
-    mCount = 0;
-
-    if (mAlloc) {
+    if (mAlloc)
         Mem::Free(mBuffer, mAlloc);
-        mCapacity = 0;
-        mBuffer = nullptr;
-    }
+
+    mCount = 0;
+    mCapacity = 0;
+    mBuffer = nullptr;
 }
 
 template <typename _T>
@@ -1996,9 +2002,9 @@ template<typename _T, uint32 _MaxCount>
 inline void StaticArray<_T, _MaxCount>::RemoveAndSwap(uint32 index)
 {
     ASSERT(mBuffer);
-    #ifdef CONFIG_CHECK_OUTOFBOUNDS
+#ifdef CONFIG_CHECK_OUTOFBOUNDS
     ASSERT_MSG(index <= mCount, "Index out of bounds (count: %u, index: %u)", mCount, index);
-    #endif
+#endif
     Swap<_T>(mBuffer[index], mBuffer[--mCount]);
 }
 
@@ -6495,10 +6501,13 @@ namespace Str
     API char* Concat(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src);
     API char* ConcatCount(char* RESTRICT dst, uint32 dstSize, const char* RESTRICT src, uint32 count);
     NO_ASAN API uint32 Len(const char* str);
+    FORCE_INLINE constexpr uint32 LenStringLiteral(const char* str);
     API uint32 PrintFmt(char* str, uint32 size, const char* fmt, ...);
     API uint32 PrintFmtArgs(char* str, uint32 size, const char* fmt, va_list args);
     API char* PrintFmtAlloc(MemAllocator* alloc, const char* fmt, ...);
     API char* PrintFmtAllocArgs(MemAllocator* alloc, const char* fmt, va_list args);
+    API uint32 ScanFmt(const char* str, const char* fmt, ...);
+    API uint32 ScanFmtArgs(const char* str, const char* fmt, va_list args);
     API bool Utf8ToWide(const char* src, wchar_t* dst, size_t dstNumBytes);
     API bool WideToUtf8(const wchar_t* src, char* dst, size_t dstNumBytes);
     API bool IsEqual(const char* s1, const char* s2);
@@ -6888,6 +6897,13 @@ inline uint32 String<_Size>::CalcLength()
     return mLen;
 }
 
+FORCE_INLINE constexpr uint32 Str::LenStringLiteral(const char* str)
+{
+    uint32 count = 0;
+    while (*(str++)) 
+        ++count;
+    return count;
+}
 
 
 struct Blob
@@ -7514,6 +7530,31 @@ namespace Hash
     API uint32 Murmur32(const void* key, uint32 len, uint32 seed = 0);
     API HashResult128 Murmur128(const void* key, size_t len, uint32 seed = 0);
 }
+
+struct HashStringLiteral
+{
+    inline constexpr HashStringLiteral(const char* _cstr) :
+#if CONFIG_ENABLE_ASSERT
+        cstr(_cstr),
+#endif
+        hash(Hash::Fnv32Str(_cstr))
+    {        
+    }
+
+    inline constexpr HashStringLiteral& operator=(const char* _cstr)
+    {
+    #if CONFIG_ENABLE_ASSERT
+        cstr = _cstr;
+    #endif
+        hash = Hash::Fnv32Str(_cstr);
+        return *this;
+    }
+
+#if CONFIG_ENABLE_ASSERT
+    const char* cstr;
+#endif
+    uint32 hash;
+};
 
 struct HashMurmur32Incremental
 {
@@ -8189,6 +8230,7 @@ struct Float4
     explicit constexpr Float4(float _xxxx) : x(_xxxx), y(_xxxx), z(_xxxx), w(_xxxx) {}
     explicit constexpr Float4(const float* _f) : x(_f[0]), y(_f[1]), z(_f[2]), w(_f[3]) {}
     explicit constexpr Float4(Float3 v, float _w = 1.0f) : x(v.x), y(v.y), z(v.z), w(_w) {}
+    explicit constexpr Float4(float v[3], float _w = 1.0f) : x(v[0]), y(v[1]), z(v[2]), w(_w) {}
     explicit constexpr Float4(Float2 v, float _z = 0, float _w = 1.0f) : x(v.x), y(v.y), z(_z), w(_w) {}
 
     static Float4 Mul(Float4 _a, Float4 _b);
@@ -8218,15 +8260,7 @@ struct Color4u
     {
     }
 
-    explicit constexpr Color4u(float _r, float _g, float _b, float _a) :
-        r((uint8)(_r * 255.0f)),
-        g((uint8)(_g * 255.0f)),
-        b((uint8)(_b * 255.0f)),
-        a((uint8)(_a * 255.0f))
-    {
-    }
-
-    explicit constexpr Color4u(const float* f) : Color4u(f[0], f[1], f[2], f[3]) {}
+    explicit Color4u(const float* f) { *this = Color4u::FromFloat4(f[0], f[1], f[2], f[3]); }
     constexpr Color4u(uint32 _n) : n(_n) {}
 
     Color4u& operator=(uint32 _n) 
@@ -8237,8 +8271,10 @@ struct Color4u
 
     static float ValueToLinear(float _a);
     static float ValueToGamma(float _a);
+    static Color4u FromFloat4(float _r, float _g, float _b, float _a = 1.0f);
     static Float4 ToFloat4(Color4u c);
-    static Color4u  Blend(Color4u _a, Color4u _b, float _t);
+    static Float4 ToFloat4(uint8 _r, uint8 _g, uint8 _b, uint8 _a = 255);
+    static Color4u Blend(Color4u _a, Color4u _b, float _t);
     static Float4 ToFloat4SRGB(Float4 cf);
     static Float4 ToFloat4Linear(Float4 c);
     static Float3 RGBtoHSV(Float3 rgb);
@@ -8445,20 +8481,21 @@ struct Mat4
     static Mat4   Perspective(float width, float height, float zn, float zf, bool d3dNdc = false);
     static Mat4   PerspectiveLH(float width, float height, float zn, float zf, bool d3dNdc = false);
     static Mat4   PerspectiveOffCenter(float xmin, float ymin, float xmax, float ymax,
-                                                 float zn, float zf, bool d3dNdc = false);
+                                       float zn, float zf, bool d3dNdc = false);
     static Mat4   PerspectiveOffCenterLH(float xmin, float ymin, float xmax, float ymax,
-                                                   float zn, float zf, bool d3dNdc = false);
+                                         float zn, float zf, bool d3dNdc = false);
     static Mat4   PerspectiveFOV(float fov_y, float aspect, float zn, float zf, bool d3dNdc = false);
     static Mat4   PerspectiveFOVLH(float fov_y, float aspect, float zn, float zf, bool d3dNdc = false);
     static Mat4   Ortho(float width, float height, float zn, float zf, float offset = 0, bool d3dNdc = false);
     static Mat4   OrthoLH(float width, float height, float zn, float zf, float offset = 0, bool d3dNdc = false);
     static Mat4   OrthoOffCenter(float xmin, float ymin, float xmax, float ymax, float zn,
-                                           float zf, float offset = 0, bool d3dNdc = false);
+                                 float zf, float offset = 0, bool d3dNdc = false);
     static Mat4   OrthoOffCenterLH(float xmin, float ymin, float xmax, float ymax, float zn,
-                                             float zf, float offset = 0, bool d3dNdc = false);
-    static Mat4   ScaleRotateTranslate(float _sx, float _sy, float _sz, 
-                                                 float _ax, float _ay, float _az,
-                                                 float _tx, float _ty, float _tz);
+                                   float zf, float offset = 0, bool d3dNdc = false);
+    static Mat4   TransformMat(float _tx, float _ty, float _tz, 
+                               float _ax, float _ay, float _az,
+                               float _sx, float _sy, float _sz);
+    static Mat4   TransformMat(Float3 translation, Quat rotation, Float3 scale);
     static Mat4   Mul(const Mat4& _a, const Mat4& _b);
     static Mat4   Inverse(const Mat4& _a);
     static Mat4   InverseTransformMat(const Mat4& _a);
@@ -8607,6 +8644,7 @@ struct AABB
     bool IsEmpty() const;
     Float3 Extents() const;
     Float3 Center() const;
+    Float3 Dimensions() const;
 
     static void   AddPoint(AABB* aabb, Float3 pt);
     static AABB   Unify(const AABB& aabb1, const AABB& aabb2);
@@ -8649,35 +8687,6 @@ struct Plane
     static Float3 Origin(Plane _plane);
 };
 
-struct Transform3D 
-{
-    Float3 pos;
-    Mat3 rot;
-
-    Transform3D() = default;
-    explicit constexpr Transform3D(Float3 _pos, const Mat3& _rot) : pos(_pos), rot(_rot) {}
-
-    static Transform3D Mul(const Transform3D& txa, const Transform3D& txb);
-    static Float3      MulFloat3(const Transform3D& tx, Float3 v);
-    static Float3      MulFloat3Scale(const Transform3D& tx, Float3 scale, Float3 v);
-    static Transform3D Inverse(const Transform3D& tx);
-    static Float3      MulFloat3Inverse(const Transform3D& tx, Float3 v);
-    static Transform3D MulInverse(const Transform3D& txa, const Transform3D& txb);
-    static Mat4        ToMat4(const Transform3D& tx);
-    static Transform3D Make(float x, float y, float z, float rx, float ry, float rz);
-    static Transform3D FromMat4(const Mat4& mat);
-};
-
-struct Box 
-{
-    Transform3D tx;   // transform (pos = origin of the box, rot = rotation of the box)
-    Float3 e;         // half-extent from the origin (0.5*width, 0.5*height, 0.5f*depth)
-
-    Box() = default;
-    explicit constexpr Box(const Transform3D& _tx, Float3 _e) : tx(_tx), e(_e) {}
-
-    static AABB ToAABB(const Box& box);
-};
 
 
 
@@ -8693,8 +8702,9 @@ inline constexpr float M_LOGNAT2H     = 0.6931471805599453094172321214582f;
 inline constexpr float M_LOGNAT2L     = 1.90821492927058770002e-10f;
 inline constexpr float M_E            = 2.7182818284590452353602874713527f;
 inline constexpr float M_NEARZERO     = (1.0f / (float)(1 << 28));
-inline constexpr float M_FLOAT32_MIN  = (1.175494e-38f);
-inline constexpr float M_FLOAT32_MAX  = (3.402823e+38f);
+inline constexpr float M_FLOAT32_MIN  = 1.175494e-38f;
+inline constexpr float M_FLOAT32_MAX  = 3.402823e+38f;
+inline constexpr float M_FLOAT32_EPSILON = 1.192093e-07f;
 
 inline constexpr Float2 FLOAT2_ZERO  { 0.0f, 0.0f };
 inline constexpr Float2 FLOAT2_UNITX { 1.0f, 0.0f };
@@ -8727,8 +8737,6 @@ inline constexpr Mat4 MAT4_IDENT {
 };
 
 inline constexpr Quat QUAT_INDENT {0, 0, 0, 1.0f};
-
-inline constexpr Transform3D TRANSFORM3D_IDENT { FLOAT3_ZERO, MAT3_IDENT };
 
 inline constexpr Color4u COLOR4U_WHITE  { uint8(255), uint8(255), uint8(255), uint8(255) };
 inline constexpr Color4u COLOR4U_BLACK  { uint8(0), uint8(0), uint8(0), uint8(255) };
@@ -9083,6 +9091,7 @@ namespace Log
 #define LOG_VERBOSE(_text, ...)   Log::_private::PrintVerbose(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
 #define LOG_WARNING(_text, ...)   Log::_private::PrintWarning(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
 #define LOG_ERROR(_text, ...)     Log::_private::PrintError(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define LOG_TEMP LOG_VERBOSE
 
 
 
@@ -9132,6 +9141,8 @@ namespace M
     FORCE_INLINE bool IsINF64(double _f);
     FORCE_INLINE float Round(float _f);
     FORCE_INLINE float Ceil(float _f);
+    FORCE_INLINE int CeilDiv(int n, int d);             // How many 'd' fits into 'n' (Ceiling division): ceil(float(f)/float(d))
+    FORCE_INLINE uint32 CeilDiv(uint32 n, uint32 d);    
     FORCE_INLINE float Lerp(float _a, float _b, float _t);
     FORCE_INLINE float SmoothLerp(float _a, float _b, float _dt, float h);
     FORCE_INLINE float Sign(float _a);
@@ -9298,6 +9309,16 @@ FORCE_INLINE float M::Round(float _f)
 FORCE_INLINE float M::Ceil(float _f)
 {
     return -M::Floor(-_f);
+}
+
+FORCE_INLINE int M::CeilDiv(int n, int d)
+{
+    return (n + (d - 1))/d;
+}
+
+FORCE_INLINE uint32 M::CeilDiv(uint32 n, uint32 d)
+{
+    return (n + (d - 1))/d;
 }
 
 FORCE_INLINE float M::Lerp(float _a, float _b, float _t)
@@ -9562,8 +9583,14 @@ FORCE_INLINE float Quat::Angle(Quat qa, Quat qb)
 
 FORCE_INLINE Quat Quat::Norm(Quat q)
 {
-    const float inv_norm = M::Rsqrt(Quat::Dot(q, q));
-    return Quat(q.x*inv_norm, q.y*inv_norm, q.z*inv_norm, q.w*inv_norm);
+    float d = Quat::Dot(q, q);
+    if (d > M_FLOAT32_EPSILON) {
+        float inv_norm = M::Rsqrt(d);
+        return Quat(q.x*inv_norm, q.y*inv_norm, q.z*inv_norm, q.w*inv_norm);
+    }
+    else {
+        return QUAT_INDENT;    
+    }
 }
 
 FORCE_INLINE Quat Quat::RotateAxis(Float3 _axis, float _angle)
@@ -10010,10 +10037,24 @@ FORCE_INLINE float Color4u::ValueToGamma(float _a)
     return result;
 }
 
+FORCE_INLINE Color4u Color4u::FromFloat4(float r, float g, float b, float a)
+{
+    return Color4u(
+        ((uint8)(r * 255.0f)),
+        ((uint8)(g * 255.0f)),
+        ((uint8)(b * 255.0f)),
+        ((uint8)(a * 255.0f)));
+}
+
 FORCE_INLINE Float4 Color4u::ToFloat4(Color4u c)
 {
     float rcp = 1.0f / 255.0f;
     return Float4((float)c.r * rcp, (float)c.g * rcp, (float)c.b * rcp, (float)c.a * rcp);
+}
+
+FORCE_INLINE Float4 Color4u::ToFloat4(uint8 _r, uint8 _g, uint8 _b, uint8 _a)
+{
+    return ToFloat4(Color4u(_r, _g, _b, _a));
 }
 
 
@@ -10440,6 +10481,11 @@ FORCE_INLINE Float3 AABB::Extents() const
     return Float3::Mul(Float3(xmax - xmin,  ymax - ymin, zmax - zmin), 0.5f);
 }
 
+FORCE_INLINE Float3 AABB::Dimensions() const
+{
+    return Float3(xmax - xmin,  ymax - ymin, zmax - zmin);
+}
+
 FORCE_INLINE Float3 AABB::Center() const
 {
     return Float3::Mul(Float3::Add(Float3(vmin), Float3(vmax)), 0.5f);
@@ -10472,58 +10518,6 @@ FORCE_INLINE AABB AABB::Scale(const AABB& aabb, Float3 scale)
     return AABB(p.x - e.x, p.y - e.y, p.z - e.z, 
                 p.x + e.x, p.y + e.y, p.z + e.z);
 }
-
-FORCE_INLINE Transform3D Transform3D::Mul(const Transform3D& txa, const Transform3D& txb)
-{
-    return Transform3D(Float3::Add(Mat3::MulFloat3(txa.rot, txb.pos), txa.pos), Mat3::Mul(txa.rot, txb.rot));
-}
-
-FORCE_INLINE Float3 Transform3D::MulFloat3(const Transform3D& tx, Float3 v)
-{
-    return Float3::Add(Mat3::MulFloat3(tx.rot, v), tx.pos);
-}   
-
-FORCE_INLINE Float3 Transform3D::MulFloat3Scale(const Transform3D& tx, Float3 scale, Float3 v)
-{
-    return Float3::Add(Mat3::MulFloat3(tx.rot, Float3::Mul(v, scale)), tx.pos);
-}
-
-FORCE_INLINE Transform3D Transform3D::Inverse(const Transform3D& tx)
-{   
-    Mat3 rotInv = Mat3::Transpose(tx.rot);
-    return Transform3D(Mat3::MulFloat3(rotInv, Float3::Mul(tx.pos, -1.0f)), rotInv);
-}
-
-FORCE_INLINE Float3 Transform3D::MulFloat3Inverse(const Transform3D& tx, Float3 v)
-{   
-    Mat3 rmat = Mat3::Transpose(tx.rot);
-    return Mat3::MulFloat3(rmat, Float3::Sub(v, tx.pos));
-}
-
-FORCE_INLINE Transform3D Transform3D::MulInverse(const Transform3D& txa, const Transform3D& txb)
-{
-    return Transform3D(Mat3::MulFloat3Inverse(txa.rot, Float3::Sub(txb.pos, txa.pos)), Mat3::MulInverse(txa.rot, txb.rot));
-}
-
-FORCE_INLINE Mat4 Transform3D::ToMat4(const Transform3D& tx)
-{
-    return Mat4(Float4(Float3(tx.rot.fc1), 0.0f),
-                Float4(Float3(tx.rot.fc2), 0.0f),
-                Float4(Float3(tx.rot.fc3), 0.0f),
-                Float4(tx.pos,             1.0f));
-}
-
-FORCE_INLINE Transform3D Transform3D::Make(float x, float y, float z, float rx, float ry, float rz)
-{
-    Mat4 rot = Mat4::RotateXYZ(rx, ry, rz);
-    return Transform3D(Float3(x, y, z), Mat3(rot.fc1, rot.fc2, rot.fc3));
-}
-
-FORCE_INLINE Transform3D Transform3D::FromMat4(const Mat4& mat)
-{
-    return Transform3D(Float3(mat.fc4),  Mat3(mat.fc1, mat.fc2, mat.fc3));
-}
-
 
                                                                                                            
 FORCE_INLINE Float2 operator+(Float2 a, Float2 b)
@@ -10579,6 +10573,26 @@ FORCE_INLINE Float3 operator*(Float3 v, float k)
 FORCE_INLINE Float3 operator*(float k, Float3 v)
 {
     return Float3::Mul(v, k);
+}
+
+FORCE_INLINE Float4 operator+(Float4 v1, Float4 v2)
+{
+    return Float4::Add(v1, v2);
+}
+
+FORCE_INLINE Float4 operator-(Float4 v1, Float4 v2)
+{
+    return Float4::Sub(v1, v2);
+}
+
+FORCE_INLINE Float4 operator*(Float4 v, float k)
+{
+    return Float4::Mul(v, k);
+}
+
+FORCE_INLINE Float4 operator*(float k, Float4 v)
+{
+    return Float4::Mul(v, k);
 }
 
 FORCE_INLINE Mat4 operator*(const Mat4& a, const Mat4& b)
@@ -10730,7 +10744,7 @@ namespace M
                                              float zf, float offset = 0, bool d3dNdc = false) { return Mat4::OrthoOffCenterLH(xmin, ymin, xmax, ymax, zn, zf, offset, d3dNdc); }
     FORCE_INLINE Mat4   Mat4ScaleRotateTranslate(float _sx, float _sy, float _sz, 
                                                  float _ax, float _ay, float _az,
-                                                 float _tx, float _ty, float _tz) { return Mat4::ScaleRotateTranslate(_sx, _sy, _sz, _ax, _ay, _az, _tx, _ty, _tz); }
+                                                 float _tx, float _ty, float _tz) { return Mat4::TransformMat(_sx, _sy, _sz, _ax, _ay, _az, _tx, _ty, _tz); }
     FORCE_INLINE Mat4   Mat4Mul(const Mat4& _a, const Mat4& _b) { return Mat4::Mul(_a, _b); }
     FORCE_INLINE Mat4   Mat4Inverse(const Mat4& _a) { return Mat4::Inverse(_a); }
     FORCE_INLINE Mat4   Mat4InverseTransformMat(const Mat4& _a) { return Mat4::InverseTransformMat(_a); }
@@ -10774,18 +10788,6 @@ namespace M
     FORCE_INLINE float  PlaneDistance(Plane _plane, Float3 _p) { return Plane::Distance(_plane, _p); }
     FORCE_INLINE Float3 PlaneProjectPoint(Plane _plane, Float3 _p) { return Plane::ProjectPoint(_plane, _p); }
     FORCE_INLINE Float3 PlaneOrigin(Plane _plane) { return Plane::Origin(_plane); }
-
-    FORCE_INLINE Transform3D Transform3DMul(const Transform3D& txa, const Transform3D& txb) { return Transform3D::Mul(txa, txb); }
-    FORCE_INLINE Float3      Transform3DMulFloat3(const Transform3D& tx, Float3 v) { return Transform3D::MulFloat3(tx, v); }
-    FORCE_INLINE Float3      Transform3DMulFloat3Scale(const Transform3D& tx, Float3 scale, Float3 v) { return Transform3D::MulFloat3Scale(tx, scale, v); }
-    FORCE_INLINE Transform3D Transform3DInverse(const Transform3D& tx) { return Transform3D::Inverse(tx); }
-    FORCE_INLINE Float3      Transform3DMulFloat3Inverse(const Transform3D& tx, Float3 v) { return Transform3D::MulFloat3Inverse(tx, v); }
-    FORCE_INLINE Transform3D Transform3DMulInverse(const Transform3D& txa, const Transform3D& txb) { return Transform3D::MulInverse(txa, txb); }
-    FORCE_INLINE Mat4        Transform3DToMat4(const Transform3D& tx) { return Transform3D::ToMat4(tx); }
-    FORCE_INLINE Transform3D Transform3DMake(float x, float y, float z, float rx, float ry, float rz) { return Transform3D::Make(x, y, z, rx, ry, rz); }
-    FORCE_INLINE Transform3D Transform3DFromMat4(const Mat4& mat) { return Transform3D::FromMat4(mat); }
-
-    FORCE_INLINE AABB BoxToAABB(const Box& box) { return Box::ToAABB(box); } 
 }
 
 
@@ -11960,7 +11962,7 @@ struct OSWin32Pipe
 	};
 
 	void Write(const void* data, uint32 size);
-	template <typename _T> uint32 Write(const _T& item) { return Write(&item, sizeof(item)); }
+	template <typename _T> void Write(const _T& item) { Write(&item, sizeof(item)); }
 
 	bool IsConnected() const;
 	void Close();

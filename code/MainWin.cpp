@@ -23,6 +23,8 @@
 #include <LPP_API_Options.h>
 #endif
 
+#include <shellapi.h>   // DragAcceptFiles
+
 struct GraphicsContext
 {
     ID3D11Device* device;
@@ -43,6 +45,8 @@ struct MainWindowContext
 {
     HWND hwnd;
 	Array<WindowTimer> timers;
+	DropFilesCallback dropFilesCallback;
+	void* dropFilesUserData;
     uint32 resizeWidth;
     uint32 resizeHeight;
 	bool forceUpdateFrame;
@@ -187,6 +191,8 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
                               settings.windowX, settings.windowY, 
                               Clamp<uint16>(settings.windowWidth, 500, displayRect.Width()), Clamp<uint16>(settings.windowHeight, 500, displayRect.Height()), 
                               nullptr, nullptr, wc.hInstance, nullptr);
+
+	DragAcceptFiles(hwnd, TRUE);
 
     // Show the window
     ::ShowWindow(hwnd, SW_SHOWDEFAULT);
@@ -398,6 +404,27 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		}
 		break;
 
+	case WM_DROPFILES:
+		{
+			HDROP hDrop = (HDROP)wParam;
+			UINT count = DragQueryFileA(hDrop, 0xffffffff, nullptr, 0);
+			if (count && gWindow.dropFilesCallback) {
+				Array<Path> filepaths;
+				filepaths.Reserve(count);
+
+				for (UINT i = 0; i < count; i++) {
+					Path* filepath = filepaths.Push();
+					UINT len = DragQueryFileA(hDrop, i, nullptr, 0);
+					DragQueryFileA(hDrop, i, filepath->Ptr(), filepath->Capacity());
+					filepath->CalcLength();
+				}
+
+				gWindow.dropFilesCallback(filepaths.Count(), filepaths.Ptr(), gWindow.dropFilesUserData);
+				filepaths.Free();
+			}
+		}
+		break;
+
     }
     return ::DefWindowProcW(hWnd, msg, wParam, lParam);
 }
@@ -555,6 +582,12 @@ void RemoveWindowTimer(uint32 timerId)
 		gWindow.timers.RemoveAndSwap(index);
 		KillTimer(gWindow.hwnd, timerId);
 	}
+}
+
+void RegisterDropFiles(DropFilesCallback callback, void* userData)
+{
+	gWindow.dropFilesCallback = callback;
+	gWindow.dropFilesUserData = userData;
 }
 
 #endif // PLATFORM_WINDOWS
