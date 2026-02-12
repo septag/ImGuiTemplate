@@ -46,5 +46,5 @@ using TimerCallback = void(*)(void* userData);
 uint32 AddWindowTimer(TimerCallback timerCb, uint32 intervalMs, void* userData);
 void RemoveWindowTimer(uint32 timerId);
 
-using DropFilesCallback = void(*)(uint32 count, const Path* paths, void* userData);
+using DropFilesCallback = void(*)(uint32 count, const Path* paths, Int2 mousePos, void* userData);
 void RegisterDropFiles(DropFilesCallback callback, void* userData);

@@ -412,6 +412,11 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				Array<Path> filepaths;
 				filepaths.Reserve(count);
 
+				POINT pt;
+				DragQueryPoint(hDrop, &pt);
+				ClientToScreen(hWnd, &pt);
+				Int2 myPt = Int2(pt.x, pt.y);
+
 				for (UINT i = 0; i < count; i++) {
 					Path* filepath = filepaths.Push();
 					UINT len = DragQueryFileA(hDrop, i, nullptr, 0);
@@ -419,9 +424,11 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					filepath->CalcLength();
 				}
 
-				gWindow.dropFilesCallback(filepaths.Count(), filepaths.Ptr(), gWindow.dropFilesUserData);
+				gWindow.dropFilesCallback(filepaths.Count(), filepaths.Ptr(), myPt, gWindow.dropFilesUserData);
 				filepaths.Free();
 			}
+
+			DragFinish(hDrop);
 		}
 		break;
 
