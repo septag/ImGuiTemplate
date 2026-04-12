@@ -154,7 +154,8 @@ bool ImGui::MyInitialize()
 
 void ImGui::MyRelease()
 {
-    DestroyTexture(gImGuiExtra.fontTexture);
+    //if (!(ImGui::GetIO().BackendFlags & ImGuiBackendFlags_RendererHasTextures))
+    //    DestroyTexture(gImGuiExtra.fontTexture);
 }
 
 const Fonts& ImGui::GetFonts()
@@ -201,7 +202,9 @@ bool ImGui::LoadFonts(float dpiScale)
         // fontConfig.GlyphMinAdvanceX = fontSize;
         static const ImWchar iconRanges[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
         io.Fonts->AddFontFromMemoryCompressedTTF(FontAwesome_compressed_data, FontAwesome_compressed_size, fontSize*dpiScale, &fontConfig, iconRanges);
-        io.Fonts->Build();
+
+        //if (!(io.BackendFlags & ImGuiBackendFlags_RendererHasTextures))
+        //    io.Fonts->Build();
     }
 
     {
@@ -217,14 +220,16 @@ bool ImGui::LoadFonts(float dpiScale)
         gImGuiExtra.fonts.monoFontSize = monoFontSize;
     }
 
-    uint8* fontPixels;
-    int fontWidth, fontHeight, fontBpp;
-    io.Fonts->GetTexDataAsRGBA32(&fontPixels, &fontWidth, &fontHeight, &fontBpp);
+  //  if (!(io.BackendFlags & ImGuiBackendFlags_RendererHasTextures)) {
+  //      uint8* fontPixels;
+  //      int fontWidth, fontHeight, fontBpp;
+  //      io.Fonts->GetTexDataAsRGBA32(&fontPixels, &fontWidth, &fontHeight, &fontBpp);
     
-    void* texture = CreateRGBATexture(fontWidth, fontHeight, fontPixels);
-    io.Fonts->SetTexID((ImTextureID)texture);
+  //      void* texture = CreateRGBATexture(fontWidth, fontHeight, fontPixels);
+  //      io.Fonts->SetTexID((ImTextureID)texture);
 
-    gImGuiExtra.fontTexture = texture;
+  //      gImGuiExtra.fontTexture = texture;
+  //  }
 
     return true;
 }

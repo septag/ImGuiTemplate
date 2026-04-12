@@ -146,12 +146,12 @@ void UpdateCommon()
     {
         for (const ShortcutItem& item : gShortcuts) {
             int modKeys = 0;
-            if (ImGui::IsKeyDown(ImGuiKey_ModAlt))
-                modKeys |= ImGuiKey_ModAlt;
-            if (ImGui::IsKeyDown(ImGuiKey_ModCtrl))
-                modKeys |= ImGuiKey_ModCtrl;
-            if (ImGui::IsKeyDown(ImGuiKey_ModShift))
-                modKeys |= ImGuiKey_ModShift;
+            if (ImGui::IsKeyDown(ImGuiMod_Alt))
+                modKeys |= ImGuiMod_Alt;
+            if (ImGui::IsKeyDown(ImGuiMod_Ctrl))
+                modKeys |= ImGuiMod_Ctrl;
+            if (ImGui::IsKeyDown(ImGuiMod_Shift))
+                modKeys |= ImGuiMod_Shift;
 
             if ((item.keys[0] && ImGui::IsKeyPressed(item.keys[0])) && 
                 (item.keys[1] == 0 || (item.keys[1] && ImGui::IsKeyPressed(item.keys[1]))) &&
@@ -193,11 +193,11 @@ static ShortcutItem ParseShortcutKeys(const char* shortcut)
             char modstr[32];
             Str::ToUpper(modstr, sizeof(modstr), keystr);
             if (Str::IsEqual(modstr, "ALT"))
-                item.modKeys |= ImGuiKey_ModAlt;
+                item.modKeys |= ImGuiMod_Alt;
             else if (Str::IsEqual(modstr, "CTRL"))
-                item.modKeys |= ImGuiKey_ModCtrl;
+                item.modKeys |= ImGuiMod_Ctrl;
             else if (Str::IsEqual(modstr, "SHIFT"))
-                item.modKeys |= ImGuiKey_ModShift;
+                item.modKeys |= ImGuiMod_Shift;
         } 
         else if (len == 1 && numKeys < 2) {
             if (keystr[0] > 32) {

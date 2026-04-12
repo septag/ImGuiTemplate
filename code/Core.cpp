@@ -2091,6 +2091,13 @@ void MemTempAllocator::GetStats(MemAllocator* alloc, Stats** outStats, uint32* o
         s.commitedBytes = gMemTemp.tempCtxs[i]->commitedBytes;
         s.reservedBytes = gMemTemp.tempCtxs[i]->reservedBytes;
         s.threadId = gMemTemp.tempCtxs[i]->threadId;
+
+        if (gMemTemp.tempCtxs[i]->threadName[0] == 0) {
+            Thread::GetCurrentThreadName(gMemTemp.tempCtxs[i]->threadName, sizeof(gMemTemp.tempCtxs[i]->threadName));
+            if (gMemTemp.tempCtxs[i]->threadName[0] == 0)
+                Str::PrintFmt(gMemTemp.tempCtxs[i]->threadName, sizeof(gMemTemp.tempCtxs[i]->threadName), "Thread #%u", s.threadId);
+        }
+
         s.threadName = gMemTemp.tempCtxs[i]->threadName;
     }
 }
@@ -9856,8 +9863,12 @@ found:
 
         type = CJ5_TOKEN_STRING;
     } else {
-        uint32_t fourcc_;
-        CJ5_MEMCPY(&fourcc_, &json5[start], 4);
+        uint32_t fourcc_ = 0;
+        if (parser->pos - start >= 4)
+            CJ5_MEMCPY(&fourcc_, &json5[start], 4);
+        else
+            CJ5_MEMCPY(&fourcc_, &json5[start], parser->pos - start);
+
         uint32_t* fourcc = &fourcc_;
  
         if (*fourcc == CJ5__NULL_FOURCC) {
@@ -11342,7 +11353,7 @@ Mat4 Mat4::ViewFPS(Float3 eye, float pitch, float yaw)
 Mat4 Mat4::ViewArcBall(Float3 move, Quat rot, Float3 target_pos)
 {
     Mat4 translateInv = Mat4::Translate(-move.x, -move.y, -move.z);
-    Mat4 rotateInv = Mat4::FromQuat(Quat::Inverse(rot));
+    Mat4 rotateInv = Mat4::FromQuat(Quat::Conjugate(rot));
     Mat4 translateObjInv = Mat4::Translate(-target_pos.x, -target_pos.y, -target_pos.z);
     Mat4 TR = Mat4::Mul(translateObjInv, rotateInv);
     return Mat4::Mul(TR, translateInv);
@@ -11408,9 +11419,9 @@ Mat4 Mat4::PerspectiveFOV(float fov_y, float aspect, float zn, float zf, bool d3
     return Mat4::Perspective(width, height, zn, zf, d3dNdc);
 }
 
-Mat4 Mat4::PerspectiveFOVLH(float fov_y, float aspect, float zn, float zf, bool d3dNdc)
+Mat4 Mat4::PerspectiveFOVLH(float fovY, float aspect, float zn, float zf, bool d3dNdc)
 {
-    const float height = 1.0f / M::Tan(fov_y * 0.5f);
+    const float height = 1.0f / M::Tan(fovY * 0.5f);
     const float width = height / aspect;
     return Mat4::PerspectiveLH(width, height, zn, zf, d3dNdc);
 }
@@ -11481,42 +11492,28 @@ Mat4 Mat4::TransformMat(float _tx, float _ty, float _tz,
 {
     float sx, cx, sy, cy, sz, cz;
     
-    if (_ax != 0) {
-        sx = M::Sin(_ax);
-        cx = M::Cos(_ax);
-    } else {
-        sx = 0;
-        cx = 1.0f;
-    }
+    sx = M::Sin(_ax);
+    cx = M::Cos(_ax);
     
-    if (_ay != 0) {
-        sy = M::Sin(_ay);
-        cy = M::Cos(_ay);
-    } else {
-        sy = 0;
-        cy = 1.0f;
-    }
+    sy = M::Sin(_ay);
+    cy = M::Cos(_ay);
     
-    if (_az != 0) {
-        sz = M::Sin(_az);
-        cz = M::Cos(_az);
-    } else {
-        sz = 0;
-        cz = 1.0f;
-    }
+    sz = M::Sin(_az);
+    cz = M::Cos(_az);
     
     const float sxsz = sx * sz;
     const float cycz = cy * cz;
     
-    return Mat4(_sx * (cycz - sxsz * sy), _sx * -cx * sz, _sx * (cz * sy + cy * sxsz),    _tx,
-                    _sy * (cz * sx * sy + cy * sz), _sy * cx * cz,  _sy * (sy * sz - cycz * sx),    _ty,
-                    _sz * -cx * sy,                 _sz * sx,       _sz * cx * cy,                  _tz, 
-                    0.0f,                           0.0f,           0.0f,                           1.0f);
+    return Mat4(_sx * (cycz - sxsz * sy),       _sy * -cx * sz,       _sz * (cz * sy + cy * sxsz),    _tx,
+                _sx * (cz * sx * sy + cy * sz), _sy * cx * cz,        _sz * (sy * sz - cycz * sx),    _ty,
+                _sx * -cx * sy,                 _sy * sx,             _sz * cx * cy,                  _tz, 
+                0.0f,                           0.0f,                 0.0f,                           1.0f);
 }
 
 Mat4 Mat4::TransformMat(Float3 translation, Quat rotation, Float3 scale)
 {
-    rotation = Quat::Norm(rotation);
+    ASSERT(Quat::IsNorm(rotation));
+
     float x = rotation.x;
     float y = rotation.y;
     float z = rotation.z;
@@ -11527,10 +11524,10 @@ Mat4 Mat4::TransformMat(Float3 translation, Quat rotation, Float3 scale)
     float wx = w*x, wy = w*y, wz = w*z;
 
     float r00 = 1.0f - 2.0f*(yy + zz);
-    float r01 = 2.0f*(xy + wz);
+    float r01 = 2.0f*(xy - wz);
     float r02 = 2.0f*(xz - wy);
 
-    float r10 = 2.0f*(xy - wz);
+    float r10 = 2.0f*(xy + wz);
     float r11 = 1.0f - 2.0f*(xx + zz);
     float r12 = 2.0f*(yz + wx);
 
@@ -11709,6 +11706,14 @@ Mat4 Mat4::FromQuat(Quat q)
                 xy + wz,            1.0f - xx - zz,     yz - wx,        0.0f,
                 xz - wy,            yz + wx,            1.0f - xx - yy, 0.0f,
                 0.0f,               0.0f,               0.0f,           1.0f);
+}
+
+Mat4 Mat4::FromMat3(const Mat3& _mat)
+{
+    return Mat4(_mat.m11, _mat.m12, _mat.m13, 0,
+                _mat.m21, _mat.m22, _mat.m23, 0,
+                _mat.m31, _mat.m32, _mat.m33, 0, 
+                0       , 0       , 0       , 1);
 }
 
 Mat4 Mat4::FromNormalAngle(Float3 _normal, float _scale, Float3 _pos, float _angle)
@@ -12039,7 +12044,6 @@ Quat Quat::FromEuler(Float3 _vec3)
     return q;
 }
 
-
 Float3 Plane::CalcNormal(Float3 _va, Float3 _vb, Float3 _vc)
 {
     Float3 ba = Float3::Sub(_vb, _va);
@@ -12057,25 +12061,37 @@ Plane Plane::From3Points(Float3 _va, Float3 _vb, Float3 _vc)
 
 Plane Plane::FromNormalPoint(Float3 _normal, Float3 _p)
 {
-    Float3 normal = Float3::Norm(_normal);
+    ASSERT(M::IsEqual(Float3::Dot(_normal, _normal), 1));
+
     float d = Float3::Dot(_normal, _p);
-    return Plane(normal, -d);
+    return Plane(_normal, -d);
 }
 
 float Plane::Distance(Plane _plane, Float3 _p)
 {
-    return Float3::Dot(Float3(_plane.normal), _p) + _plane.dist;
+    return Float3::Dot(_plane.normal, _p) + _plane.d;
 }
 
 Float3 Plane::ProjectPoint(Plane _plane, Float3 _p)
 {
-    return Float3::Sub(_p, Float3::Mul(Float3(_plane.normal), Distance(_plane, _p)));
+    return Float3::Sub(_p, Float3::Mul(_plane.normal, Distance(_plane, _p)));
 }
 
-Float3 Plane::Origin(Plane _plane)
+Float3 Plane::ClosestPointToOrigin(Plane _plane)
 {
-    return Float3::Mul(Float3(_plane.normal), -_plane.dist);
+    return Float3::Mul(_plane.normal, -_plane.d);
 }
+
+float Plane::HitRay(Plane _plane, Float3 _origin, Float3 _direction)
+{
+    float VdotN = Float3::Dot(_direction, _plane.normal);
+    if (M::Abs(VdotN) < 0.000001f)
+        return -1.0f;
+    float PdotN = Float3::Dot(_origin, _plane.normal);
+    float t = -(PdotN + _plane.d)/VdotN;
+    return t;    
+}
+
 
 AABB AABB::Transform(const AABB& aabb, const Mat4& mat)
 {

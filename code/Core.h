@@ -1119,6 +1119,8 @@ private:
     bool mOwnsId = false;
 };
 
+#define DEFINE_SAFE_TEMP_ALLOCATOR(_name, _alloc) MemTempAllocator _name(_alloc->GetType() == MemAllocatorType::Temp ? ((MemTempAllocator*)_alloc)->GetId() : 0);
+
                                                                                      
 struct MemBumpAllocatorBase : MemAllocator
 {
@@ -1303,8 +1305,10 @@ template <typename _FieldType> inline MemSingleShotMalloc<_T, _MaxFields>&
     size = AlignValue<size_t>(size, align);
 
     size_t offset = mSize;
-    if (offset % align != 0)
+    if (offset % align != 0) {
         offset = AlignValue<size_t>(offset, align);
+        size += offset - mSize;
+    }
 
     Field& buff = mFields[index];
     buff.pPtr = nullptr;
@@ -1505,6 +1509,7 @@ struct Array
     bool IsFull() const;
     const _T* Ptr() const;
     _T* Ptr();
+    void ForceSetCount(uint32 count);
     
     void Detach(_T** outBuffer, uint32* outCount);
     Span<_T> Detach();
@@ -1724,6 +1729,13 @@ template <typename _T>
 inline uint32 Array<_T>::Count() const
 {
     return mCount;
+}
+
+template <typename _T>
+inline void Array<_T>::ForceSetCount(uint32 count)
+{
+    ASSERT(count <= mCapacity);
+    mCount = count;
 }
 
 template <typename _T>
@@ -8324,10 +8336,11 @@ struct Quat
 
     static Float3 MulXYZ(Quat _qa, Quat _qb);
     static Quat   Mul(Quat p, Quat q);
-    static Quat   Inverse(Quat _q);
+    static Quat   Conjugate(Quat _q);       // Inverse = Conjucate if length of the quaternion = 1. (IsNorm() == true)
     static float  Dot(Quat _a, Quat _b);
     static float  Angle(Quat _a, Quat _b);
     static Quat   Norm(Quat _q);
+    static bool   IsNorm(Quat _q);
     static Quat   RotateAxis(Float3 _axis, float _angle);
     static Quat   RotateX(float _ax);
     static Quat   RotateY(float _ay);
@@ -8454,7 +8467,13 @@ struct Mat4
     Float4 Row3() const;
     Float4 Row4() const;
 
+    void SetCol1(Float4 _col1);
+    void SetCol2(Float4 _col2);
+    void SetCol3(Float4 _col3);
+    void SetCol4(Float4 _col4);
+
     static Mat4   Translate(float _tx, float _ty, float _tz);
+    static Mat4   Translate(Float3 _t);
     static Mat4   Scale(float _sx, float _sy, float _sz);
     static Mat4   Scale(float _scale);
     static Mat4   RotateX(float _ax);
@@ -8499,9 +8518,10 @@ struct Mat4
     static Mat4   Mul(const Mat4& _a, const Mat4& _b);
     static Mat4   Inverse(const Mat4& _a);
     static Mat4   InverseTransformMat(const Mat4& _a);
-    static Quat   ToQuat(const Mat4& _mat);
+    static Quat   ToQuat(const Mat4& _mat);     // Matrix should be Orthonormal (Pure rotation)
     static Mat4   FromQuat(Quat q);
     static Mat4   ProjectPlane(Float3 planeNormal);
+    static Mat4   FromMat3(const Mat3& _mat);
 };
 
 struct RectFloat 
@@ -8515,8 +8535,8 @@ struct RectFloat
 
         struct 
         {
-            float vmin[2];
-            float vmax[2];
+            Float2 vmin;
+            Float2 vmax;
         };
 
         float f[4];
@@ -8536,7 +8556,7 @@ struct RectFloat
     }
 
     explicit constexpr RectFloat(Float2 _vmin, Float2 _vmax) :
-        RectFloat(_vmin.f, _vmax.f)
+        vmin(_vmin), vmax(_vmax)
     {
     }
 
@@ -8548,9 +8568,9 @@ struct RectFloat
     static RectFloat   Expand(const RectFloat rc, Float2 expand);
     static bool   TestPoint(const RectFloat rc, Float2 pt);
     static bool   Test(const RectFloat rc1, const RectFloat rc2);
-    static void   AddPoint(RectFloat* rc, Float2 pt);
+    static void   AddPoint(RectFloat& rc, Float2 pt);
     static Float2 GetCorner(const RectFloat* rc, int index);
-    static void   GetCorners(Float2 corners[4], const RectFloat* rc);
+    static void   GetCorners(const RectFloat* rc, Float2 corners[4]);
     static Float2 Extents(const RectFloat rc);
     static Float2 Center(const RectFloat rc);
     static RectFloat   Translate(const RectFloat rc, Float2 pos);
@@ -8567,8 +8587,8 @@ struct RectInt
 
         struct 
         {
-            int vmin[3];
-            int vmax[3];
+            Int2 vmin;
+            Int2 vmax;
         };
 
         int n[4];
@@ -8589,7 +8609,7 @@ struct RectInt
     }
 
     explicit constexpr RectInt(Int2 _vmin, Int2 _vmax) :
-        RectInt(_vmin.n, _vmax.n)
+        vmin(_vmin), vmax(_vmax)
     { 
     }
 
@@ -8602,9 +8622,9 @@ struct RectInt
     static RectInt  Expand(const RectInt rc, Int2 expand);
     static bool   TestPoint(const RectInt rc, Int2 pt);
     static bool   Test(const RectInt rc1, const RectInt rc2);
-    static void   AddPoint(RectInt* rc, Int2 pt);
+    static void   AddPoint(RectInt& rc, Int2 pt);
     static Int2   GetCorner(const RectInt* rc, int index);
-    static void   GetCorners(Int2 corners[4], const RectInt* rc);
+    static void   GetCorners(const RectInt* rc, Int2 corners[4]);
 };
 
 struct AABB 
@@ -8618,8 +8638,8 @@ struct AABB
 
         struct 
         {
-            float vmin[3];
-            float vmax[3];
+            Float3 vmin;
+            Float3 vmax;
         };
 
         float f[6];
@@ -8637,7 +8657,7 @@ struct AABB
     {   
     }
     explicit constexpr AABB(Float3 _vmin, Float3 _vmax) :
-        AABB(_vmin.f, _vmax.f)
+        vmin(_vmin), vmax(_vmax)
     {
     }
 
@@ -8646,12 +8666,13 @@ struct AABB
     Float3 Center() const;
     Float3 Dimensions() const;
 
-    static void   AddPoint(AABB* aabb, Float3 pt);
+    static AABB   CenterExtents(Float3 center, Float3 extents);
+    static void   AddPoint(AABB& aabb, Float3 pt);
     static AABB   Unify(const AABB& aabb1, const AABB& aabb2);
     static bool   TestPoint(const AABB& aabb, Float3 pt);
     static bool   Test(const AABB& aabb1, const AABB& aabb2);
     static Float3 GetCorner(const AABB& aabb, int index);
-    static void   GetCorners(Float3 corners[8], const AABB& aabb);
+    static void   GetCorners(const AABB& aabb, Float3 corners[8]);
     static AABB   Translate(const AABB& aabb, Float3 offset);
     static AABB   SetPos(const AABB& aabb, Float3 pos);
     static AABB   Expand(const AABB& aabb, Float3 expand);
@@ -8665,8 +8686,8 @@ struct Plane
         Float4 p;
 
         struct {
-            float normal[3];
-            float dist;
+            Float3 normal;
+            float d;
         };
 
         float f[4];
@@ -8675,7 +8696,7 @@ struct Plane
     Plane() = default;
     explicit constexpr Plane(float _nx, float _ny, float _nz, float _d) : p(_nx, _ny, _nz, _d) {}
     explicit constexpr Plane(Float3 _normal, float _d) :
-        normal { _normal.x,     _normal.y,  _normal.z}, dist(_d)
+        normal { _normal.x,     _normal.y,  _normal.z}, d(_d)
     {   
     }
 
@@ -8684,7 +8705,8 @@ struct Plane
     static Plane  FromNormalPoint(Float3 _normal, Float3 _p);
     static float  Distance(Plane _plane, Float3 _p);
     static Float3 ProjectPoint(Plane _plane, Float3 _p);
-    static Float3 Origin(Plane _plane);
+    static Float3 ClosestPointToOrigin(Plane _plane);
+    static float  HitRay(Plane _plane, Float3 _origin, Float3 _direction);
 };
 
 
@@ -9548,12 +9570,13 @@ FORCE_INLINE Float3 Quat::MulXYZ(Quat qa, Quat qb)
 
 FORCE_INLINE Float3 Quat::TransformFloat3(Float3 v, Quat q)
 {
-    Quat tmp0 = Quat::Inverse(q);
+    ASSERT(Quat::IsNorm(q));
+
+    Quat tmp0 = Quat::Conjugate(q);
     Quat qv = Quat(v.x, v.y, v.z, 0.0f);
     Quat tmp1 = Quat::Mul(qv, tmp0);
     return Quat::MulXYZ(q, tmp1);
 }
-
 
 FORCE_INLINE Quat Quat::Mul(Quat p, Quat q)
 {
@@ -9565,7 +9588,7 @@ FORCE_INLINE Quat Quat::Mul(Quat p, Quat q)
     );
 }
 
-FORCE_INLINE Quat Quat::Inverse(Quat q)
+FORCE_INLINE Quat Quat::Conjugate(Quat q)
 {
     return Quat(-q.x, -q.y, -q.z, q.w);
 }
@@ -9585,12 +9608,18 @@ FORCE_INLINE Quat Quat::Norm(Quat q)
 {
     float d = Quat::Dot(q, q);
     if (d > M_FLOAT32_EPSILON) {
-        float inv_norm = M::Rsqrt(d);
-        return Quat(q.x*inv_norm, q.y*inv_norm, q.z*inv_norm, q.w*inv_norm);
+        float invNorm = M::Rsqrt(d);
+        return Quat(q.x*invNorm, q.y*invNorm, q.z*invNorm, q.w*invNorm);
     }
     else {
         return QUAT_INDENT;    
     }
+}
+
+FORCE_INLINE bool Quat::IsNorm(Quat q)
+{
+    float d = Quat::Dot(q, q);
+    return M::IsEqual(d, 1);
 }
 
 FORCE_INLINE Quat Quat::RotateAxis(Float3 _axis, float _angle)
@@ -9807,6 +9836,37 @@ FORCE_INLINE Float4 Mat4::Row4() const
     return Float4(m41, m42, m43, m44);
 }
 
+FORCE_INLINE void Mat4::SetCol1(Float4 _col1)
+{
+    fc1[0] = _col1.x;  
+    fc1[1] = _col1.y;
+    fc1[2] = _col1.z;
+    fc1[3] = _col1.w;
+}
+
+FORCE_INLINE void Mat4::SetCol2(Float4 _col2)
+{
+    fc2[0] = _col2.x;  
+    fc2[1] = _col2.y;
+    fc2[2] = _col2.z;
+    fc2[3] = _col2.w;
+}
+
+FORCE_INLINE void Mat4::SetCol3(Float4 _col3)
+{
+    fc3[0] = _col3.x;  
+    fc3[1] = _col3.y;
+    fc3[2] = _col3.z;
+    fc3[3] = _col3.w;
+}
+
+FORCE_INLINE void Mat4::SetCol4(Float4 _col4)
+{
+    fc4[0] = _col4.x;  
+    fc4[1] = _col4.y;
+    fc4[2] = _col4.z;
+    fc4[3] = _col4.w;
+}
 
 FORCE_INLINE Mat4 Mat4::Translate(float _tx, float _ty, float _tz)
 {
@@ -9814,6 +9874,11 @@ FORCE_INLINE Mat4 Mat4::Translate(float _tx, float _ty, float _tz)
                 0.0f, 1.0f, 0.0f, _ty, 
                 0.0f, 0.0f, 1.0f, _tz, 
                 0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+FORCE_INLINE Mat4 Mat4::Translate(Float3 _t)
+{
+    return Translate(_t.x, _t.y, _t.z);
 }
 
 FORCE_INLINE Mat4 Mat4::Scale(float _sx, float _sy, float _sz)
@@ -10271,9 +10336,9 @@ FORCE_INLINE bool RectFloat::Test(const RectFloat rc1, const RectFloat rc2)
     return true;
 }
 
-FORCE_INLINE void RectFloat::AddPoint(RectFloat* rc, Float2 pt)
+FORCE_INLINE void RectFloat::AddPoint(RectFloat& rc, Float2 pt)
 {
-    *rc = RectFloat(Float2::Min(Float2(rc->vmin), pt), Float2::Max(Float2(rc->vmax), pt));
+    rc = RectFloat(Float2::Min(Float2(rc.vmin), pt), Float2::Max(Float2(rc.vmax), pt));
 }
 
 FORCE_INLINE bool RectFloat::IsEmpty() const
@@ -10297,7 +10362,7 @@ FORCE_INLINE Float2 RectFloat::GetCorner(const RectFloat* rc, int index)
     return Float2((index & 1) ? rc->xmax : rc->xmin, (index & 2) ? rc->ymax : rc->ymin);
 }
 
-FORCE_INLINE void RectFloat::GetCorners(Float2 corners[4], const RectFloat* rc)
+FORCE_INLINE void RectFloat::GetCorners(const RectFloat* rc, Float2 corners[4])
 {
     for (int i = 0; i < 4; i++)
         corners[0] = RectFloat::GetCorner(rc, i);
@@ -10349,9 +10414,9 @@ FORCE_INLINE bool RectInt::Test(const RectInt rc1, const RectInt rc2)
     return true;
 }
 
-FORCE_INLINE void RectInt::AddPoint(RectInt* rc, Int2 pt)
+FORCE_INLINE void RectInt::AddPoint(RectInt& rc, Int2 pt)
 {
-    *rc = RectInt(Int2::Min(Int2(rc->vmin), pt), Int2::Max(Int2(rc->vmax), pt));
+    rc = RectInt(Int2::Min(Int2(rc.vmin), pt), Int2::Max(Int2(rc.vmax), pt));
 }
 
 FORCE_INLINE bool RectInt::IsEmpty() const
@@ -10396,7 +10461,7 @@ FORCE_INLINE Int2 RectInt::GetCorner(const RectInt* rc, int index)
     return Int2((index & 1) ? rc->xmax : rc->xmin, (index & 2) ? rc->ymax : rc->ymin);
 }
 
-FORCE_INLINE void RectInt::GetCorners(Int2 corners[4], const RectInt* rc)
+FORCE_INLINE void RectInt::GetCorners(const RectInt* rc, Int2 corners[4])
 {
     for (int i = 0; i < 4; i++)
         corners[0] = GetCorner(rc, i);
@@ -10408,16 +10473,21 @@ FORCE_INLINE bool AABB::IsEmpty() const
     return xmin >= xmax || ymin >= ymax || zmin >= zmax;
 }
 
-FORCE_INLINE void AABB::AddPoint(AABB* aabb, Float3 pt)
+FORCE_INLINE AABB AABB::CenterExtents(Float3 center, Float3 extents)
 {
-    *aabb = AABB(Float3::Min(Float3(aabb->vmin), pt), Float3::Max(Float3(aabb->vmax), pt));
+    return AABB(Float3::Sub(center, extents), Float3::Add(center, extents));
+}
+
+FORCE_INLINE void AABB::AddPoint(AABB& aabb, Float3 pt)
+{
+    aabb = AABB(Float3::Min(Float3(aabb.vmin), pt), Float3::Max(Float3(aabb.vmax), pt));
 }
 
 FORCE_INLINE AABB AABB::Unify(const AABB& aabb1, const AABB& aabb2)
 {
     AABB r = aabb1;
-    AABB::AddPoint(&r, Float3(aabb2.vmin));
-    AABB::AddPoint(&r, Float3(aabb2.vmax));
+    AABB::AddPoint(r, Float3(aabb2.vmin));
+    AABB::AddPoint(r, Float3(aabb2.vmax));
     return r;
 }
 
@@ -10470,7 +10540,7 @@ FORCE_INLINE Float3 AABB::GetCorner(const AABB& aabb, int index)
                   (index & 2) ? aabb.zmax : aabb.zmin);
 }
 
-FORCE_INLINE void AABB::GetCorners(Float3 corners[8], const AABB& aabb)
+FORCE_INLINE void AABB::GetCorners(const AABB& aabb, Float3 corners[8])
 {
     for (int i = 0; i < 8; i++)
         corners[i] = AABB::GetCorner(aabb, i);
@@ -10675,7 +10745,7 @@ namespace M
 
     FORCE_INLINE Float3 QuatMulXYZ(Quat _qa, Quat _qb) { return Quat::MulXYZ(_qa, _qb); }
     FORCE_INLINE Quat   QuatMul(Quat p, Quat q) { return Quat::Mul(p, q); }
-    FORCE_INLINE Quat   QuatInverse(Quat _q) { return Quat::Inverse(_q); }
+    FORCE_INLINE Quat   QuatInverse(Quat _q) { return Quat::Conjugate(_q); }
     FORCE_INLINE float  QuatDot(Quat _a, Quat _b) { return Quat::Dot(_a, _b); }
     FORCE_INLINE float  QuatAngle(Quat _a, Quat _b) { return Quat::Angle(_a, _b); }
     FORCE_INLINE Quat   QuatNorm(Quat _q) { return Quat::Norm(_q); }
@@ -10756,9 +10826,9 @@ namespace M
     FORCE_INLINE RectFloat   RectExpand(const RectFloat rc, Float2 expand) { return RectFloat::Expand(rc, expand); }
     FORCE_INLINE bool   RectTestPoint(const RectFloat rc, Float2 pt) { return RectFloat::TestPoint(rc, pt); }
     FORCE_INLINE bool   RectTest(const RectFloat rc1, const RectFloat rc2) { return RectFloat::Test(rc1, rc2); }
-    FORCE_INLINE void   RectAddPoint(RectFloat* rc, Float2 pt) { RectFloat::AddPoint(rc, pt); }
+    FORCE_INLINE void   RectAddPoint(RectFloat& rc, Float2 pt) { RectFloat::AddPoint(rc, pt); }
     FORCE_INLINE Float2 RectGetCorner(const RectFloat* rc, int index) { return RectFloat::GetCorner(rc, index); }
-    FORCE_INLINE void   RectGetCorners(Float2 corners[4], const RectFloat* rc) { RectFloat::GetCorners(corners, rc); }
+    FORCE_INLINE void   RectGetCorners(const RectFloat* rc, Float2 corners[4]) { RectFloat::GetCorners(rc, corners); }
     FORCE_INLINE Float2 RectExtents(const RectFloat rc) { return RectFloat::Extents(rc); }
     FORCE_INLINE Float2 RectCenter(const RectFloat rc) { return RectFloat::Center(rc); }
     FORCE_INLINE RectFloat   RectTranslate(const RectFloat rc, Float2 pos) { return RectFloat::Translate(rc, pos); }
@@ -10766,16 +10836,17 @@ namespace M
     FORCE_INLINE RectInt  RectIntExpand(const RectInt rc, Int2 expand) { return RectInt::Expand(rc, expand); }
     FORCE_INLINE bool     RectIntTestPoint(const RectInt rc, Int2 pt) { return RectInt::TestPoint(rc, pt); }
     FORCE_INLINE bool     RectIntTest(const RectInt rc1, const RectInt rc2) { return RectInt::Test(rc1, rc2); }
-    FORCE_INLINE void     RectIntAddPoint(RectInt* rc, Int2 pt) { return RectInt::AddPoint(rc, pt); }
+    FORCE_INLINE void     RectIntAddPoint(RectInt& rc, Int2 pt) { return RectInt::AddPoint(rc, pt); }
     FORCE_INLINE Int2     RectIntGetCorner(const RectInt* rc, int index) { return RectInt::GetCorner(rc, index); }
-    FORCE_INLINE void     RectIntGetCorners(Int2 corners[4], const RectInt* rc) { return RectInt::GetCorners(corners, rc); }
+    FORCE_INLINE void     RectIntGetCorners(const RectInt* rc, Int2 corners[4]) { return RectInt::GetCorners(rc, corners); }
 
-    FORCE_INLINE void   AABBAddPoint(AABB* aabb, Float3 pt) { return AABB::AddPoint(aabb, pt); }
+    FORCE_INLINE AABB   AABBCenterExtents(Float3 center, Float3 extents) { return AABB::CenterExtents(center, extents); }
+    FORCE_INLINE void   AABBAddPoint(AABB& aabb, Float3 pt) { return AABB::AddPoint(aabb, pt); }
     FORCE_INLINE AABB   AABBUnify(const AABB& aabb1, const AABB& aabb2) { return AABB::Unify(aabb1, aabb2); }
     FORCE_INLINE bool   AABBTestPoint(const AABB& aabb, Float3 pt) { return AABB::TestPoint(aabb, pt); }
     FORCE_INLINE bool   AABBTest(const AABB& aabb1, const AABB& aabb2) { return AABB::Test(aabb1, aabb2); }
     FORCE_INLINE Float3 AABBGetCorner(const AABB& aabb, int index) { return AABB::GetCorner(aabb, index); }
-    FORCE_INLINE void   AABBGetCorners(Float3 corners[8], const AABB& aabb) { return AABB::GetCorners(corners, aabb); }
+    FORCE_INLINE void   AABBGetCorners(const AABB& aabb, Float3 corners[8]) { return AABB::GetCorners(aabb, corners); }
     FORCE_INLINE AABB   AABBTranslate(const AABB& aabb, Float3 offset) { return AABB::Translate(aabb, offset); }
     FORCE_INLINE AABB   AABBSetPos(const AABB& aabb, Float3 pos) { return AABB::SetPos(aabb, pos); }
     FORCE_INLINE AABB   AABBExpand(const AABB& aabb, Float3 expand) { return AABB::Expand(aabb, expand); }
@@ -10787,7 +10858,7 @@ namespace M
     FORCE_INLINE Plane  PlaneFromNormalPoint(Float3 _normal, Float3 _p) { return Plane::FromNormalPoint(_normal, _p); }
     FORCE_INLINE float  PlaneDistance(Plane _plane, Float3 _p) { return Plane::Distance(_plane, _p); }
     FORCE_INLINE Float3 PlaneProjectPoint(Plane _plane, Float3 _p) { return Plane::ProjectPoint(_plane, _p); }
-    FORCE_INLINE Float3 PlaneOrigin(Plane _plane) { return Plane::Origin(_plane); }
+    FORCE_INLINE Float3 PlaneOrigin(Plane _plane) { return Plane::ClosestPointToOrigin(_plane); }
 }
 
 
