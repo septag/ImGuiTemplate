@@ -27,7 +27,7 @@ static void SetImGuiTheme()
     style.GrabMinSize = 14;
     style.WindowBorderSize = 1;
     style.ChildBorderSize = 0;
-    style.PopupBorderSize = 0;
+    style.PopupBorderSize = 1;
     style.FrameBorderSize = 0;
     style.TabBorderSize = 0;
     
@@ -48,7 +48,7 @@ static void SetImGuiTheme()
     colors[ImGuiCol_WindowBg]               = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
     colors[ImGuiCol_ChildBg]                = ImVec4(0.24f, 0.24f, 0.24f, 1.00f);
     colors[ImGuiCol_PopupBg]                = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
-    colors[ImGuiCol_Border]                 = ImVec4(1.00f, 1.00f, 1.00f, 0.10f);
+    colors[ImGuiCol_Border]                 = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);
     colors[ImGuiCol_BorderShadow]           = ImVec4(0.18f, 0.18f, 0.18f, 1.00f);
     colors[ImGuiCol_FrameBg]                = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
     colors[ImGuiCol_FrameBgHovered]         = ImVec4(1.00f, 1.00f, 1.00f, 0.08f);
